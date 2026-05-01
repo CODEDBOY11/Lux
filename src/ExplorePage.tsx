@@ -1,11 +1,3 @@
-/**
- * pages/ExplorePage.tsx
- *
- * Public listings page — reads live from ListingsDB.
- * Works for logged-out users, guests, and hosts.
- * Wishlist toggle requires guest login.
- */
-
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -293,4 +285,3 @@ export default function ExplorePage() {
     </div>
   );
 }
-

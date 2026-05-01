@@ -35,7 +35,7 @@ interface AuthContextValue {
   user: User | null;
   /** True while Firebase is still resolving the initial auth state */
   loading: boolean;
-
+  updateUser: (data: Partial<User>) => void;
   // ── Email / password ──
   login: (
     email: string,
@@ -297,6 +297,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         forgotPassword,
         logout,
         refreshUser,
+        updateUser: (data: Partial<User>) => {
+          if (!user) return;
+          const updated = { ...user, ...data };
+          AuthDB.update(user.id, data);
+          Session.set(updated, Session.isRemembered());
+          setUser(updated);
+        },
       }}
     >
       {children}

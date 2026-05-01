@@ -226,6 +226,7 @@ export const AuthDB = {
     if (!passwordMatch) return { ok: false, msg: "Invalid email or password." };
 
     Session.set(user, rememberMe);
+
     return { ok: true, user };
   },
 
@@ -627,10 +628,25 @@ export const BookingsDB = {
 /* ─────────────── SESSION ─────────────── */
 
 export const Session = {
-  /**
-   * rememberMe=true  → localStorage  (persists 30 days across tab closes)
-   * rememberMe=false → sessionStorage (clears when tab/browser closes)
-   */
+  isRemembered(): boolean {
+    try {
+      const raw =
+        sessionStorage.getItem(KEYS.session) ??
+        localStorage.getItem(KEYS.session);
+
+      if (!raw) return false;
+
+      const parsed = JSON.parse(raw) as {
+        user: User;
+        rememberMe: boolean;
+        setAt: number;
+      };
+
+      return parsed.rememberMe;
+    } catch {
+      return false;
+    }
+  },
   set(user: User, rememberMe = false): void {
     const payload = JSON.stringify({ user, rememberMe, setAt: Date.now() });
     if (rememberMe) {
