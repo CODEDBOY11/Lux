@@ -113,7 +113,7 @@ const LoginPage = ({
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  const { login } = useAuth();
+  const { login, loginWithGoogle, loginWithApple, forgotPassword } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<LoginView>("login");
@@ -150,7 +150,7 @@ const LoginPage = ({
     if (!validate()) return;
     setErrorMessage("");
     setLoading(true);
-    const res = await login(email, password);
+    const res = await login(email, password, rememberMe);
     setLoading(false);
     if (!res.ok) {
       setErrorMessage(res.msg || "Invalid email or password");
@@ -169,8 +169,11 @@ const LoginPage = ({
     }, 1800);
   };
 
-  const handleForgot = () => {
+  const handleForgot = async () => {
     if (!forgotEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(forgotEmail)) return;
+    setLoading(true);
+    await forgotPassword(forgotEmail);
+    setLoading(false);
     setView("forgot-sent");
   };
 
@@ -516,7 +519,26 @@ const LoginPage = ({
       <div className="grid grid-cols-2 gap-3 mb-6">
         <button
           type="button"
-          className="flex items-center justify-center gap-2.5 py-3 rounded-xl border border-[rgba(245,240,232,0.08)] bg-[rgba(245,240,232,0.02)] text-sm text-[rgba(245,240,232,0.6)] hover:border-[rgba(245,240,232,0.18)] hover:bg-[rgba(245,240,232,0.05)] transition-all"
+          disabled={loading}
+          onClick={async () => {
+            setLoading(true);
+            setErrorMessage("");
+            const res = await loginWithGoogle(role);
+            setLoading(false);
+            if (!res.ok) {
+              setErrorMessage(res.msg || "Google sign-in failed.");
+              return;
+            }
+            if (res.user?.role !== role) {
+              setErrorMessage(
+                `This Google account is a ${res.user?.role === "host" ? "Host" : "Guest"} account. Please switch portal.`,
+              );
+              return;
+            }
+            setView("success");
+            setTimeout(() => navigate(config.redirectPath), 1800);
+          }}
+          className="flex items-center justify-center gap-2.5 py-3 rounded-xl border border-[rgba(245,240,232,0.08)] bg-[rgba(245,240,232,0.02)] text-sm text-[rgba(245,240,232,0.6)] hover:border-[rgba(245,240,232,0.18)] hover:bg-[rgba(245,240,232,0.05)] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <svg width="15" height="15" viewBox="0 0 24 24">
             <path
@@ -540,7 +562,26 @@ const LoginPage = ({
         </button>
         <button
           type="button"
-          className="flex items-center justify-center gap-2.5 py-3 rounded-xl border border-[rgba(245,240,232,0.08)] bg-[rgba(245,240,232,0.02)] text-sm text-[rgba(245,240,232,0.6)] hover:border-[rgba(245,240,232,0.18)] hover:bg-[rgba(245,240,232,0.05)] transition-all"
+          disabled={loading}
+          onClick={async () => {
+            setLoading(true);
+            setErrorMessage("");
+            const res = await loginWithApple(role);
+            setLoading(false);
+            if (!res.ok) {
+              setErrorMessage(res.msg || "Apple sign-in failed.");
+              return;
+            }
+            if (res.user?.role !== role) {
+              setErrorMessage(
+                `This Apple account is a ${res.user?.role === "host" ? "Host" : "Guest"} account. Please switch portal.`,
+              );
+              return;
+            }
+            setView("success");
+            setTimeout(() => navigate(config.redirectPath), 1800);
+          }}
+          className="flex items-center justify-center gap-2.5 py-3 rounded-xl border border-[rgba(245,240,232,0.08)] bg-[rgba(245,240,232,0.02)] text-sm text-[rgba(245,240,232,0.6)] hover:border-[rgba(245,240,232,0.18)] hover:bg-[rgba(245,240,232,0.05)] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <svg
             width="15"
