@@ -18,7 +18,7 @@ import {
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  signInWithPopup,
+  signInWithRedirect,
   sendPasswordResetEmail,
   sendEmailVerification,
   signOut,
@@ -43,7 +43,11 @@ interface AuthContextValue {
   user: User | null;
   loading: boolean;
   updateUser: (data: Partial<User>) => void;
-  login: (email: string, password: string, rememberMe?: boolean) => Promise<AuthResult>;
+  login: (
+    email: string,
+    password: string,
+    rememberMe?: boolean,
+  ) => Promise<AuthResult>;
   register: (data: RegisterData) => Promise<AuthResult>;
   loginWithGoogle: (role: UserRole) => Promise<AuthResult>;
   loginWithApple: (role: UserRole) => Promise<AuthResult>;
@@ -76,18 +80,21 @@ export function useAuth(): AuthContextValue {
 
 function firebaseMsg(code: string): string {
   const map: Record<string, string> = {
-    "auth/user-not-found":         "No account found with this email.",
-    "auth/wrong-password":         "Incorrect password. Please try again.",
-    "auth/invalid-credential":     "Invalid email or password.",
-    "auth/email-already-in-use":   "An account with this email already exists.",
-    "auth/weak-password":          "Password must be at least 6 characters.",
-    "auth/invalid-email":          "Please enter a valid email address.",
-    "auth/too-many-requests":      "Too many attempts. Please wait a moment and try again.",
-    "auth/popup-closed-by-user":   "Sign-in popup was closed. Please try again.",
-    "auth/popup-blocked":          "Popup was blocked. Please allow popups for this site.",
-    "auth/cancelled-popup-request":"Sign-in was cancelled.",
-    "auth/network-request-failed": "Network error. Check your connection and try again.",
-    "auth/user-disabled":          "This account has been disabled.",
+    "auth/user-not-found": "No account found with this email.",
+    "auth/wrong-password": "Incorrect password. Please try again.",
+    "auth/invalid-credential": "Invalid email or password.",
+    "auth/email-already-in-use": "An account with this email already exists.",
+    "auth/weak-password": "Password must be at least 6 characters.",
+    "auth/invalid-email": "Please enter a valid email address.",
+    "auth/too-many-requests":
+      "Too many attempts. Please wait a moment and try again.",
+    "auth/popup-closed-by-user": "Sign-in popup was closed. Please try again.",
+    "auth/popup-blocked":
+      "Popup was blocked. Please allow popups for this site.",
+    "auth/cancelled-popup-request": "Sign-in was cancelled.",
+    "auth/network-request-failed":
+      "Network error. Check your connection and try again.",
+    "auth/user-disabled": "This account has been disabled.",
   };
   return map[code] ?? "Something went wrong. Please try again.";
 }
@@ -118,11 +125,12 @@ function ensureLocalUser(
   if (local) {
     // Patch OAuth fields if missing (e.g. user signed up via email, now using Google)
     if (provider && (!local.oauthProvider || !local.oauthId)) {
-      local = AuthDB.update(local.id, {
-        oauthProvider: provider,
-        oauthId: fbUser.uid,
-        emailVerified: true,
-      }) ?? local;
+      local =
+        AuthDB.update(local.id, {
+          oauthProvider: provider,
+          oauthId: fbUser.uid,
+          emailVerified: true,
+        }) ?? local;
     }
     return local;
   }
@@ -130,12 +138,12 @@ function ensureLocalUser(
   // No local record — create one from Firebase profile data
   const nameParts = (fbUser.displayName ?? "").trim().split(" ");
   const firstName = nameParts[0] || "User";
-  const lastName  = nameParts.slice(1).join(" ") || "";
+  const lastName = nameParts.slice(1).join(" ") || "";
 
   const result = AuthDB.register({
     role,
     email,
-    password:  "",            // Firebase owns the password
+    password: "", // Firebase owns the password
     firstName,
     lastName,
     marketingOptIn: false,
@@ -149,11 +157,13 @@ function ensureLocalUser(
     }
     // Patch OAuth fields
     if (provider) {
-      return AuthDB.update(result.user.id, {
-        oauthProvider: provider,
-        oauthId: fbUser.uid,
-        emailVerified: true,
-      }) ?? result.user;
+      return (
+        AuthDB.update(result.user.id, {
+          oauthProvider: provider,
+          oauthId: fbUser.uid,
+          emailVerified: true,
+        }) ?? result.user
+      );
     }
     return result.user;
   }
@@ -166,7 +176,7 @@ function ensureLocalUser(
 /* ─────────────── Provider ─────────────── */
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser]     = useState<User | null>(Session.get());
+  const [user, setUser] = useState<User | null>(Session.get());
   const [loading, setLoading] = useState(true);
 
   const refreshUser = useCallback(() => setUser(Session.get()), []);
@@ -229,7 +239,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Ensure local record exists (handles Firebase-Console-created users)
       const localUser = ensureLocalUser(fbUser);
 
-      Session.set(localUser, rememberMe);   // FIX 5: rememberMe actually used
+      Session.set(localUser, rememberMe); // FIX 5: rememberMe actually used
       setUser(localUser);
       return { ok: true, user: localUser };
     },
@@ -237,26 +247,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   /* ── Register ── */
-  const register = useCallback(async (data: RegisterData): Promise<AuthResult> => {
-    let fbUser: FirebaseUser;
-    try {
-      const cred = await createUserWithEmailAndPassword(auth, data.email, data.password);
-      fbUser = cred.user;
-    } catch (err: any) {
-      return { ok: false, msg: firebaseMsg(err.code) };
-    }
+  const register = useCallback(
+    async (data: RegisterData): Promise<AuthResult> => {
+      let fbUser: FirebaseUser;
+      try {
+        const cred = await createUserWithEmailAndPassword(
+          auth,
+          data.email,
+          data.password,
+        );
+        fbUser = cred.user;
+      } catch (err: any) {
+        return { ok: false, msg: firebaseMsg(err.code) };
+      }
 
-    // Send verification email (non-blocking)
-    try { await sendEmailVerification(fbUser); } catch { /* best-effort */ }
+      // Send verification email (non-blocking)
+      try {
+        await sendEmailVerification(fbUser);
+      } catch {
+        /* best-effort */
+      }
 
-    // Save to local DB
-    const result = AuthDB.register(data);
-    if (!result.ok) return result;
+      // Save to local DB
+      const result = AuthDB.register(data);
+      if (!result.ok) return result;
 
-    // Sign out after register so user goes through login + email verification
-    await signOut(auth);
-    return { ok: true, user: result.user };
-  }, []);
+      // Sign out after register so user goes through login + email verification
+      await signOut(auth);
+      return { ok: true, user: result.user };
+    },
+    [],
+  );
 
   /* ── Google sign-in ──
    *
@@ -266,8 +287,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginWithGoogle = useCallback(
     async (role: UserRole): Promise<AuthResult> => {
       try {
-        const cred = await signInWithPopup(auth, googleProvider);
-        const localUser = ensureLocalUser(cred.user, role, "google");
+        const cred = await signInWithRedirect(auth, googleProvider);
+        const localUser = ensureLocalUser(cred, role, "google");
         Session.set(localUser);
         setUser(localUser);
         return { ok: true, user: localUser };
@@ -282,8 +303,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginWithApple = useCallback(
     async (role: UserRole): Promise<AuthResult> => {
       try {
-        const cred = await signInWithPopup(auth, appleProvider);
-        const localUser = ensureLocalUser(cred.user, role, "apple");
+        const cred = await signInWithRedirect(auth, appleProvider);
+        const localUser = ensureLocalUser(cred, role, "apple");
         Session.set(localUser);
         setUser(localUser);
         return { ok: true, user: localUser };
@@ -299,16 +320,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * Customise the email template at:
    * Firebase Console → Authentication → Templates → Password reset
    */
-  const forgotPassword = useCallback(async (email: string): Promise<AuthResult> => {
-    try {
-      await sendPasswordResetEmail(auth, email);
-      AuthDB.forgotPassword(email); // local DB sync
-      return { ok: true };
-    } catch (err: any) {
-      if (err.code === "auth/user-not-found") return { ok: true }; // don't expose
-      return { ok: false, msg: firebaseMsg(err.code) };
-    }
-  }, []);
+  const forgotPassword = useCallback(
+    async (email: string): Promise<AuthResult> => {
+      try {
+        await sendPasswordResetEmail(auth, email);
+        AuthDB.forgotPassword(email); // local DB sync
+        return { ok: true };
+      } catch (err: any) {
+        if (err.code === "auth/user-not-found") return { ok: true }; // don't expose
+        return { ok: false, msg: firebaseMsg(err.code) };
+      }
+    },
+    [],
+  );
 
   /* ── Logout ── */
   const logout = useCallback(async () => {
@@ -365,17 +389,30 @@ export function ProtectedRoute({
 
   if (loading) {
     return (
-      <div style={{
-        display: "flex", alignItems: "center", justifyContent: "center",
-        minHeight: "100vh", background: "#0e0d0b", color: "#C9A96E",
-        fontFamily: "Cormorant Garamond, serif", fontSize: 22, gap: 12,
-      }}>
-        <span style={{
-          width: 18, height: 18,
-          border: "2px solid rgba(201,169,110,0.3)",
-          borderTopColor: "#C9A96E", borderRadius: "50%",
-          display: "inline-block", animation: "spin 0.8s linear infinite",
-        }} />
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100vh",
+          background: "#0e0d0b",
+          color: "#C9A96E",
+          fontFamily: "Cormorant Garamond, serif",
+          fontSize: 22,
+          gap: 12,
+        }}
+      >
+        <span
+          style={{
+            width: 18,
+            height: 18,
+            border: "2px solid rgba(201,169,110,0.3)",
+            borderTopColor: "#C9A96E",
+            borderRadius: "50%",
+            display: "inline-block",
+            animation: "spin 0.8s linear infinite",
+          }}
+        />
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         Loading…
       </div>
