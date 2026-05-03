@@ -1,11 +1,12 @@
 // src/AuthContext.tsx
-// Firebase-wired auth context.
-// FIXES:
-//   1. Correct Firebase import path
-//   2. Email login works for Firebase-Console-created users (auto-creates local record)
-//   3. onAuthStateChanged restores session for BOTH email AND OAuth users on page reload
-//   4. Google login correctly handles existing email users (no role required on re-login)
-//   5. rememberMe is properly forwarded from login()
+// Firebase Auth + Supabase DB — fully async.
+//
+// What changed from the localStorage version:
+//   - Every AuthDB call is now awaited (Supabase is async)
+//   - ensureSupabaseUser() replaces ensureLocalUser() — async, hits Supabase
+//   - getRedirectResult() handles Google/Apple redirect return
+//   - Role is persisted in localStorage across the OAuth redirect round-trip
+//   - loginWithGoogle / loginWithApple are void (trigger redirect, page navigates away)
 
 import {
   createContext,
@@ -19,13 +20,14 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithRedirect,
+  getRedirectResult,
   sendPasswordResetEmail,
   sendEmailVerification,
   signOut,
   onAuthStateChanged,
   type User as FirebaseUser,
 } from "firebase/auth";
-// FIX 1: Correct import path — adjust if your file structure differs
+import { useNavigate } from "react-router-dom";
 import { auth, googleProvider, appleProvider } from "./Firebase";
 import {
   AuthDB,
@@ -35,6 +37,11 @@ import {
   type UserRole,
 } from "./index";
 
+/* ─────────────── Constants ─────────────── */
+
+const REDIRECT_ROLE_KEY = "zb_oauth_redirect_role";
+const REDIRECT_PROVIDER_KEY = "zb_oauth_redirect_provider";
+
 /* ─────────────── Types ─────────────── */
 
 type AuthResult = { ok: boolean; msg?: string; user?: User };
@@ -42,15 +49,17 @@ type AuthResult = { ok: boolean; msg?: string; user?: User };
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
-  updateUser: (data: Partial<User>) => void;
+  updateUser: (data: Partial<User>) => Promise<void>;
   login: (
     email: string,
     password: string,
     rememberMe?: boolean,
   ) => Promise<AuthResult>;
   register: (data: RegisterData) => Promise<AuthResult>;
-  loginWithGoogle: (role: UserRole) => Promise<AuthResult>;
-  loginWithApple: (role: UserRole) => Promise<AuthResult>;
+  /** Saves role to localStorage then redirects to Google. Page navigates away. */
+  loginWithGoogle: (role: UserRole) => void;
+  /** Saves role to localStorage then redirects to Apple. Page navigates away. */
+  loginWithApple: (role: UserRole) => void;
   forgotPassword: (email: string) => Promise<AuthResult>;
   logout: () => Promise<void>;
   refreshUser: () => void;
@@ -76,7 +85,7 @@ export function useAuth(): AuthContextValue {
   return ctx;
 }
 
-/* ─────────────── Firebase error messages ─────────────── */
+/* ─────────────── Firebase error → readable message ─────────────── */
 
 function firebaseMsg(code: string): string {
   const map: Record<string, string> = {
@@ -86,91 +95,86 @@ function firebaseMsg(code: string): string {
     "auth/email-already-in-use": "An account with this email already exists.",
     "auth/weak-password": "Password must be at least 6 characters.",
     "auth/invalid-email": "Please enter a valid email address.",
-    "auth/too-many-requests":
-      "Too many attempts. Please wait a moment and try again.",
-    "auth/popup-closed-by-user": "Sign-in popup was closed. Please try again.",
-    "auth/popup-blocked":
-      "Popup was blocked. Please allow popups for this site.",
+    "auth/too-many-requests": "Too many attempts. Please wait and try again.",
+    "auth/popup-closed-by-user": "Sign-in was closed. Please try again.",
+    "auth/popup-blocked": "Popup blocked. Please allow popups for this site.",
     "auth/cancelled-popup-request": "Sign-in was cancelled.",
-    "auth/network-request-failed":
-      "Network error. Check your connection and try again.",
+    "auth/network-request-failed": "Network error. Check your connection.",
     "auth/user-disabled": "This account has been disabled.",
   };
   return map[code] ?? "Something went wrong. Please try again.";
 }
 
-/* ─────────────── Helper: ensure a local DB record exists for a Firebase user ───
- *
- * FIX 2 + FIX 3:
- * Users created via the Firebase Console, Google OAuth, or any other
- * Firebase method may not have a matching record in localStorage yet.
- * This function creates one automatically so the rest of the app works.
- */
-function ensureLocalUser(
+/* ─────────────── ensureSupabaseUser ─────────────────────────────────────────
+ * After any Firebase sign-in, guarantee a matching row exists in Supabase.
+ * Creates one automatically if the user signed in via Firebase Console
+ * or is a first-time OAuth user.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+async function ensureSupabaseUser(
   fbUser: FirebaseUser,
   role: UserRole = "guest",
   provider?: "google" | "apple",
-): User {
+): Promise<User> {
   const email = (fbUser.email ?? "").toLowerCase().trim();
 
-  // Try to find existing local record
-  let local =
-    AuthDB.getByEmail(email) ??
-    (provider && fbUser.uid
-      ? AuthDB.all().find(
-          (u) => u.oauthProvider === provider && u.oauthId === fbUser.uid,
-        )
-      : undefined);
+  // 1. Try find by firebase_uid
+  let local = await AuthDB.getByFirebaseUid(fbUser.uid);
+
+  // 2. Fall back to email
+  if (!local) {
+    local = await AuthDB.getByEmail(email);
+  }
 
   if (local) {
-    // Patch OAuth fields if missing (e.g. user signed up via email, now using Google)
-    if (provider && (!local.oauthProvider || !local.oauthId)) {
-      local =
-        AuthDB.update(local.id, {
-          oauthProvider: provider,
-          oauthId: fbUser.uid,
-          emailVerified: true,
-        }) ?? local;
+    // Patch OAuth / verified fields if they changed
+    const needsPatch =
+      (provider && (!local.oauthProvider || !local.oauthId)) ||
+      (fbUser.emailVerified && !local.emailVerified) ||
+      !local.firebaseUid;
+
+    if (needsPatch) {
+      const patch: Partial<User> = {};
+      if (!local.firebaseUid) patch.firebaseUid = fbUser.uid;
+      if (provider && !local.oauthProvider) patch.oauthProvider = provider;
+      if (provider && !local.oauthId) patch.oauthId = fbUser.uid;
+      if (fbUser.emailVerified && !local.emailVerified)
+        patch.emailVerified = true;
+
+      local = (await AuthDB.update(local.id, patch)) ?? local;
     }
     return local;
   }
 
-  // No local record — create one from Firebase profile data
+  // 3. No Supabase record at all — create one
   const nameParts = (fbUser.displayName ?? "").trim().split(" ");
   const firstName = nameParts[0] || "User";
   const lastName = nameParts.slice(1).join(" ") || "";
 
-  const result = AuthDB.register({
+  const result = await AuthDB.register({
     role,
     email,
-    password: "", // Firebase owns the password
+    password: "", // Firebase owns the credential
     firstName,
     lastName,
+    firebaseUid: fbUser.uid,
     marketingOptIn: false,
   });
 
   if (result.ok && result.user) {
-    // Mark verified if Firebase says so
-    if (fbUser.emailVerified) {
-      AuthDB.verifyEmail(result.user.id);
-      return AuthDB.getById(result.user.id) ?? result.user;
-    }
-    // Patch OAuth fields
+    const patches: Partial<User> = { firebaseUid: fbUser.uid };
     if (provider) {
-      return (
-        AuthDB.update(result.user.id, {
-          oauthProvider: provider,
-          oauthId: fbUser.uid,
-          emailVerified: true,
-        }) ?? result.user
-      );
+      patches.oauthProvider = provider;
+      patches.oauthId = fbUser.uid;
     }
-    return result.user;
+    if (fbUser.emailVerified) patches.emailVerified = true;
+    return (await AuthDB.update(result.user.id, patches)) ?? result.user;
   }
 
-  // register() returned ok:false — the email was already there, race condition
-  // Retry the lookup
-  return AuthDB.getByEmail(email)!;
+  // Race condition — row appeared between check and insert, look it up again
+  const retry = await AuthDB.getByEmail(email);
+  if (!retry) throw new Error("Failed to create or find user in Supabase.");
+  return retry;
 }
 
 /* ─────────────── Provider ─────────────── */
@@ -178,35 +182,73 @@ function ensureLocalUser(
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(Session.get());
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   const refreshUser = useCallback(() => setUser(Session.get()), []);
 
   useEffect(() => {
-    // Seed demo data once
+    // No-op for Supabase (demo data seeded via schema.sql)
     seedDemoData();
 
-    // FIX 3: onAuthStateChanged now restores BOTH email AND OAuth sessions
-    const unsub = onAuthStateChanged(auth, (fbUser) => {
+    /* ── Step 1: Handle OAuth redirect result ────────────────────────────
+     * When Google/Apple redirects back to your app, getRedirectResult()
+     * returns the credential. We read the saved role from localStorage,
+     * upsert the Supabase user, and navigate to the right dashboard.
+     * ─────────────────────────────────────────────────────────────────── */
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (!result) return; // Normal page load — no pending redirect
+
+        const savedRole =
+          (localStorage.getItem(REDIRECT_ROLE_KEY) as UserRole) ?? "guest";
+        const savedProvider =
+          (localStorage.getItem(REDIRECT_PROVIDER_KEY) as "google" | "apple") ??
+          "google";
+        localStorage.removeItem(REDIRECT_ROLE_KEY);
+        localStorage.removeItem(REDIRECT_PROVIDER_KEY);
+
+        const localUser = await ensureSupabaseUser(
+          result.user,
+          savedRole,
+          savedProvider,
+        );
+        Session.set(localUser);
+        setUser(localUser);
+
+        navigate(localUser.role === "host" ? "/dashboard" : "/account", {
+          replace: true,
+        });
+      })
+      .catch((err) => {
+        console.error("getRedirectResult error:", err);
+        localStorage.removeItem(REDIRECT_ROLE_KEY);
+        localStorage.removeItem(REDIRECT_PROVIDER_KEY);
+      });
+
+    /* ── Step 2: Ongoing auth state observer ────────────────────────────
+     * Fires on every page load and whenever Firebase auth state changes.
+     * Syncs the Supabase user record into local session cache.
+     * ─────────────────────────────────────────────────────────────────── */
+    const unsub = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
-        // Firebase has an active session — make sure local DB is in sync
-        const email = (fbUser.email ?? "").toLowerCase().trim();
-        const existing = AuthDB.getByEmail(email);
+        // Look up the Supabase record by firebase_uid
+        const existing =
+          (await AuthDB.getByFirebaseUid(fbUser.uid)) ??
+          (await AuthDB.getByEmail((fbUser.email ?? "").toLowerCase().trim()));
 
         if (existing) {
-          // Sync email-verified status from Firebase → local DB
+          // Sync email-verified from Firebase → Supabase if needed
           if (fbUser.emailVerified && !existing.emailVerified) {
-            AuthDB.verifyEmail(existing.id);
+            await AuthDB.verifyEmail(existing.id);
           }
-          const fresh = AuthDB.getById(existing.id) ?? existing;
+          const fresh = (await AuthDB.getById(existing.id)) ?? existing;
           const remembered = Session.isRemembered();
           Session.set(fresh, remembered);
           setUser(fresh);
         }
-        // If no local record exists, we don't auto-create here —
-        // that only happens when the user explicitly logs in below,
-        // so we don't silently assign a role.
+        // No Supabase record on plain auth-state-change: handled by
+        // getRedirectResult (OAuth) or login() (email/password).
       } else {
-        // Firebase signed out — clear local session
         Session.clear();
         setUser(null);
       }
@@ -214,14 +256,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return unsub;
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* ── Email / password login ──
-   *
-   * FIX 2: If the user was created in Firebase Console (no local record),
-   * we auto-create their local profile so login succeeds.
-   * FIX 5: rememberMe is now forwarded correctly.
-   */
+  /* ── Email / password login ── */
   const login = useCallback(
     async (
       email: string,
@@ -236,10 +273,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { ok: false, msg: firebaseMsg(err.code) };
       }
 
-      // Ensure local record exists (handles Firebase-Console-created users)
-      const localUser = ensureLocalUser(fbUser);
-
-      Session.set(localUser, rememberMe); // FIX 5: rememberMe actually used
+      // Guarantee Supabase record (handles Firebase-Console-created users)
+      const localUser = await ensureSupabaseUser(fbUser);
+      Session.set(localUser, rememberMe);
       setUser(localUser);
       return { ok: true, user: localUser };
     },
@@ -268,63 +304,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         /* best-effort */
       }
 
-      // Save to local DB
-      const result = AuthDB.register(data);
+      // Save to Supabase
+      const result = await AuthDB.register({
+        ...data,
+        firebaseUid: fbUser.uid,
+      });
       if (!result.ok) return result;
 
-      // Sign out after register so user goes through login + email verification
+      // Sign out — user must verify email before logging in
       await signOut(auth);
       return { ok: true, user: result.user };
     },
     [],
   );
 
-  /* ── Google sign-in ──
-   *
-   * FIX 4: If the user already has a local email account, we link the
-   * OAuth provider to it rather than failing or creating a duplicate.
-   */
-  const loginWithGoogle = useCallback(
-    async (role: UserRole): Promise<AuthResult> => {
-      try {
-        const cred = await signInWithRedirect(auth, googleProvider);
-        const localUser = ensureLocalUser(cred, role, "google");
-        Session.set(localUser);
-        setUser(localUser);
-        return { ok: true, user: localUser };
-      } catch (err: any) {
-        return { ok: false, msg: firebaseMsg(err.code) };
-      }
-    },
-    [],
-  );
+  /* ── Google sign-in ──────────────────────────────────────────────────────
+   * Saves role → triggers redirect → page navigates away.
+   * Result is handled by getRedirectResult() in the useEffect above.
+   * DO NOT await this — it returns void intentionally.
+   * ─────────────────────────────────────────────────────────────────────── */
+  const loginWithGoogle = useCallback((role: UserRole): void => {
+    localStorage.setItem(REDIRECT_ROLE_KEY, role);
+    localStorage.setItem(REDIRECT_PROVIDER_KEY, "google");
+    signInWithRedirect(auth, googleProvider);
+  }, []);
 
   /* ── Apple sign-in ── */
-  const loginWithApple = useCallback(
-    async (role: UserRole): Promise<AuthResult> => {
-      try {
-        const cred = await signInWithRedirect(auth, appleProvider);
-        const localUser = ensureLocalUser(cred, role, "apple");
-        Session.set(localUser);
-        setUser(localUser);
-        return { ok: true, user: localUser };
-      } catch (err: any) {
-        return { ok: false, msg: firebaseMsg(err.code) };
-      }
-    },
-    [],
-  );
+  const loginWithApple = useCallback((role: UserRole): void => {
+    localStorage.setItem(REDIRECT_ROLE_KEY, role);
+    localStorage.setItem(REDIRECT_PROVIDER_KEY, "apple");
+    signInWithRedirect(auth, appleProvider);
+  }, []);
 
   /* ── Forgot password ──
    * Firebase sends the reset email — no backend needed.
-   * Customise the email template at:
+   * Customise the template at:
    * Firebase Console → Authentication → Templates → Password reset
    */
   const forgotPassword = useCallback(
     async (email: string): Promise<AuthResult> => {
       try {
         await sendPasswordResetEmail(auth, email);
-        AuthDB.forgotPassword(email); // local DB sync
+        await AuthDB.forgotPassword(email); // no-op in Supabase version, kept for compat
         return { ok: true };
       } catch (err: any) {
         if (err.code === "auth/user-not-found") return { ok: true }; // don't expose
@@ -335,17 +356,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   /* ── Logout ── */
-  const logout = useCallback(async () => {
+  const logout = useCallback(async (): Promise<void> => {
     await signOut(auth);
     Session.clear();
     setUser(null);
   }, []);
 
-  /* ── Update local user ── */
+  /* ── Update user profile ── */
   const updateUser = useCallback(
-    (data: Partial<User>) => {
+    async (data: Partial<User>): Promise<void> => {
       if (!user) return;
-      const updated = AuthDB.update(user.id, data);
+      const updated = await AuthDB.update(user.id, data);
       if (updated) {
         Session.set(updated, Session.isRemembered());
         setUser(updated);

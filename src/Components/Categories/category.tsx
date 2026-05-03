@@ -204,7 +204,7 @@ function CategoryCard({
 
         {/* Property count badge */}
         <div className="absolute top-4 right-4">
-          <span className="text-[11px] font-semibold text-white/70 bg-black/30 backdrop-blur-md px-2.5 py-1 rounded-full">
+          <span className="text-[11px] font-semibold text-white/70 backdrop-blur-md px-2.5 py-1 rounded-full">
             {count > 0
               ? `${count} propert${count === 1 ? "y" : "ies"}`
               : "Coming soon"}
