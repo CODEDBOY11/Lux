@@ -5,6 +5,13 @@ import react from "@vitejs/plugin-react";
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  define: {
+    // Ensure env variables are replaced in production builds
+    __ENV_SUPABASE_URL__: JSON.stringify(process.env.VITE_SUPABASE_URL || ""),
+    __ENV_SUPABASE_KEY__: JSON.stringify(
+      process.env.VITE_SUPABASE_ANON_KEY || "",
+    ),
+  },
   resolve: {
     alias: [
       {
