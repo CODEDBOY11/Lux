@@ -5,7 +5,7 @@
  * All data live from BookingsDB and user.wishlist.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   CalendarDaysIcon,
@@ -24,12 +24,27 @@ export default function GuestDashboard() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("bookings");
 
-  if (!user) return null;
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [wishlistItems, setWishlistItems] = useState<Listing[]>([]);
 
-  const bookings: Booking[] = BookingsDB.byGuest(user.id);
-  const wishlistItems: Listing[] = (user.wishlist || [])
-    .map((id) => ListingsDB.getById(id))
-    .filter(Boolean) as Listing[];
+  useEffect(() => {
+    if (!user) return;
+
+    BookingsDB.byGuest(user.id).then(setBookings);
+
+    const wishlist = user.wishlist ?? [];
+    if (wishlist.length === 0) {
+      setWishlistItems([]);
+    } else {
+      Promise.all(wishlist.map((id) => ListingsDB.getById(id))).then((items) =>
+        setWishlistItems(
+          items.filter((item): item is Listing => Boolean(item)),
+        ),
+      );
+    }
+  }, [user]);
+
+  if (!user) return null;
 
   const NAV = [
     {

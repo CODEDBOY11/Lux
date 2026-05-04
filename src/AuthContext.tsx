@@ -79,6 +79,7 @@ interface RegisterData {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>");
@@ -269,8 +270,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const cred = await signInWithEmailAndPassword(auth, email, password);
         fbUser = cred.user;
-      } catch (err: any) {
-        return { ok: false, msg: firebaseMsg(err.code) };
+      } catch (err: unknown) {
+        return {
+          ok: false,
+          msg: firebaseMsg(
+            (err as { code?: string }).code || "auth/unknown-error",
+          ),
+        };
       }
 
       // Guarantee Supabase record (handles Firebase-Console-created users)
@@ -293,8 +299,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           data.password,
         );
         fbUser = cred.user;
-      } catch (err: any) {
-        return { ok: false, msg: firebaseMsg(err.code) };
+      } catch (err: unknown) {
+        return {
+          ok: false,
+          msg: firebaseMsg(
+            (err as { code?: string }).code || "auth/unknown-error",
+          ),
+        };
       }
 
       // Send verification email (non-blocking)
@@ -347,9 +358,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await sendPasswordResetEmail(auth, email);
         await AuthDB.forgotPassword(email); // no-op in Supabase version, kept for compat
         return { ok: true };
-      } catch (err: any) {
-        if (err.code === "auth/user-not-found") return { ok: true }; // don't expose
-        return { ok: false, msg: firebaseMsg(err.code) };
+      } catch (err: unknown) {
+        if ((err as { code?: string }).code === "auth/user-not-found")
+          return { ok: true }; // don't expose
+        return {
+          ok: false,
+          msg: firebaseMsg(
+            (err as { code?: string }).code || "auth/unknown-error",
+          ),
+        };
       }
     },
     [],

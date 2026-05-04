@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { ReactNode } from "react";
 import {
   Routes,
@@ -21,7 +21,7 @@ import TestimonialsCTA from "./Components/action/action";
 import Footer from "./Components/footer/footer";
 import Hero from "./Components/Hero";
 
-import { ListingsDB, type Hotel } from "./index"; // Recommended location
+import { ListingsDB, type Hotel, type Listing } from "./index"; // Recommended location
 
 // 🔐 Prevent logged-in users from accessing auth pages
 function AuthGuard({ children }: { children: ReactNode }) {
@@ -40,7 +40,21 @@ function AuthGuard({ children }: { children: ReactNode }) {
 function ListingRoute() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const listing = id ? ListingsDB.getById(id) : undefined;
+  const [listing, setListing] = useState<Listing | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!id) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoading(true);
+    ListingsDB.getById(id)
+      .then(setListing)
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
 
   if (!listing) {
     return <Navigate to="/explore" replace />;

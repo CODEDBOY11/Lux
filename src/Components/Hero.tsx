@@ -229,14 +229,18 @@ const Hero = ({
 
   /* Auto-suggest on query change */
   useEffect(() => {
-    if (form.query.length >= 1) {
-      const s = getLocationSuggestions(form.query);
-      setSuggestions(s);
-      setShowSuggestions(s.length > 0);
-    } else {
-      setSuggestions([]);
-      setShowSuggestions(false);
-    }
+    const fetchSuggestions = async () => {
+      if (form.query.length >= 1) {
+        const s = await getLocationSuggestions(form.query);
+        setSuggestions(s);
+        setShowSuggestions(s.length > 0);
+      } else {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+    };
+
+    fetchSuggestions();
   }, [form.query]);
 
   /* Close suggestions on outside click */
@@ -255,7 +259,7 @@ const Hero = ({
 
   const handleSearch = useCallback(() => {
     setIsSearching(true);
-    setTimeout(() => {
+    setTimeout(async () => {
       const params: SearchParams = {
         query: form.query.trim() || undefined,
         checkIn: form.checkIn || undefined,
@@ -263,7 +267,7 @@ const Hero = ({
         guests: form.guests ? parseInt(form.guests) : undefined,
       };
       const results = searchHotels(params);
-      setSearchResults(results);
+      setSearchResults(await results);
       setHasSearched(true);
       setIsSearching(false);
       setShowSuggestions(false);
@@ -506,9 +510,9 @@ const Hero = ({
                       key={chip}
                       onClick={() => {
                         setForm((f) => ({ ...f, query: chip }));
-                        setTimeout(() => {
+                        setTimeout(async () => {
                           const params: SearchParams = { query: chip };
-                          setSearchResults(searchHotels(params));
+                          setSearchResults(await searchHotels(params));
                           setHasSearched(true);
                         }, 100);
                       }}

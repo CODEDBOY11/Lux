@@ -27,10 +27,11 @@ export default function ExplorePage() {
   const [category, setCategory] = useState("");
   const [results, setResults] = useState<Listing[]>([]);
 
-  const runSearch = useCallback(() => {
+  const runSearch = useCallback(async () => {
     const cat = category || undefined;
     const g = guests ? parseInt(guests) : undefined;
-    setResults(ListingsDB.search(query, g, cat));
+    const found = await ListingsDB.search(query, g, cat);
+    setResults(found);
   }, [query, guests, category]);
 
   useEffect(() => {

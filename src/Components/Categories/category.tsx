@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ListingsDB, type Listing } from "../../index";
 import { ArrowRightIcon } from "@heroicons/react/24/outline";
 
@@ -83,46 +83,62 @@ interface CategoryStats {
 }
 
 function useCategoryStats(): CategoryStats[] {
-  return useMemo(() => {
-    const all = ListingsDB.all();
+  const [stats, setStats] = useState<CategoryStats[]>([]);
 
-    return (Object.keys(CATEGORY_META) as CategoryKey[])
-      .map((key) => {
-        const listings = all.filter((l) => l.category === key);
-        const meta = CATEGORY_META[key];
+  useEffect(() => {
+    let isMounted = true;
 
-        const avgPrice =
-          listings.length > 0
-            ? Math.round(
-                listings.reduce((s, l) => s + l.pricePerNight, 0) /
-                  listings.length,
-              )
-            : 0;
+    ListingsDB.all().then((all) => {
+      if (!isMounted) return;
 
-        const minPrice =
-          listings.length > 0
-            ? Math.min(...listings.map((l) => l.pricePerNight))
-            : 0;
+      const computed = (Object.keys(CATEGORY_META) as CategoryKey[]).map(
+        (key) => {
+          const listings = all.filter((l) => l.category === key);
+          const meta = CATEGORY_META[key];
 
-        const topRating =
-          listings.length > 0 ? Math.max(...listings.map((l) => l.rating)) : 0;
+          const avgPrice =
+            listings.length > 0
+              ? Math.round(
+                  listings.reduce((s, l) => s + l.pricePerNight, 0) /
+                    listings.length,
+                )
+              : 0;
 
-        const coverImage =
-          listings.find((l) => l.images[0])?.images[0] ?? meta.fallbackImage;
+          const minPrice =
+            listings.length > 0
+              ? Math.min(...listings.map((l) => l.pricePerNight))
+              : 0;
 
-        return {
-          key,
-          meta,
-          count: listings.length,
-          avgPrice,
-          minPrice,
-          topRating,
-          coverImage,
-          listings,
-        };
-      })
-      .sort((a, b) => b.count - a.count || b.avgPrice - a.avgPrice);
+          const topRating =
+            listings.length > 0
+              ? Math.max(...listings.map((l) => l.rating))
+              : 0;
+
+          const coverImage =
+            listings.find((l) => l.images[0])?.images[0] ?? meta.fallbackImage;
+
+          return {
+            key,
+            meta,
+            count: listings.length,
+            avgPrice,
+            minPrice,
+            topRating,
+            coverImage,
+            listings,
+          };
+        },
+      );
+
+      setStats(computed);
+    });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
+
+  return stats;
 }
 
 /* ─────────────── Card component ─────────────── */

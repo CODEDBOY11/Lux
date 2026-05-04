@@ -111,6 +111,85 @@ const amenityIcons: Record<string, string> = {
 };
 
 /* ─────────────────────────────────────────────────────────────── */
+/*  Gallery Component                                                */
+/* ─────────────────────────────────────────────────────────────── */
+type GalleryProps = {
+  hotel: Hotel;
+  activeImg: number;
+  setActiveImg: (i: number) => void;
+  setGalleryOpen: (b: boolean) => void;
+  prevImg: () => void;
+  nextImg: () => void;
+};
+
+const Gallery = ({
+  hotel,
+  activeImg,
+  setActiveImg,
+  setGalleryOpen,
+  prevImg,
+  nextImg,
+}: GalleryProps) => (
+  <div className="fixed inset-0 z-[60] bg-black/95 flex flex-col">
+    <div className="flex items-center justify-between px-6 py-4">
+      <span className="text-white/60 text-sm font-medium">
+        {activeImg + 1} / {hotel.images.length}
+      </span>
+      <button
+        onClick={() => setGalleryOpen(false)}
+        className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+      >
+        <XMarkIcon className="w-5 h-5 text-white" />
+      </button>
+    </div>
+    <div className="flex-1 flex items-center justify-center relative px-4">
+      <button
+        onClick={prevImg}
+        className="absolute left-4 md:left-8 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all hover:scale-105"
+      >
+        <ChevronLeftIcon className="w-5 h-5 text-white" />
+      </button>
+      <img
+        src={hotel.images[activeImg]}
+        alt=""
+        className="max-h-[75vh] max-w-full object-contain rounded-xl"
+        onError={(e) => {
+          (e.target as HTMLImageElement).src = hotel.thumbnail;
+        }}
+      />
+      <button
+        onClick={nextImg}
+        className="absolute right-4 md:right-8 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all hover:scale-105"
+      >
+        <ChevronRightIcon className="w-5 h-5 text-white" />
+      </button>
+    </div>
+    <div className="flex gap-3 justify-center pb-6 overflow-x-auto px-4">
+      {hotel.images.map((img, i) => (
+        <button
+          key={i}
+          onClick={() => setActiveImg(i)}
+          className={`w-16 h-12 rounded-lg overflow-hidden shrink-0 transition-all ${
+            i === activeImg
+              ? "ring-2 ring-[#C9A96E] opacity-100"
+              : "opacity-40 hover:opacity-70"
+          }`}
+        >
+          <img
+            src={img}
+            alt=""
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = hotel.thumbnail;
+            }}
+          />
+        </button>
+      ))}
+    </div>
+  </div>
+);
+
+/* ─────────────────────────────────────────────────────────────── */
 /*  BookingPage                                                      */
 /* ─────────────────────────────────────────────────────────────── */
 type Props = { hotel: Hotel; onBack?: () => void };
@@ -127,6 +206,9 @@ const BookingPage = ({ hotel, onBack }: Props) => {
   const [guests, setGuests] = useState(2);
   const [step, setStep] = useState<"idle" | "form" | "confirm" | "done">(
     "idle",
+  );
+  const [bookingRef] = useState(
+    () => `ZB-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
   );
   const [guestInfo, setGuestInfo] = useState({
     name: "",
@@ -169,63 +251,6 @@ const BookingPage = ({ hotel, onBack }: Props) => {
   const nextImg = () => setActiveImg((i) => (i + 1) % hotel.images.length);
   const prevImg = () =>
     setActiveImg((i) => (i - 1 + hotel.images.length) % hotel.images.length);
-
-  /* ── Gallery overlay ── */
-  const Gallery = () => (
-    <div className="fixed inset-0 z-[60] bg-black/95 flex flex-col">
-      <div className="flex items-center justify-between px-6 py-4">
-        <span className="text-white/60 text-sm font-medium">
-          {activeImg + 1} / {hotel.images.length}
-        </span>
-        <button
-          onClick={() => setGalleryOpen(false)}
-          className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
-        >
-          <XMarkIcon className="w-5 h-5 text-white" />
-        </button>
-      </div>
-      <div className="flex-1 flex items-center justify-center relative px-4">
-        <button
-          onClick={prevImg}
-          className="absolute left-4 md:left-8 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all hover:scale-105"
-        >
-          <ChevronLeftIcon className="w-5 h-5 text-white" />
-        </button>
-        <img
-          src={hotel.images[activeImg]}
-          alt=""
-          className="max-h-[75vh] max-w-full object-contain rounded-xl"
-          onError={(e) => {
-            (e.target as HTMLImageElement).src = hotel.thumbnail;
-          }}
-        />
-        <button
-          onClick={nextImg}
-          className="absolute right-4 md:right-8 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all hover:scale-105"
-        >
-          <ChevronRightIcon className="w-5 h-5 text-white" />
-        </button>
-      </div>
-      <div className="flex gap-3 justify-center pb-6 overflow-x-auto px-4">
-        {hotel.images.map((img, i) => (
-          <button
-            key={i}
-            onClick={() => setActiveImg(i)}
-            className={`w-16 h-12 rounded-lg overflow-hidden shrink-0 transition-all ${i === activeImg ? "ring-2 ring-[#C9A96E] opacity-100" : "opacity-40 hover:opacity-70"}`}
-          >
-            <img
-              src={img}
-              alt=""
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = hotel.thumbnail;
-              }}
-            />
-          </button>
-        ))}
-      </div>
-    </div>
-  );
 
   /* ── Booking Modal ── */
   const BookingModal = () => (
@@ -483,7 +508,7 @@ const BookingPage = ({ hotel, onBack }: Props) => {
                 Booking Reference
               </p>
               <p className="text-2xl font-bold tracking-widest text-[#C9A96E] font-mono">
-                ZB-{Math.random().toString(36).substring(2, 8).toUpperCase()}
+                {bookingRef}
               </p>
             </div>
             <button
@@ -513,8 +538,20 @@ const BookingPage = ({ hotel, onBack }: Props) => {
   return (
     <div className="min-h-screen bg-[#faf9f7] font-sans text-gray-900">
       {/* ── Gallery ── */}
-      {galleryOpen && <Gallery />}
-      {step !== "idle" && <BookingModal />}
+      {galleryOpen && (
+        <Gallery
+          hotel={hotel}
+          activeImg={activeImg}
+          setActiveImg={setActiveImg}
+          setGalleryOpen={setGalleryOpen}
+          prevImg={prevImg}
+          nextImg={nextImg}
+        />
+      )}
+      {step !== "idle" && (
+        // eslint-disable-next-line
+        <BookingModal />
+      )}
 
       {/* ── Sticky nav ── */}
       <header

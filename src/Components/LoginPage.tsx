@@ -127,11 +127,13 @@ const LoginPage = ({
   const config = ROLE_CONFIG[role];
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 
   // Reset form when switching roles
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setErrors({});
     setErrorMessage("");
   }, [role]);
@@ -520,23 +522,10 @@ const LoginPage = ({
         <button
           type="button"
           disabled={loading}
-          onClick={async () => {
+          onClick={() => {
             setLoading(true);
             setErrorMessage("");
-            const res = await loginWithGoogle(role);
-            setLoading(false);
-            if (!res.ok) {
-              setErrorMessage(res.msg || "Google sign-in failed.");
-              return;
-            }
-            if (res.user?.role !== role) {
-              setErrorMessage(
-                `This Google account is a ${res.user?.role === "host" ? "Host" : "Guest"} account. Please switch portal.`,
-              );
-              return;
-            }
-            setView("success");
-            setTimeout(() => navigate(config.redirectPath), 1800);
+            loginWithGoogle(role);
           }}
           className="flex items-center justify-center gap-2.5 py-3 rounded-xl border border-[rgba(245,240,232,0.08)] bg-[rgba(245,240,232,0.02)] text-sm text-[rgba(245,240,232,0.6)] hover:border-[rgba(245,240,232,0.18)] hover:bg-[rgba(245,240,232,0.05)] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
         >
@@ -563,23 +552,10 @@ const LoginPage = ({
         <button
           type="button"
           disabled={loading}
-          onClick={async () => {
+          onClick={() => {
             setLoading(true);
             setErrorMessage("");
-            const res = await loginWithApple(role);
-            setLoading(false);
-            if (!res.ok) {
-              setErrorMessage(res.msg || "Apple sign-in failed.");
-              return;
-            }
-            if (res.user?.role !== role) {
-              setErrorMessage(
-                `This Apple account is a ${res.user?.role === "host" ? "Host" : "Guest"} account. Please switch portal.`,
-              );
-              return;
-            }
-            setView("success");
-            setTimeout(() => navigate(config.redirectPath), 1800);
+            loginWithApple(role);
           }}
           className="flex items-center justify-center gap-2.5 py-3 rounded-xl border border-[rgba(245,240,232,0.08)] bg-[rgba(245,240,232,0.02)] text-sm text-[rgba(245,240,232,0.6)] hover:border-[rgba(245,240,232,0.18)] hover:bg-[rgba(245,240,232,0.05)] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
         >
