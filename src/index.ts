@@ -18,24 +18,16 @@ import { createClient } from "@supabase/supabase-js";
 
 /* ─────────────── Client ─────────────── */
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
-const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+console.log("URL:", import.meta.env.VITE_SUPABASE_URL);
+console.log("KEY:", import.meta.env.VITE_SUPABASE_ANON_KEY);
 
-// Validate credentials exist (will be replaced at build time)
-if (
-  !SUPABASE_URL ||
-  !SUPABASE_ANON ||
-  SUPABASE_URL === "" ||
-  SUPABASE_ANON === ""
-) {
-  throw new Error(
-    `Supabase credentials not configured. Please ensure:
-1. .env.local exists in your project root
-2. It contains VITE_SUPABASE_URL=<your-url>
-3. It contains VITE_SUPABASE_ANON_KEY=<your-key>
-4. Rebuild the project (npm run build) for changes to take effect.`,
-  );
-}
+const SUPABASE_URL =
+  import.meta.env.VITE_SUPABASE_URL ||
+  "https://bwfftarbhvbhywucgftx.supabase.co";
+
+const SUPABASE_ANON =
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ3ZmZ0YXJiaHZiaHl3dWNnZnR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3NDA0MzAsImV4cCI6MjA5MzMxNjQzMH0.fEHW44Z-L2XmDfu143fdjbkEGIu9Wm12CnqioSqUW0I";
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
 
