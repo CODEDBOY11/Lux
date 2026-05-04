@@ -18,19 +18,22 @@ import { createClient } from "@supabase/supabase-js";
 
 /* ─────────────── Client ─────────────── */
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? "";
-const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY ?? "";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-if (!SUPABASE_URL || !SUPABASE_ANON) {
-  console.error("Missing environment variables:", {
-    VITE_SUPABASE_URL: SUPABASE_URL ? "✓ present" : "✗ missing",
-    VITE_SUPABASE_ANON_KEY: SUPABASE_ANON ? "✓ present" : "✗ missing",
-  });
+// Validate credentials exist (will be replaced at build time)
+if (
+  !SUPABASE_URL ||
+  !SUPABASE_ANON ||
+  SUPABASE_URL === "" ||
+  SUPABASE_ANON === ""
+) {
   throw new Error(
-    `Supabase credentials missing. ` +
-      `VITE_SUPABASE_URL: ${SUPABASE_URL ? "✓" : "✗"}, ` +
-      `VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON ? "✓" : "✗"}. ` +
-      `Ensure .env.local exists at project root with both variables defined.`,
+    `Supabase credentials not configured. Please ensure:
+1. .env.local exists in your project root
+2. It contains VITE_SUPABASE_URL=<your-url>
+3. It contains VITE_SUPABASE_ANON_KEY=<your-key>
+4. Rebuild the project (npm run build) for changes to take effect.`,
   );
 }
 
