@@ -29,7 +29,6 @@ import {
   EllipsisHorizontalIcon,
   PlusIcon,
   ChevronRightIcon,
-  UserIcon,
   ClockIcon,
 } from "@heroicons/react/24/outline";
 import { useAuth } from "./AuthContext";
@@ -1216,6 +1215,3 @@ const Dashboard = ({ onBook, onLogout }: DashboardProps) => {
 };
 
 export default Dashboard;
-function setLoading(arg0: boolean): void {
-  throw new Error("Function not implemented.");
-}
