@@ -29,9 +29,10 @@ import {
   EllipsisHorizontalIcon,
   PlusIcon,
   ChevronRightIcon,
+  UserIcon,
   ClockIcon,
 } from "@heroicons/react/24/outline";
-import { useAuth } from "../src/AuthContext";
+import { useAuth } from "./AuthContext";
 import {
   ListingsDB,
   BookingsDB,
@@ -39,7 +40,7 @@ import {
   type Hotel,
   type Booking,
   type Listing,
-} from "../src/index";
+} from "./index";
 
 /* ─────────────── Helpers ─────────────── */
 
@@ -460,7 +461,7 @@ const HostContent = ({
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionsOpen, setActionsOpen] = useState<string | null>(null);
-  const actionsRef = useRef<HTMLTableDataCellElement | null>(null);
+  const actionsRef = useRef<HTMLTableDataCellElement>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -783,7 +784,7 @@ const GuestContent = ({
       wids.length > 0
         ? Promise.all(wids.map((id) => ListingsDB.getById(id))).then((r) =>
             r
-              .filter((item): item is Listing => Boolean(item))
+              .filter((item): item is Listing => item !== null)
               .map(listingToHotel),
           )
         : Promise.resolve([] as Hotel[]),
@@ -1215,3 +1216,6 @@ const Dashboard = ({ onBook, onLogout }: DashboardProps) => {
 };
 
 export default Dashboard;
+function setLoading(arg0: boolean): void {
+  throw new Error("Function not implemented.");
+}
