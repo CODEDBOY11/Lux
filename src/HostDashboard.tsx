@@ -1,14 +1,4 @@
-// src/pages/Dashboard.tsx
-// Matches the design in the screenshot:
-//   • Dark walnut/wood sidebar with user avatar + nav items
-//   • Stat cards row: Total Listings, Active Bookings, Earnings, Pending
-//   • Recent Bookings table with Confirmed / Declined / Waiting status pills + actions
-//   • Your Properties panel (right column)
-//   • Property cards grid at the bottom
-//   • Mobile: hamburger button opens a slide-in drawer
-//   • Host vs Guest: completely different content & nav
-
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   HomeIcon,
@@ -30,7 +20,18 @@ import {
   PlusIcon,
   ChevronRightIcon,
   ClockIcon,
+  PencilSquareIcon,
+  TrashIcon,
+  CheckCircleIcon,
+  PhotoIcon,
+  UserIcon,
+  ArrowTrendingUpIcon,
+  SparklesIcon,
 } from "@heroicons/react/24/outline";
+import {
+  StarIcon as StarSolid,
+  HeartIcon as HeartSolid,
+} from "@heroicons/react/24/solid";
 import { useAuth } from "./AuthContext";
 import {
   ListingsDB,
@@ -41,190 +42,9 @@ import {
   type Listing,
 } from "./index";
 
-/* ─────────────── Helpers ─────────────── */
-
-const fmt$ = (n: number) =>
-  "$" + n.toLocaleString("en-US", { maximumFractionDigits: 0 });
-
-const fmtDate = (d: string) =>
-  new Date(d).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-
-const greeting = () => {
-  const h = new Date().getHours();
-  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
-};
-
-/* ─────────────── Skeleton ─────────────── */
-const Sk = ({ h = "h-8", w = "w-full" }: { h?: string; w?: string }) => (
-  <div className={`${h} ${w} rounded-lg bg-white/6 animate-pulse`} />
-);
-
-/* ─────────────── Status pill ─────────────── */
-const StatusPill = ({ status }: { status: Booking["status"] | "waiting" }) => {
-  const cfg = {
-    confirmed: {
-      label: "Confirmed",
-      bg: "#16a34a22",
-      text: "#4ade80",
-      border: "#16a34a44",
-    },
-    pending: {
-      label: "Waiting",
-      bg: "#d97706222",
-      text: "#fbbf24",
-      border: "#d9770644",
-    },
-    cancelled: {
-      label: "Declined",
-      bg: "#dc262622",
-      text: "#f87171",
-      border: "#dc262644",
-    },
-    waiting: {
-      label: "Waiting",
-      bg: "#d9770622",
-      text: "#fbbf24",
-      border: "#d9770644",
-    },
-  }[status] ?? {
-    label: status,
-    bg: "#ffffff11",
-    text: "#ffffff88",
-    border: "#ffffff22",
-  };
-
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1 rounded-full border"
-      style={{ background: cfg.bg, color: cfg.text, borderColor: cfg.border }}
-    >
-      <span
-        className="w-1.5 h-1.5 rounded-full"
-        style={{ background: cfg.text }}
-      />
-      {cfg.label}
-    </span>
-  );
-};
-
-/* ─────────────── Stat card (matches screenshot style) ─────────────── */
-const StatCard = ({
-  icon,
-  label,
-  value,
-  delay = 0,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string | number;
-  delay?: number;
-}) => (
-  <div
-    className="bg-white rounded-2xl border border-gray-100 p-5 flex-1 min-w-0 shadow-sm"
-    style={{ animation: `fadeUp 0.45s ease ${delay}ms both` }}
-  >
-    <div className="flex items-center gap-3">
-      <div className="w-10 h-10 rounded-xl bg-[#C9A96E]/10 flex items-center justify-center shrink-0">
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <p className="text-2xl font-bold text-gray-900 font-['Cormorant_Garamond'] leading-none">
-          {value}
-        </p>
-        <p className="text-xs text-gray-400 mt-0.5">{label}</p>
-      </div>
-    </div>
-  </div>
-);
-
-/* ─────────────── Property mini-card (right panel) ─────────────── */
-const PropMini = ({ hotel }: { hotel: Hotel }) => (
-  <div className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-0 hover:bg-gray-50/50 transition-colors cursor-pointer group">
-    <div className="w-14 h-12 rounded-xl overflow-hidden shrink-0">
-      <img
-        src={
-          hotel.thumbnail ||
-          "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=200"
-        }
-        alt={hotel.name}
-        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-        onError={(e) => {
-          (e.target as HTMLImageElement).src =
-            "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=200";
-        }}
-      />
-    </div>
-    <div className="flex-1 min-w-0">
-      <p className="text-sm font-semibold text-gray-800 truncate">
-        {hotel.name}
-      </p>
-      <p className="text-xs text-[#C9A96E] font-bold mt-0.5">
-        ₦{(hotel.pricePerNight * 1600).toLocaleString()}
-        <span className="text-gray-400 font-normal text-[10px]">/night</span>
-      </p>
-    </div>
-  </div>
-);
-
-/* ─────────────── Property bottom card ─────────────── */
-const PropCard = ({
-  hotel,
-  onBook,
-}: {
-  hotel: Hotel;
-  onBook?: (h: Hotel) => void;
-}) => (
-  <div
-    className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-md transition-all duration-300 cursor-pointer group"
-    onClick={() => onBook?.(hotel)}
-  >
-    <div className="relative h-44 overflow-hidden">
-      <img
-        src={
-          hotel.thumbnail ||
-          "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400"
-        }
-        alt={hotel.name}
-        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-        onError={(e) => {
-          (e.target as HTMLImageElement).src =
-            "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400";
-        }}
-      />
-      {hotel.featured && (
-        <span className="absolute top-2 left-2 bg-[#C9A96E] text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wide">
-          Featured
-        </span>
-      )}
-    </div>
-    <div className="p-4">
-      <p className="font-semibold text-gray-800 text-sm truncate">
-        {hotel.name}
-      </p>
-      <div className="flex items-center justify-between mt-1.5">
-        <div className="flex items-center gap-1">
-          <MapPinIcon className="w-3 h-3 text-[#C9A96E]" />
-          <p className="text-xs text-gray-400 truncate max-w-[120px]">
-            {hotel.city}
-          </p>
-        </div>
-        <p className="text-sm font-bold text-gray-900">
-          ₦{(hotel.pricePerNight * 1600).toLocaleString()}
-          <span className="text-gray-400 font-normal text-[10px]">/night</span>
-        </p>
-      </div>
-    </div>
-  </div>
-);
-
-/* ═══════════════════════════════════════════════════════════
-   SIDEBAR
-═══════════════════════════════════════════════════════════ */
-
+/* ─────────────────────────────────────────────────────────
+   TYPES
+───────────────────────────────────────────────────────── */
 type NavKey =
   | "dashboard"
   | "properties"
@@ -236,6 +56,108 @@ type NavKey =
   | "wishlist"
   | "history";
 
+/* ─────────────────────────────────────────────────────────
+   HELPERS
+───────────────────────────────────────────────────────── */
+const fmt$ = (n: number) =>
+  "$" + n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+const fmtDate = (d: string) =>
+  new Date(d).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+const greeting = () => {
+  const h = new Date().getHours();
+  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+};
+
+/* ─────────────────────────────────────────────────────────
+   SKELETON
+───────────────────────────────────────────────────────── */
+const Sk = ({
+  h = "h-8",
+  rounded = "rounded-xl",
+}: {
+  h?: string;
+  rounded?: string;
+}) => <div className={`w-full ${h} ${rounded} bg-gray-100 animate-pulse`} />;
+
+/* ─────────────────────────────────────────────────────────
+   STATUS PILL
+───────────────────────────────────────────────────────── */
+const StatusPill = ({ status }: { status: string }) => {
+  const cfg: Record<string, { label: string; cls: string }> = {
+    confirmed: {
+      label: "Confirmed",
+      cls: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    },
+    pending: {
+      label: "Waiting",
+      cls: "bg-amber-50  text-amber-700  border-amber-200",
+    },
+    cancelled: {
+      label: "Declined",
+      cls: "bg-red-50    text-red-600    border-red-200",
+    },
+  };
+  const s = cfg[status] ?? {
+    label: status,
+    cls: "bg-gray-50 text-gray-500 border-gray-200",
+  };
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border whitespace-nowrap ${s.cls}`}
+    >
+      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" />
+      {s.label}
+    </span>
+  );
+};
+
+/* ─────────────────────────────────────────────────────────
+   STAT CARD
+───────────────────────────────────────────────────────── */
+const StatCard = ({
+  icon,
+  label,
+  value,
+  delay = 0,
+  sub,
+  accent = "#C9A96E",
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
+  delay?: number;
+  sub?: string;
+  accent?: string;
+}) => (
+  <div
+    className="bg-white rounded-2xl border border-gray-100 p-5 flex-1 min-w-[140px] shadow-sm hover:shadow-md transition-all duration-200"
+    style={{ animation: `fadeUp 0.4s ease ${delay}ms both` }}
+  >
+    <div
+      className="w-10 h-10 rounded-xl flex items-center justify-center mb-3"
+      style={{ background: `${accent}18`, border: `1px solid ${accent}30` }}
+    >
+      {icon}
+    </div>
+    <p className="text-2xl font-bold text-gray-900 font-['Cormorant_Garamond'] leading-none">
+      {value}
+    </p>
+    <p className="text-xs text-gray-400 mt-1">{label}</p>
+    {sub && (
+      <p className="text-[10px] mt-0.5 font-medium" style={{ color: accent }}>
+        {sub}
+      </p>
+    )}
+  </div>
+);
+
+/* ─────────────────────────────────────────────────────────
+   SIDEBAR
+───────────────────────────────────────────────────────── */
 const HOST_NAV = [
   { key: "dashboard" as NavKey, label: "Dashboard", icon: HomeIcon },
   {
@@ -253,7 +175,6 @@ const HOST_NAV = [
   },
   { key: "settings" as NavKey, label: "Settings", icon: Cog6ToothIcon },
 ];
-
 const GUEST_NAV = [
   { key: "dashboard" as NavKey, label: "Overview", icon: HomeIcon },
   { key: "bookings" as NavKey, label: "My Bookings", icon: CalendarDaysIcon },
@@ -271,7 +192,7 @@ const Sidebar = ({
   role,
   active,
   onNav,
-  pendingCount,
+  pending,
   onClose,
   onLogout,
   isMobile,
@@ -279,48 +200,55 @@ const Sidebar = ({
   role: "host" | "guest";
   active: NavKey;
   onNav: (k: NavKey) => void;
-  pendingCount: number;
+  pending: number;
   onClose?: () => void;
   onLogout: () => void;
   isMobile?: boolean;
 }) => {
   const { user } = useAuth();
   const nav = role === "host" ? HOST_NAV : GUEST_NAV;
+  const isGuest = role === "guest";
 
   return (
     <aside
-      className="w-64 h-full flex flex-col relative overflow-hidden"
+      className="w-64 h-full flex flex-col relative"
       style={{
         background:
-          "linear-gradient(180deg, #1a0f08 0%, #2d1a0e 40%, #1a0f08 100%)",
-        backgroundImage: `
-          linear-gradient(180deg, #1a0f08 0%, #2d1a0e 40%, #1a0f08 100%),
-          url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23C9A96E' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")
-        `,
+          "linear-gradient(180deg,#160e08 0%,#261508 55%,#160e08 100%)",
       }}
     >
-      {/* Gold top accent */}
-      <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-[#C9A96E] to-transparent" />
+      <div
+        className="absolute inset-0 opacity-[0.04]"
+        style={{
+          backgroundImage:
+            "url(\"data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23C9A96E' fill-opacity='1' fill-rule='evenodd'%3E%3Cpath d='M0 40L40 0H20L0 20M40 40V20L20 40'/%3E%3C/g%3E%3C/svg%3E\")",
+        }}
+      />
+      <div className="h-0.5 bg-gradient-to-r from-transparent via-[#C9A96E] to-transparent relative z-10" />
 
-      {/* User profile */}
-      <div className="px-5 pt-6 pb-5 border-b border-white/8 flex items-center gap-3">
-        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#C9A96E] to-[#a07840] flex items-center justify-center shrink-0 shadow-lg">
-          <span className="text-white font-bold text-base">
-            {user?.avatar ?? user?.firstName?.[0] ?? "?"}
-          </span>
+      {/* User block */}
+      <div className="relative z-10 px-5 pt-6 pb-5 border-b border-white/8 flex items-center gap-3">
+        <div
+          className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-base shadow-lg"
+          style={{
+            background: isGuest
+              ? "linear-gradient(135deg,#6EADC9,#4a8aad)"
+              : "linear-gradient(135deg,#C9A96E,#8a6030)",
+          }}
+        >
+          {user?.avatar ?? user?.firstName?.[0] ?? "?"}
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-white font-semibold text-sm truncate">
             {user?.firstName} {user?.lastName}
           </p>
           <span
-            className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
+            className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
             style={{
-              background:
-                role === "host"
-                  ? "rgba(201,169,110,0.2)"
-                  : "rgba(110,173,201,0.2)",
-              color: role === "host" ? "#C9A96E" : "#6EADC9",
+              background: isGuest
+                ? "rgba(110,173,201,0.2)"
+                : "rgba(201,169,110,0.2)",
+              color: isGuest ? "#6EADC9" : "#C9A96E",
             }}
           >
             {role}
@@ -329,44 +257,41 @@ const Sidebar = ({
         {isMobile && (
           <button
             onClick={onClose}
-            className="text-white/40 hover:text-white transition-colors p-1"
+            className="text-white/40 hover:text-white p-1 transition-colors"
           >
             <XMarkIcon className="w-5 h-5" />
           </button>
         )}
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 px-3 pt-4 space-y-0.5 overflow-y-auto">
-        {nav.map((item) => {
-          const isActive = active === item.key;
-          const hasBadge = item.key === "bookings" && pendingCount > 0;
+      {/* Nav items */}
+      <nav className="flex-1 relative z-10 px-3 pt-3 space-y-0.5 overflow-y-auto">
+        {nav.map(({ key, label, icon: Icon }) => {
+          const isActive = active === key;
+          const hasBadge = key === "bookings" && pending > 0;
           return (
             <button
-              key={item.key}
+              key={key}
               onClick={() => {
-                onNav(item.key);
+                onNav(key);
                 onClose?.();
               }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
-                isActive
-                  ? "text-white"
-                  : "text-white/50 hover:text-white/80 hover:bg-white/5"
-              }`}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${isActive ? "text-white shadow-md" : "text-white/50 hover:text-white/80 hover:bg-white/5"}`}
               style={
                 isActive
-                  ? { background: "linear-gradient(135deg, #C9A96E, #a07840)" }
+                  ? {
+                      background: isGuest
+                        ? "linear-gradient(135deg,#6EADC9,#4a8aad)"
+                        : "linear-gradient(135deg,#C9A96E,#9a7030)",
+                    }
                   : {}
               }
             >
-              <item.icon
-                className="w-4 h-4 shrink-0"
-                style={{ width: 17, height: 17 }}
-              />
-              <span>{item.label}</span>
+              <Icon style={{ width: 17, height: 17 }} className="shrink-0" />
+              <span>{label}</span>
               {hasBadge && (
                 <span className="ml-auto bg-white/20 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
-                  {pendingCount > 9 ? "9+" : pendingCount}
+                  {pending > 9 ? "9+" : pending}
                 </span>
               )}
             </button>
@@ -375,14 +300,14 @@ const Sidebar = ({
       </nav>
 
       {/* Logout */}
-      <div className="px-3 pb-5 pt-3 border-t border-white/8">
+      <div className="relative z-10 px-3 pb-5 pt-3 border-t border-white/8">
         <button
           onClick={onLogout}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-white/50 hover:text-white hover:bg-white/5 transition-all duration-200"
+          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-white/40 hover:text-red-400 hover:bg-red-500/8 transition-all"
         >
           <ArrowRightOnRectangleIcon
-            className="w-4 h-4"
             style={{ width: 17, height: 17 }}
+            className="shrink-0"
           />
           Log Out
         </button>
@@ -391,21 +316,22 @@ const Sidebar = ({
   );
 };
 
-/* ═══════════════════════════════════════════════════════════
+/* ─────────────────────────────────────────────────────────
    TOP BAR
-═══════════════════════════════════════════════════════════ */
+───────────────────────────────────────────────────────── */
 const TopBar = ({
   title,
   onHamburger,
-  pendingCount,
+  pending,
 }: {
   title: string;
   onHamburger: () => void;
-  pendingCount: number;
+  pending: number;
 }) => {
   const { user } = useAuth();
+  const isGuest = user?.role === "guest";
   return (
-    <header className="h-16 bg-white border-b border-gray-100 flex items-center justify-between px-6 shrink-0 sticky top-0 z-20">
+    <header className="h-16 bg-white border-b border-gray-100 flex items-center justify-between px-5 shrink-0 sticky top-0 z-20">
       <div className="flex items-center gap-3">
         <button
           onClick={onHamburger}
@@ -415,30 +341,32 @@ const TopBar = ({
         </button>
         <h1 className="text-xl font-bold text-gray-900">{title}</h1>
       </div>
-
-      <div className="flex items-center gap-3">
-        {/* Search */}
-        <div className="hidden md:flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 w-52">
+      <div className="flex items-center gap-2.5">
+        <div className="hidden md:flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 w-48">
           <MagnifyingGlassIcon className="w-4 h-4 text-gray-400 shrink-0" />
           <input
-            placeholder="Search...."
+            placeholder="Search..."
             className="bg-transparent text-sm text-gray-600 w-full outline-none placeholder:text-gray-400"
           />
         </div>
-
-        {/* Bell */}
-        <button className="relative w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-colors">
-          <BellIcon className="w-5 h-5" />
-          {pendingCount > 0 && (
-            <span className="absolute top-2 right-2 w-2 h-2 bg-[#C9A96E] rounded-full" />
+        <button className="relative w-9 h-9 rounded-xl border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-colors">
+          <BellIcon className="w-4 h-4" />
+          {pending > 0 && (
+            <span
+              className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full"
+              style={{ background: isGuest ? "#6EADC9" : "#C9A96E" }}
+            />
           )}
         </button>
-
-        {/* Avatar */}
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#C9A96E] to-[#a07840] flex items-center justify-center cursor-pointer shadow-md">
-          <span className="text-white font-bold text-sm">
-            {user?.avatar ?? user?.firstName?.[0] ?? "?"}
-          </span>
+        <div
+          className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm cursor-pointer text-white text-sm font-bold"
+          style={{
+            background: isGuest
+              ? "linear-gradient(135deg,#6EADC9,#4a8aad)"
+              : "linear-gradient(135deg,#C9A96E,#8a6030)",
+          }}
+        >
+          {user?.avatar ?? user?.firstName?.[0] ?? "?"}
         </div>
       </div>
     </header>
@@ -446,9 +374,1700 @@ const TopBar = ({
 };
 
 /* ═══════════════════════════════════════════════════════════
-   HOST DASHBOARD CONTENT
+   ADD / EDIT LISTING FORM
 ═══════════════════════════════════════════════════════════ */
-const HostContent = ({
+const AMENITIES_LIST = [
+  "Free WiFi",
+  "Private Pool",
+  "Butler Service",
+  "Sea View",
+  "Air Conditioning",
+  "Concierge",
+  "Fine Dining",
+  "Spa Island",
+  "Airport Transfer",
+  "BBQ",
+  "Wine Cellar",
+  "Netflix",
+  "Daily Cleaning",
+  "Water Sports",
+  "Kids Club",
+  "Gym",
+  "Parking",
+  "Fireplace",
+  "Hot Tub",
+  "Pet Friendly",
+  "Mountain View",
+  "Ocean Front",
+  "Rooftop Terrace",
+  "Helipad",
+];
+
+type LForm = {
+  name: string;
+  description: string;
+  location: string;
+  city: string;
+  country: string;
+  category: Listing["category"];
+  pricePerNight: string;
+  bedrooms: string;
+  bathrooms: string;
+  maxGuests: string;
+  amenities: string[];
+  tags: string;
+  images: string;
+  featured: boolean;
+  available: boolean;
+};
+
+const BLANK: LForm = {
+  name: "",
+  description: "",
+  location: "",
+  city: "",
+  country: "",
+  category: "villa",
+  pricePerNight: "",
+  bedrooms: "1",
+  bathrooms: "1",
+  maxGuests: "2",
+  amenities: [],
+  tags: "",
+  images: "",
+  featured: false,
+  available: true,
+};
+
+const ListingForm = ({
+  editing,
+  onSave,
+  onCancel,
+  hostId,
+  hostName,
+}: {
+  editing: Hotel | null;
+  onSave: (h: Hotel) => void;
+  onCancel: () => void;
+  hostId: string;
+  hostName: string;
+}) => {
+  const [form, setForm] = useState<LForm>(
+    editing
+      ? {
+          name: editing.name,
+          description: editing.description,
+          location: editing.location,
+          city: editing.city,
+          country: editing.country,
+          category: editing.category,
+          pricePerNight: String(editing.pricePerNight),
+          bedrooms: String(editing.bedrooms),
+          bathrooms: String(editing.bathrooms),
+          maxGuests: String(editing.maxGuests),
+          amenities: editing.amenities,
+          tags: editing.tags.join(", "),
+          images: editing.images.join("\n"),
+          featured: editing.featured,
+          available: editing.available,
+        }
+      : BLANK,
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const set = (k: keyof LForm) => (v: string | boolean | string[]) =>
+    setForm((f) => ({ ...f, [k]: v }));
+
+  const counter = (
+    k: "bedrooms" | "bathrooms" | "maxGuests",
+    delta: number,
+  ) => {
+    const min = k === "maxGuests" ? 1 : 0;
+    set(k)(String(Math.max(min, Number(form[k]) + delta)));
+  };
+
+  const toggleAmenity = (a: string) =>
+    set("amenities")(
+      form.amenities.includes(a)
+        ? form.amenities.filter((x) => x !== a)
+        : [...form.amenities, a],
+    );
+
+  const save = async () => {
+    if (!form.name.trim() || !form.city.trim() || !form.pricePerNight) {
+      setError("Name, city and price per night are required.");
+      return;
+    }
+    if (isNaN(Number(form.pricePerNight)) || Number(form.pricePerNight) <= 0) {
+      setError("Price must be a positive number.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    const images = form.images
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const tags = form.tags
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    try {
+      const payload = {
+        name: form.name.trim(),
+        description: form.description.trim(),
+        location: form.location.trim(),
+        city: form.city.trim(),
+        country: form.country.trim(),
+        category: form.category,
+        pricePerNight: Number(form.pricePerNight),
+        bedrooms: Number(form.bedrooms),
+        bathrooms: Number(form.bathrooms),
+        maxGuests: Number(form.maxGuests),
+        amenities: form.amenities,
+        tags,
+        images,
+        featured: form.featured,
+        available: form.available,
+      };
+      let result: Listing;
+      if (editing) {
+        const u = await ListingsDB.update(editing.id, payload);
+        if (!u)
+          throw new Error("Update failed — check your Supabase connection.");
+        result = u;
+      } else {
+        result = await ListingsDB.add({ hostId, hostName, ...payload });
+      }
+      onSave(listingToHotel(result));
+    } catch (e: any) {
+      setError(e.message ?? "Something went wrong.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inp =
+    "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#C9A96E] focus:ring-2 focus:ring-[#C9A96E]/10 transition-all bg-white";
+  const lbl =
+    "block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5";
+  const previewUrls = form.images
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  return (
+    <div
+      className="flex-1 overflow-y-auto bg-gray-50"
+      style={{ animation: "fadeUp 0.3s ease both" }}
+    >
+      <div className="max-w-2xl mx-auto p-6 pb-16">
+        {/* Header */}
+        <div className="flex items-center gap-4 mb-7">
+          <button
+            onClick={onCancel}
+            className="w-9 h-9 rounded-xl border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors bg-white"
+          >
+            <XMarkIcon className="w-4 h-4" />
+          </button>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">
+              {editing ? "Edit Listing" : "Add New Listing"}
+            </h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {editing
+                ? "Update your property details"
+                : "Fill in the details below to publish your property"}
+            </p>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mb-5 bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3 flex items-start gap-2">
+            <XMarkIcon className="w-4 h-4 shrink-0 mt-0.5" /> {error}
+          </div>
+        )}
+
+        <div className="space-y-5">
+          {/* ── Basic info ── */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+            <h3 className="font-bold text-gray-800 text-sm mb-4 flex items-center gap-2">
+              <BuildingOffice2Icon className="w-4 h-4 text-[#C9A96E]" /> Basic
+              Information
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className={lbl}>Property Name *</label>
+                <input
+                  className={inp}
+                  value={form.name}
+                  onChange={(e) => set("name")(e.target.value)}
+                  placeholder="e.g. Villa Lumière Côte d'Azur"
+                />
+              </div>
+              <div>
+                <label className={lbl}>Description</label>
+                <textarea
+                  className={inp + " resize-none"}
+                  rows={3}
+                  value={form.description}
+                  onChange={(e) => set("description")(e.target.value)}
+                  placeholder="What makes this property special..."
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={lbl}>Category *</label>
+                  <select
+                    className={inp}
+                    value={form.category}
+                    onChange={(e) =>
+                      set("category")(e.target.value as Listing["category"])
+                    }
+                  >
+                    {(
+                      [
+                        "villa",
+                        "apartment",
+                        "resort",
+                        "boutique",
+                        "penthouse",
+                      ] as const
+                    ).map((c) => (
+                      <option key={c} value={c}>
+                        {c.charAt(0).toUpperCase() + c.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={lbl}>Price Per Night (USD) *</label>
+                  <input
+                    className={inp}
+                    type="number"
+                    min="1"
+                    value={form.pricePerNight}
+                    onChange={(e) => set("pricePerNight")(e.target.value)}
+                    placeholder="500"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-5">
+                {(["featured", "available"] as const).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => set(k)(!form[k])}
+                    className="flex items-center gap-2 group"
+                  >
+                    <div
+                      className={`w-4.5 h-4.5 rounded border-2 flex items-center justify-center transition-all ${form[k] ? "bg-[#C9A96E] border-[#C9A96E]" : "border-gray-300 group-hover:border-[#C9A96E]"}`}
+                      style={{ width: 18, height: 18 }}
+                    >
+                      {form[k] && (
+                        <CheckCircleIcon
+                          className="w-3 h-3 text-white"
+                          style={{ width: 11, height: 11 }}
+                        />
+                      )}
+                    </div>
+                    <span className="text-sm text-gray-600 capitalize">
+                      {k === "featured"
+                        ? "Featured property"
+                        : "Available / Live"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Location ── */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+            <h3 className="font-bold text-gray-800 text-sm mb-4 flex items-center gap-2">
+              <MapPinIcon className="w-4 h-4 text-[#C9A96E]" /> Location
+            </h3>
+            <div className="grid grid-cols-1 gap-4">
+              <div>
+                <label className={lbl}>Full Address / Area</label>
+                <input
+                  className={inp}
+                  value={form.location}
+                  onChange={(e) => set("location")(e.target.value)}
+                  placeholder="e.g. Èze-sur-Mer, Côte d'Azur"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={lbl}>City *</label>
+                  <input
+                    className={inp}
+                    value={form.city}
+                    onChange={(e) => set("city")(e.target.value)}
+                    placeholder="Paris"
+                  />
+                </div>
+                <div>
+                  <label className={lbl}>Country</label>
+                  <input
+                    className={inp}
+                    value={form.country}
+                    onChange={(e) => set("country")(e.target.value)}
+                    placeholder="France"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Capacity ── */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+            <h3 className="font-bold text-gray-800 text-sm mb-4 flex items-center gap-2">
+              <UserIcon className="w-4 h-4 text-[#C9A96E]" /> Capacity
+            </h3>
+            <div className="grid grid-cols-3 gap-4">
+              {(
+                [
+                  ["bedrooms", "Bedrooms"],
+                  ["bathrooms", "Bathrooms"],
+                  ["maxGuests", "Max Guests"],
+                ] as const
+              ).map(([k, lbl2]) => (
+                <div key={k}>
+                  <label className={lbl}>{lbl2}</label>
+                  <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden bg-white">
+                    <button
+                      type="button"
+                      onClick={() => counter(k, -1)}
+                      className="px-3 py-2.5 text-gray-400 hover:bg-gray-50 font-bold transition-colors"
+                    >
+                      −
+                    </button>
+                    <span className="flex-1 text-center text-sm font-bold text-gray-900">
+                      {form[k]}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => counter(k, 1)}
+                      className="px-3 py-2.5 text-gray-400 hover:bg-gray-50 font-bold transition-colors"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Amenities ── */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+            <h3 className="font-bold text-gray-800 text-sm mb-1 flex items-center gap-2">
+              <CheckCircleIcon className="w-4 h-4 text-[#C9A96E]" /> Amenities
+              <span className="text-xs font-normal text-gray-400">
+                ({form.amenities.length} selected)
+              </span>
+            </h3>
+            <p className="text-xs text-gray-400 mb-4">
+              Select everything available at your property
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {AMENITIES_LIST.map((a) => {
+                const on = form.amenities.includes(a);
+                return (
+                  <button
+                    key={a}
+                    type="button"
+                    onClick={() => toggleAmenity(a)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border transition-all text-left ${on ? "bg-[#C9A96E]/8 border-[#C9A96E]/40 text-[#C9A96E]" : "bg-gray-50 border-gray-100 text-gray-500 hover:border-gray-300 hover:bg-gray-100"}`}
+                  >
+                    <div
+                      className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 transition-all ${on ? "bg-[#C9A96E] border-[#C9A96E]" : "border-gray-300"}`}
+                    >
+                      {on && (
+                        <span className="text-white text-[8px] font-bold">
+                          ✓
+                        </span>
+                      )}
+                    </div>
+                    {a}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ── Tags & Images ── */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+            <h3 className="font-bold text-gray-800 text-sm mb-4 flex items-center gap-2">
+              <PhotoIcon className="w-4 h-4 text-[#C9A96E]" /> Tags & Photos
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className={lbl}>Tags (comma-separated)</label>
+                <input
+                  className={inp}
+                  value={form.tags}
+                  onChange={(e) => set("tags")(e.target.value)}
+                  placeholder="Romantic, Sea View, Private, Luxury"
+                />
+              </div>
+              <div>
+                <label className={lbl}>Image URLs (one per line)</label>
+                <textarea
+                  className={inp + " resize-none font-mono text-xs"}
+                  rows={4}
+                  value={form.images}
+                  onChange={(e) => set("images")(e.target.value)}
+                  placeholder={
+                    "https://images.unsplash.com/photo-…?w=800\nhttps://…"
+                  }
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  First URL becomes the main thumbnail. Use direct image links.
+                </p>
+              </div>
+              {previewUrls.length > 0 && (
+                <div className="flex gap-2 flex-wrap">
+                  {previewUrls.slice(0, 6).map((url, i) => (
+                    <div
+                      key={i}
+                      className="relative w-20 h-16 rounded-lg overflow-hidden border border-gray-200 bg-gray-100"
+                    >
+                      <img
+                        src={url}
+                        alt=""
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (
+                            e.target as HTMLImageElement
+                          ).parentElement!.style.opacity = "0.3";
+                        }}
+                      />
+                      {i === 0 && (
+                        <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[9px] text-center py-0.5 font-bold">
+                          MAIN
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── Save ── */}
+          <div className="flex gap-3">
+            <button
+              onClick={save}
+              disabled={saving}
+              className="flex-1 bg-[#C9A96E] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-2xl text-sm hover:bg-[#b8935a] transition-all hover:scale-[1.01] active:scale-[0.99] shadow-lg shadow-[#C9A96E]/20 flex items-center justify-center gap-2"
+            >
+              {saving ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Saving…
+                </>
+              ) : editing ? (
+                "Update Listing"
+              ) : (
+                "Publish Listing"
+              )}
+            </button>
+            <button
+              onClick={onCancel}
+              className="px-6 py-3.5 rounded-2xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 bg-white transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   HOST: PROPERTIES SECTION
+═══════════════════════════════════════════════════════════ */
+const PropertiesSection = ({ onBook }: { onBook?: (h: Hotel) => void }) => {
+  const { user } = useAuth();
+  const [hotels, setHotels] = useState<Hotel[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<Hotel | null | "new">(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    setHotels((await ListingsDB.byHost(user.id)).map(listingToHotel));
+    setLoading(false);
+  }, [user]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (editing !== null) {
+    return (
+      <ListingForm
+        editing={editing === "new" ? null : editing}
+        hostId={user!.id}
+        hostName={`${user!.firstName} ${user!.lastName}`}
+        onSave={(saved) => {
+          setHotels((prev) =>
+            editing === "new"
+              ? [saved, ...prev]
+              : prev.map((h) => (h.id === saved.id ? saved : h)),
+          );
+          setEditing(null);
+        }}
+        onCancel={() => setEditing(null)}
+      />
+    );
+  }
+
+  return (
+    <div
+      className="flex-1 overflow-y-auto bg-gray-50 p-6"
+      style={{ animation: "fadeUp 0.3s ease both" }}
+    >
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">My Properties</h2>
+          <p className="text-gray-400 text-sm mt-0.5">
+            {loading
+              ? "Loading…"
+              : `${hotels.length} listing${hotels.length !== 1 ? "s" : ""}`}
+          </p>
+        </div>
+        <button
+          onClick={() => setEditing("new")}
+          className="flex items-center gap-2 bg-[#C9A96E] text-white font-semibold text-sm px-5 py-2.5 rounded-xl hover:bg-[#b8935a] transition-all hover:scale-105 shadow-md shadow-[#C9A96E]/20"
+        >
+          <PlusIcon className="w-4 h-4" /> Add Listing
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {[...Array(3)].map((_, i) => (
+            <Sk key={i} h="h-72" rounded="rounded-2xl" />
+          ))}
+        </div>
+      ) : hotels.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-28 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-[#C9A96E]/10 border border-[#C9A96E]/20 flex items-center justify-center mb-4">
+            <BuildingOffice2Icon className="w-7 h-7 text-[#C9A96E]" />
+          </div>
+          <h3 className="text-lg font-bold text-gray-700 mb-1">
+            No listings yet
+          </h3>
+          <p className="text-gray-400 text-sm mb-6 max-w-xs">
+            Add your first property to start receiving bookings from guests.
+          </p>
+          <button
+            onClick={() => setEditing("new")}
+            className="flex items-center gap-2 bg-[#C9A96E] text-white font-semibold text-sm px-6 py-3 rounded-xl hover:bg-[#b8935a] transition-all"
+          >
+            <PlusIcon className="w-4 h-4" /> Add Your First Listing
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {hotels.map((hotel, i) => (
+            <div
+              key={hotel.id}
+              className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 group"
+              style={{ animation: `fadeUp 0.4s ease ${i * 55}ms both` }}
+            >
+              <div
+                className="relative h-44 overflow-hidden cursor-pointer"
+                onClick={() => onBook?.(hotel)}
+              >
+                <img
+                  src={
+                    hotel.thumbnail ||
+                    "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400"
+                  }
+                  alt={hotel.name}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src =
+                      "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400";
+                  }}
+                />
+                <div className="absolute top-2 left-2 flex gap-1.5">
+                  {hotel.featured && (
+                    <span className="bg-[#C9A96E] text-white text-[10px] font-bold px-2.5 py-1 rounded-full">
+                      Featured
+                    </span>
+                  )}
+                  <span
+                    className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${hotel.available ? "bg-emerald-500 text-white" : "bg-gray-400 text-white"}`}
+                  >
+                    {hotel.available ? "Live" : "Hidden"}
+                  </span>
+                </div>
+              </div>
+              <div className="p-4">
+                <p className="font-bold text-gray-800 text-sm truncate mb-0.5">
+                  {hotel.name}
+                </p>
+                <div className="flex items-center gap-1 mb-3">
+                  <MapPinIcon className="w-3 h-3 text-[#C9A96E] shrink-0" />
+                  <p className="text-xs text-gray-400 truncate">
+                    {hotel.city}, {hotel.country}
+                  </p>
+                </div>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="font-bold text-gray-900">
+                    {fmt$(hotel.pricePerNight)}
+                    <span className="text-xs text-gray-400 font-normal">
+                      /night
+                    </span>
+                  </p>
+                  {hotel.rating > 0 && (
+                    <div className="flex items-center gap-1">
+                      <StarSolid className="w-3 h-3 text-[#C9A96E]" />
+                      <span className="text-xs font-semibold text-gray-600">
+                        {hotel.rating.toFixed(1)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setEditing(hotel)}
+                    className="flex-1 flex items-center justify-center gap-1 text-xs font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-200 py-2 rounded-xl transition-colors"
+                  >
+                    <PencilSquareIcon className="w-3.5 h-3.5" /> Edit
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const u = await ListingsDB.update(hotel.id, {
+                        available: !hotel.available,
+                      });
+                      if (u)
+                        setHotels((prev) =>
+                          prev.map((h) =>
+                            h.id === hotel.id ? listingToHotel(u) : h,
+                          ),
+                        );
+                    }}
+                    className={`flex-1 text-xs font-semibold py-2 rounded-xl border transition-colors ${hotel.available ? "text-amber-600 bg-amber-50 border-amber-200 hover:bg-amber-100" : "text-emerald-600 bg-emerald-50 border-emerald-200 hover:bg-emerald-100"}`}
+                  >
+                    {hotel.available ? "Hide" : "Publish"}
+                  </button>
+                  <button
+                    disabled={deleting === hotel.id}
+                    onClick={async () => {
+                      if (!confirm("Delete this listing permanently?")) return;
+                      setDeleting(hotel.id);
+                      await ListingsDB.delete(hotel.id);
+                      setHotels((prev) =>
+                        prev.filter((h) => h.id !== hotel.id),
+                      );
+                      setDeleting(null);
+                    }}
+                    className="w-9 flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 border border-gray-200 hover:border-red-200 rounded-xl transition-colors disabled:opacity-40"
+                  >
+                    {deleting === hotel.id ? (
+                      <span className="w-3.5 h-3.5 border border-red-400 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <TrashIcon className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   HOST: BOOKINGS SECTION
+═══════════════════════════════════════════════════════════ */
+const HostBookings = () => {
+  const { user } = useAuth();
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<"all" | Booking["status"]>("all");
+  const [actions, setActions] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    BookingsDB.byHost(user.id)
+      .then(setBookings)
+      .finally(() => setLoading(false));
+  }, [user]);
+
+  const changeStatus = async (id: string, s: Booking["status"]) => {
+    await BookingsDB.updateStatus(id, s);
+    setBookings((p) => p.map((b) => (b.id === id ? { ...b, status: s } : b)));
+    setActions(null);
+  };
+
+  const counts = {
+    all: bookings.length,
+    confirmed: bookings.filter((b) => b.status === "confirmed").length,
+    pending: bookings.filter((b) => b.status === "pending").length,
+    cancelled: bookings.filter((b) => b.status === "cancelled").length,
+  };
+  const filtered =
+    filter === "all" ? bookings : bookings.filter((b) => b.status === filter);
+
+  return (
+    <div
+      className="flex-1 overflow-y-auto bg-gray-50 p-6"
+      style={{ animation: "fadeUp 0.3s ease both" }}
+    >
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">Bookings</h2>
+        <p className="text-gray-400 text-sm mt-0.5">
+          {bookings.length} total reservation{bookings.length !== 1 ? "s" : ""}
+        </p>
+      </div>
+      <div className="flex gap-2 flex-wrap mb-5">
+        {(["all", "confirmed", "pending", "cancelled"] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`text-xs font-semibold px-4 py-2 rounded-full border transition-all ${filter === f ? "bg-[#C9A96E] border-[#C9A96E] text-white shadow-sm" : "border-gray-200 text-gray-500 bg-white hover:border-[#C9A96E]"}`}
+          >
+            {f.charAt(0).toUpperCase() + f.slice(1)} ({counts[f]})
+          </button>
+        ))}
+      </div>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        {loading ? (
+          <div className="p-6 space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <Sk key={i} h="h-11" />
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="p-14 text-center">
+            <CalendarDaysIcon className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+            <p className="text-gray-400 text-sm">No bookings</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {[
+                    "Guest",
+                    "Property",
+                    "Check-in",
+                    "Check-out",
+                    "Nights",
+                    "Total",
+                    "Status",
+                    "Actions",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((b, i) => (
+                  <tr
+                    key={b.id}
+                    className="border-b border-gray-50 hover:bg-gray-50/60 transition-colors"
+                    style={{ animation: `fadeUp 0.3s ease ${i * 30}ms both` }}
+                  >
+                    <td className="px-5 py-3">
+                      <p className="text-sm font-medium text-gray-800">
+                        {b.guestName}
+                      </p>
+                      <p className="text-xs text-gray-400">{b.guestEmail}</p>
+                    </td>
+                    <td className="px-5 py-3 text-sm text-gray-600 max-w-[120px] truncate">
+                      {b.listingName}
+                    </td>
+                    <td className="px-5 py-3 text-sm text-gray-500 whitespace-nowrap">
+                      {fmtDate(b.checkIn)}
+                    </td>
+                    <td className="px-5 py-3 text-sm text-gray-500 whitespace-nowrap">
+                      {fmtDate(b.checkOut)}
+                    </td>
+                    <td className="px-5 py-3 text-sm text-gray-500">
+                      {b.nights}
+                    </td>
+                    <td className="px-5 py-3 text-sm font-bold text-gray-800">
+                      {fmt$(b.totalAmount)}
+                    </td>
+                    <td className="px-5 py-3">
+                      <StatusPill status={b.status} />
+                    </td>
+                    <td className="px-5 py-3 relative">
+                      <button
+                        onClick={() =>
+                          setActions(actions === b.id ? null : b.id)
+                        }
+                        className="w-7 h-7 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400 transition-colors"
+                      >
+                        <EllipsisHorizontalIcon className="w-4 h-4" />
+                      </button>
+                      {actions === b.id && (
+                        <div
+                          className="absolute right-3 top-10 bg-white border border-gray-100 rounded-xl shadow-xl z-30 overflow-hidden min-w-[148px]"
+                          onMouseLeave={() => setActions(null)}
+                        >
+                          {b.status !== "confirmed" && (
+                            <button
+                              onClick={() => changeStatus(b.id, "confirmed")}
+                              className="w-full text-left px-4 py-2.5 text-sm text-emerald-600 hover:bg-emerald-50 font-medium"
+                            >
+                              ✓ Confirm
+                            </button>
+                          )}
+                          {b.status !== "cancelled" && (
+                            <button
+                              onClick={() => changeStatus(b.id, "cancelled")}
+                              className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 font-medium"
+                            >
+                              ✕ Decline
+                            </button>
+                          )}
+                          {b.status !== "pending" && (
+                            <button
+                              onClick={() => changeStatus(b.id, "pending")}
+                              className="w-full text-left px-4 py-2.5 text-sm text-amber-600 hover:bg-amber-50 font-medium"
+                            >
+                              ⏳ Set Pending
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   HOST: REVIEWS
+═══════════════════════════════════════════════════════════ */
+const ReviewsSection = () => {
+  const { user } = useAuth();
+  const [hotels, setHotels] = useState<Hotel[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+    ListingsDB.byHost(user.id)
+      .then((l) => setHotels(l.map(listingToHotel)))
+      .finally(() => setLoading(false));
+  }, [user]);
+
+  const avg = hotels.length
+    ? (hotels.reduce((s, h) => s + h.rating, 0) / hotels.length).toFixed(1)
+    : "—";
+  const totalReviews = hotels.reduce((s, h) => s + h.reviewCount, 0);
+
+  return (
+    <div
+      className="flex-1 overflow-y-auto bg-gray-50 p-6"
+      style={{ animation: "fadeUp 0.3s ease both" }}
+    >
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">Reviews</h2>
+        <p className="text-gray-400 text-sm mt-0.5">
+          Ratings across your properties
+        </p>
+      </div>
+      <div className="flex gap-4 flex-wrap mb-6">
+        <StatCard
+          icon={<StarSolid className="w-5 h-5 text-[#C9A96E]" />}
+          label="Avg Rating"
+          value={avg}
+          delay={0}
+        />
+        <StatCard
+          icon={<ChatBubbleLeftRightIcon className="w-5 h-5 text-[#C9A96E]" />}
+          label="Total Reviews"
+          value={totalReviews}
+          delay={60}
+        />
+        <StatCard
+          icon={<BuildingOffice2Icon className="w-5 h-5 text-[#C9A96E]" />}
+          label="Properties Rated"
+          value={hotels.filter((h) => h.reviewCount > 0).length}
+          delay={120}
+        />
+      </div>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100">
+          <h3 className="font-bold text-gray-900">Property Ratings</h3>
+        </div>
+        {loading ? (
+          <div className="p-6 space-y-3">
+            {[...Array(3)].map((_, i) => (
+              <Sk key={i} h="h-16" />
+            ))}
+          </div>
+        ) : hotels.length === 0 ? (
+          <div className="p-12 text-center">
+            <StarIcon className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+            <p className="text-gray-400 text-sm">No properties yet</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {hotels.map((h, i) => (
+              <div
+                key={h.id}
+                className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50/50 transition-colors"
+                style={{ animation: `fadeUp 0.35s ease ${i * 50}ms both` }}
+              >
+                <div className="w-14 h-12 rounded-xl overflow-hidden shrink-0">
+                  <img
+                    src={
+                      h.thumbnail ||
+                      "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=200"
+                    }
+                    alt={h.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src =
+                        "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=200";
+                    }}
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-800 truncate text-sm">
+                    {h.name}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {h.city}, {h.country}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="flex items-center gap-0.5 justify-end mb-0.5">
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <StarSolid
+                        key={s}
+                        className={`w-3.5 h-3.5 ${s <= Math.round(h.rating) ? "text-[#C9A96E]" : "text-gray-200"}`}
+                      />
+                    ))}
+                  </div>
+                  <p className="text-sm font-bold text-gray-800">
+                    {h.rating > 0 ? h.rating.toFixed(1) : "No rating"}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {h.reviewCount} review{h.reviewCount !== 1 ? "s" : ""}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   HOST: EARNINGS
+═══════════════════════════════════════════════════════════ */
+const EarningsSection = () => {
+  const { user } = useAuth();
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+    BookingsDB.byHost(user.id)
+      .then(setBookings)
+      .finally(() => setLoading(false));
+  }, [user]);
+
+  const confirmed = bookings.filter((b) => b.status === "confirmed");
+  const total = confirmed.reduce((s, b) => s + b.totalAmount, 0);
+  const avgBooking = confirmed.length
+    ? Math.round(total / confirmed.length)
+    : 0;
+  const totalNights = confirmed.reduce((s, b) => s + b.nights, 0);
+
+  return (
+    <div
+      className="flex-1 overflow-y-auto bg-gray-50 p-6"
+      style={{ animation: "fadeUp 0.3s ease both" }}
+    >
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">Earnings</h2>
+        <p className="text-gray-400 text-sm mt-0.5">
+          Revenue from confirmed bookings
+        </p>
+      </div>
+      <div className="flex gap-4 flex-wrap mb-6">
+        <StatCard
+          icon={<BanknotesIcon className="w-5 h-5 text-[#C9A96E]" />}
+          label="Total Earnings"
+          value={fmt$(total)}
+          delay={0}
+          sub="All confirmed bookings"
+        />
+        <StatCard
+          icon={<CalendarDaysIcon className="w-5 h-5 text-[#C9A96E]" />}
+          label="Confirmed Bookings"
+          value={confirmed.length}
+          delay={60}
+        />
+        <StatCard
+          icon={<ArrowTrendingUpIcon className="w-5 h-5 text-[#C9A96E]" />}
+          label="Avg Per Booking"
+          value={fmt$(avgBooking)}
+          delay={120}
+        />
+        <StatCard
+          icon={<ClockIcon className="w-5 h-5 text-[#C9A96E]" />}
+          label="Total Nights Booked"
+          value={totalNights}
+          delay={180}
+        />
+      </div>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100">
+          <h3 className="font-bold text-gray-900">Earnings History</h3>
+        </div>
+        {loading ? (
+          <div className="p-6 space-y-3">
+            {[...Array(4)].map((_, i) => (
+              <Sk key={i} h="h-10" />
+            ))}
+          </div>
+        ) : confirmed.length === 0 ? (
+          <div className="p-12 text-center">
+            <BanknotesIcon className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+            <p className="text-gray-400 text-sm">No confirmed bookings yet</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {["Guest", "Property", "Dates", "Nights", "Earned"].map(
+                    (h) => (
+                      <th
+                        key={h}
+                        className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-6 py-3"
+                      >
+                        {h}
+                      </th>
+                    ),
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {confirmed.map((b, i) => (
+                  <tr
+                    key={b.id}
+                    className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
+                    style={{ animation: `fadeUp 0.3s ease ${i * 30}ms both` }}
+                  >
+                    <td className="px-6 py-3.5 text-sm font-medium text-gray-800">
+                      {b.guestName}
+                    </td>
+                    <td className="px-6 py-3.5 text-sm text-gray-600 truncate max-w-[140px]">
+                      {b.listingName}
+                    </td>
+                    <td className="px-6 py-3.5 text-sm text-gray-500 whitespace-nowrap">
+                      {fmtDate(b.checkIn)} → {fmtDate(b.checkOut)}
+                    </td>
+                    <td className="px-6 py-3.5 text-sm text-gray-500">
+                      {b.nights}
+                    </td>
+                    <td className="px-6 py-3.5 text-sm font-bold text-emerald-600">
+                      {fmt$(b.totalAmount)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   SETTINGS (shared)
+═══════════════════════════════════════════════════════════ */
+const SettingsSection = () => {
+  const { user, updateUser } = useAuth();
+  const [form, setForm] = useState({
+    firstName: user?.firstName ?? "",
+    lastName: user?.lastName ?? "",
+    phone: user?.phone ?? "",
+    company: user?.company ?? "",
+    country: user?.country ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const isGuest = user?.role === "guest";
+
+  const save = async () => {
+    setSaving(true);
+    await updateUser(form);
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+  };
+
+  const inp =
+    "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#C9A96E] focus:ring-2 focus:ring-[#C9A96E]/10 transition-all bg-white";
+  const lbl =
+    "block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5";
+  const accent = isGuest ? "#6EADC9" : "#C9A96E";
+
+  return (
+    <div
+      className="flex-1 overflow-y-auto bg-gray-50 p-6"
+      style={{ animation: "fadeUp 0.3s ease both" }}
+    >
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">Settings</h2>
+        <p className="text-gray-400 text-sm mt-0.5">
+          Manage your account profile
+        </p>
+      </div>
+      <div className="max-w-lg space-y-5">
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+          {/* Avatar */}
+          <div className="flex items-center gap-4 mb-6 pb-5 border-b border-gray-100">
+            <div
+              className="w-16 h-16 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg"
+              style={{
+                background: isGuest
+                  ? "linear-gradient(135deg,#6EADC9,#4a8aad)"
+                  : "linear-gradient(135deg,#C9A96E,#8a6030)",
+              }}
+            >
+              {user?.avatar ?? user?.firstName?.[0] ?? "?"}
+            </div>
+            <div>
+              <p className="font-bold text-gray-800">
+                {user?.firstName} {user?.lastName}
+              </p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {isGuest ? "Guest Traveller" : "Property Host"}
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: accent }}>
+                {user?.emailVerified
+                  ? "✓ Email verified"
+                  : "⚠ Email not verified"}
+              </p>
+            </div>
+          </div>
+
+          <h3 className="font-bold text-gray-800 text-sm mb-4">
+            Profile Information
+          </h3>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={lbl}>First Name</label>
+                <input
+                  className={inp}
+                  value={form.firstName}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, firstName: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className={lbl}>Last Name</label>
+                <input
+                  className={inp}
+                  value={form.lastName}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, lastName: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+            <div>
+              <label className={lbl}>Email (cannot change)</label>
+              <input
+                className={inp + " bg-gray-50 text-gray-400 cursor-not-allowed"}
+                value={user?.email ?? ""}
+                disabled
+              />
+            </div>
+            <div>
+              <label className={lbl}>Phone</label>
+              <input
+                className={inp}
+                value={form.phone}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, phone: e.target.value }))
+                }
+                placeholder="+1 234 567 8900"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              {!isGuest && (
+                <div>
+                  <label className={lbl}>Company / Property</label>
+                  <input
+                    className={inp}
+                    value={form.company}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, company: e.target.value }))
+                    }
+                  />
+                </div>
+              )}
+              <div>
+                <label className={lbl}>Country</label>
+                <input
+                  className={inp}
+                  value={form.country}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, country: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={save}
+          disabled={saving}
+          className="w-full text-white font-bold py-3.5 rounded-2xl text-sm transition-all hover:scale-[1.01] shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+          style={{ background: accent, boxShadow: `0 8px 24px ${accent}30` }}
+        >
+          {saving ? (
+            <>
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              Saving…
+            </>
+          ) : saved ? (
+            "✓ Changes Saved!"
+          ) : (
+            "Save Changes"
+          )}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   GUEST: MY BOOKINGS
+═══════════════════════════════════════════════════════════ */
+const GuestBookings = () => {
+  const { user } = useAuth();
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<"all" | "upcoming" | "past">("all");
+
+  useEffect(() => {
+    if (!user) return;
+    BookingsDB.byGuest(user.id)
+      .then(setBookings)
+      .finally(() => setLoading(false));
+  }, [user]);
+
+  const now = new Date();
+  const upcoming = bookings.filter(
+    (b) => b.status !== "cancelled" && new Date(b.checkIn) >= now,
+  );
+  const past = bookings.filter((b) => new Date(b.checkOut) < now);
+  const show =
+    filter === "upcoming" ? upcoming : filter === "past" ? past : bookings;
+
+  return (
+    <div
+      className="flex-1 overflow-y-auto bg-gray-50 p-6"
+      style={{ animation: "fadeUp 0.3s ease both" }}
+    >
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">My Bookings</h2>
+        <p className="text-gray-400 text-sm mt-0.5">
+          {bookings.length} total reservation{bookings.length !== 1 ? "s" : ""}
+        </p>
+      </div>
+      <div className="flex gap-2 mb-5">
+        {(["all", "upcoming", "past"] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`text-xs font-semibold px-4 py-2 rounded-full border transition-all ${filter === f ? "text-white border-transparent shadow-sm" : "border-gray-200 text-gray-500 bg-white hover:border-[#6EADC9]"}`}
+            style={filter === f ? { background: "#6EADC9" } : {}}
+          >
+            {f.charAt(0).toUpperCase() + f.slice(1)} (
+            {f === "all"
+              ? bookings.length
+              : f === "upcoming"
+                ? upcoming.length
+                : past.length}
+            )
+          </button>
+        ))}
+      </div>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        {loading ? (
+          <div className="p-6 space-y-3">
+            {[...Array(4)].map((_, i) => (
+              <Sk key={i} h="h-14" />
+            ))}
+          </div>
+        ) : show.length === 0 ? (
+          <div className="p-12 text-center">
+            <CalendarDaysIcon className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+            <p className="text-gray-400 text-sm">
+              No {filter !== "all" ? filter : ""} bookings
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {[
+                    "Property",
+                    "Check-in",
+                    "Check-out",
+                    "Nights",
+                    "Total",
+                    "Status",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-6 py-3"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {show.map((b, i) => (
+                  <tr
+                    key={b.id}
+                    className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
+                    style={{ animation: `fadeUp 0.3s ease ${i * 30}ms both` }}
+                  >
+                    <td className="px-6 py-3.5">
+                      <p className="text-sm font-semibold text-gray-800 line-clamp-1">
+                        {b.listingName}
+                      </p>
+                      <p className="text-xs text-gray-400">{b.ref}</p>
+                    </td>
+                    <td className="px-6 py-3.5 text-sm text-gray-500 whitespace-nowrap">
+                      {fmtDate(b.checkIn)}
+                    </td>
+                    <td className="px-6 py-3.5 text-sm text-gray-500 whitespace-nowrap">
+                      {fmtDate(b.checkOut)}
+                    </td>
+                    <td className="px-6 py-3.5 text-sm text-gray-500">
+                      {b.nights}
+                    </td>
+                    <td className="px-6 py-3.5 text-sm font-bold text-gray-800">
+                      {fmt$(b.totalAmount)}
+                    </td>
+                    <td className="px-6 py-3.5">
+                      <StatusPill status={b.status} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   GUEST: WISHLIST
+═══════════════════════════════════════════════════════════ */
+const WishlistSection = ({ onBook }: { onBook?: (h: Hotel) => void }) => {
+  const { user, updateUser } = useAuth();
+  const [hotels, setHotels] = useState<Hotel[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+    const ids = user.wishlist ?? [];
+    if (!ids.length) {
+      setLoading(false);
+      return;
+    }
+    Promise.all(ids.map((id) => ListingsDB.getById(id)))
+      .then((r) =>
+        setHotels((r.filter(Boolean) as Listing[]).map(listingToHotel)),
+      )
+      .finally(() => setLoading(false));
+  }, [user]);
+
+  const remove = async (id: string) => {
+    const next = (user?.wishlist ?? []).filter((w) => w !== id);
+    await updateUser({ wishlist: next });
+    setHotels((prev) => prev.filter((h) => h.id !== id));
+  };
+
+  return (
+    <div
+      className="flex-1 overflow-y-auto bg-gray-50 p-6"
+      style={{ animation: "fadeUp 0.3s ease both" }}
+    >
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">Wishlist</h2>
+        <p className="text-gray-400 text-sm mt-0.5">
+          {loading
+            ? "Loading…"
+            : `${hotels.length} saved propert${hotels.length !== 1 ? "ies" : "y"}`}
+        </p>
+      </div>
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {[...Array(3)].map((_, i) => (
+            <Sk key={i} h="h-64" rounded="rounded-2xl" />
+          ))}
+        </div>
+      ) : hotels.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-[#6EADC9]/10 border border-[#6EADC9]/20 flex items-center justify-center mb-4">
+            <HeartIcon className="w-7 h-7 text-[#6EADC9]" />
+          </div>
+          <h3 className="text-lg font-bold text-gray-600 mb-1">
+            No saved properties
+          </h3>
+          <p className="text-gray-400 text-sm">
+            Heart a property on the listings page to save it here.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {hotels.map((h, i) => (
+            <div
+              key={h.id}
+              className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-all group"
+              style={{ animation: `fadeUp 0.4s ease ${i * 55}ms both` }}
+            >
+              <div
+                className="relative h-44 overflow-hidden cursor-pointer"
+                onClick={() => onBook?.(h)}
+              >
+                <img
+                  src={
+                    h.thumbnail ||
+                    "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400"
+                  }
+                  alt={h.name}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src =
+                      "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400";
+                  }}
+                />
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    remove(h.id);
+                  }}
+                  className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 flex items-center justify-center hover:bg-red-50 transition-colors shadow-sm"
+                >
+                  <HeartSolid className="w-4 h-4 text-rose-500" />
+                </button>
+              </div>
+              <div className="p-4">
+                <p className="font-bold text-gray-800 text-sm truncate">
+                  {h.name}
+                </p>
+                <div className="flex items-center gap-1 mt-0.5 mb-3">
+                  <MapPinIcon className="w-3 h-3 text-[#6EADC9]" />
+                  <p className="text-xs text-gray-400 truncate">{h.city}</p>
+                </div>
+                <div className="flex items-center justify-between">
+                  <p className="font-bold text-gray-900">
+                    {fmt$(h.pricePerNight)}
+                    <span className="text-xs text-gray-400 font-normal">
+                      /night
+                    </span>
+                  </p>
+                  <button
+                    onClick={() => onBook?.(h)}
+                    className="text-xs font-semibold text-[#6EADC9] hover:underline"
+                  >
+                    Book Now →
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   GUEST: TRAVEL HISTORY
+═══════════════════════════════════════════════════════════ */
+const TravelHistory = () => {
+  const { user } = useAuth();
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+    BookingsDB.byGuest(user.id)
+      .then((b) =>
+        setBookings(b.filter((bk) => new Date(bk.checkOut) < new Date())),
+      )
+      .finally(() => setLoading(false));
+  }, [user]);
+
+  const nights = bookings.reduce((s, b) => s + b.nights, 0);
+  const spent = bookings.reduce((s, b) => s + b.totalAmount, 0);
+
+  return (
+    <div
+      className="flex-1 overflow-y-auto bg-gray-50 p-6"
+      style={{ animation: "fadeUp 0.3s ease both" }}
+    >
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">Travel History</h2>
+        <p className="text-gray-400 text-sm mt-0.5">
+          {bookings.length} completed trip{bookings.length !== 1 ? "s" : ""}
+        </p>
+      </div>
+      <div className="flex gap-4 flex-wrap mb-6">
+        <StatCard
+          icon={<GlobeAltIcon className="w-5 h-5 text-[#6EADC9]" />}
+          label="Trips Completed"
+          value={bookings.length}
+          delay={0}
+          accent="#6EADC9"
+        />
+        <StatCard
+          icon={<ClockIcon className="w-5 h-5 text-[#6EADC9]" />}
+          label="Nights Stayed"
+          value={nights}
+          delay={60}
+          accent="#6EADC9"
+        />
+        <StatCard
+          icon={<BanknotesIcon className="w-5 h-5 text-[#6EADC9]" />}
+          label="Total Spent"
+          value={fmt$(spent)}
+          delay={120}
+          accent="#6EADC9"
+        />
+      </div>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100">
+          <h3 className="font-bold text-gray-900">Past Stays</h3>
+        </div>
+        {loading ? (
+          <div className="p-6 space-y-3">
+            {[...Array(4)].map((_, i) => (
+              <Sk key={i} h="h-11" />
+            ))}
+          </div>
+        ) : bookings.length === 0 ? (
+          <div className="p-12 text-center">
+            <GlobeAltIcon className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+            <p className="text-gray-400 text-sm">No past trips yet</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {["Property", "Dates", "Nights", "Total", "Status"].map(
+                    (h) => (
+                      <th
+                        key={h}
+                        className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-6 py-3"
+                      >
+                        {h}
+                      </th>
+                    ),
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {bookings.map((b, i) => (
+                  <tr
+                    key={b.id}
+                    className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
+                    style={{ animation: `fadeUp 0.3s ease ${i * 30}ms both` }}
+                  >
+                    <td className="px-6 py-3.5">
+                      <p className="text-sm font-semibold text-gray-800 line-clamp-1">
+                        {b.listingName}
+                      </p>
+                      <p className="text-xs text-gray-400">{b.ref}</p>
+                    </td>
+                    <td className="px-6 py-3.5 text-sm text-gray-500 whitespace-nowrap">
+                      {fmtDate(b.checkIn)} → {fmtDate(b.checkOut)}
+                    </td>
+                    <td className="px-6 py-3.5 text-sm text-gray-500">
+                      {b.nights}
+                    </td>
+                    <td className="px-6 py-3.5 text-sm font-bold text-gray-800">
+                      {fmt$(b.totalAmount)}
+                    </td>
+                    <td className="px-6 py-3.5">
+                      <StatusPill status={b.status} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   MESSAGES (shared placeholder)
+═══════════════════════════════════════════════════════════ */
+const Messages = () => (
+  <div
+    className="flex-1 flex flex-col items-center justify-center bg-gray-50 p-10 text-center"
+    style={{ animation: "fadeUp 0.3s ease both" }}
+  >
+    <div className="w-16 h-16 rounded-2xl bg-[#C9A96E]/10 border border-[#C9A96E]/20 flex items-center justify-center mb-4">
+      <ChatBubbleLeftRightIcon className="w-7 h-7 text-[#C9A96E]" />
+    </div>
+    <h2 className="text-xl font-bold text-gray-800 mb-2">Messages</h2>
+    <p className="text-gray-400 text-sm max-w-xs">
+      Connect this section to Supabase Realtime, Firebase, or a messaging
+      service like Sendbird.
+    </p>
+  </div>
+);
+
+/* ═══════════════════════════════════════════════════════════
+   HOST DASHBOARD HOME
+═══════════════════════════════════════════════════════════ */
+const HostHome = ({
   onNavigate,
   onBook,
 }: {
@@ -459,8 +2078,7 @@ const HostContent = ({
   const [hotels, setHotels] = useState<Hotel[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
-  const [actionsOpen, setActionsOpen] = useState<string | null>(null);
-  const actionsRef = useRef<HTMLTableDataCellElement>(null);
+  const [actions, setActions] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -475,49 +2093,29 @@ const HostContent = ({
       .finally(() => setLoading(false));
   }, [user]);
 
-  // Close actions menu on outside click
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (
-        actionsRef.current &&
-        !actionsRef.current.contains(e.target as Node)
-      ) {
-        setActionsOpen(null);
-      }
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
+  const changeStatus = async (id: string, s: Booking["status"]) => {
+    await BookingsDB.updateStatus(id, s);
+    setBookings((p) => p.map((b) => (b.id === id ? { ...b, status: s } : b)));
+    setActions(null);
+  };
 
   const earnings = bookings
     .filter((b) => b.status === "confirmed")
     .reduce((s, b) => s + b.totalAmount, 0);
-  const activeCount = bookings.filter((b) => b.status === "confirmed").length;
-  const pendingCount = bookings.filter((b) => b.status === "pending").length;
-  const recentBk = [...bookings]
+  const active = bookings.filter((b) => b.status === "confirmed").length;
+  const pending = bookings.filter((b) => b.status === "pending").length;
+  const recent = [...bookings]
     .sort(
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     )
     .slice(0, 8);
 
-  const handleStatusChange = async (
-    bookingId: string,
-    status: Booking["status"],
-  ) => {
-    await BookingsDB.updateStatus(bookingId, status);
-    setBookings((prev) =>
-      prev.map((b) => (b.id === bookingId ? { ...b, status } : b)),
-    );
-    setActionsOpen(null);
-  };
-
   return (
     <div
-      className="p-6 space-y-6 bg-gray-50 min-h-full"
-      style={{ animation: "fadeUp 0.35s ease both" }}
+      className="flex-1 overflow-y-auto bg-gray-50 p-6 space-y-6"
+      style={{ animation: "fadeUp 0.3s ease both" }}
     >
-      {/* Welcome */}
       <div>
         <h2 className="text-3xl font-bold text-gray-900">
           Welcome, {user?.firstName} {user?.lastName}
@@ -527,13 +2125,12 @@ const HostContent = ({
         </p>
       </div>
 
-      {/* Stat cards */}
       <div className="flex gap-4 flex-wrap">
         {loading ? (
           [...Array(4)].map((_, i) => (
             <div
               key={i}
-              className="flex-1 min-w-[140px] bg-white rounded-2xl p-5 border border-gray-100 h-20 animate-pulse"
+              className="flex-1 min-w-[140px] bg-white rounded-2xl p-5 border border-gray-100 h-24 animate-pulse"
             />
           ))
         ) : (
@@ -547,7 +2144,7 @@ const HostContent = ({
             <StatCard
               icon={<CalendarDaysIcon className="w-5 h-5 text-[#C9A96E]" />}
               label="Active Bookings"
-              value={activeCount}
+              value={active}
               delay={60}
             />
             <StatCard
@@ -558,22 +2155,19 @@ const HostContent = ({
             />
             <StatCard
               icon={<ClockIcon className="w-5 h-5 text-[#C9A96E]" />}
-              label="Pending requests"
-              value={pendingCount}
+              label="Pending Requests"
+              value={pending}
               delay={180}
             />
           </>
         )}
       </div>
 
-      {/* Main grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-6">
-        {/* ── Bookings table ── */}
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_260px] gap-6">
+        {/* Bookings table */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-            <h3 className="font-bold text-gray-900 text-base">
-              Recent Bookings
-            </h3>
+            <h3 className="font-bold text-gray-900">Recent Bookings</h3>
             <button
               onClick={() => onNavigate("bookings")}
               className="text-xs font-semibold text-[#C9A96E] hover:underline flex items-center gap-1"
@@ -581,14 +2175,13 @@ const HostContent = ({
               View all <ChevronRightIcon className="w-3.5 h-3.5" />
             </button>
           </div>
-
           {loading ? (
             <div className="p-6 space-y-3">
               {[...Array(5)].map((_, i) => (
                 <Sk key={i} h="h-10" />
               ))}
             </div>
-          ) : recentBk.length === 0 ? (
+          ) : recent.length === 0 ? (
             <div className="p-12 text-center">
               <CalendarDaysIcon className="w-10 h-10 text-gray-200 mx-auto mb-3" />
               <p className="text-gray-400 text-sm">No bookings yet</p>
@@ -602,7 +2195,7 @@ const HostContent = ({
                       (h) => (
                         <th
                           key={h}
-                          className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-6 py-3"
+                          className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3"
                         >
                           {h}
                         </th>
@@ -611,77 +2204,65 @@ const HostContent = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {recentBk.map((b, i) => (
+                  {recent.map((b, i) => (
                     <tr
                       key={b.id}
                       className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
-                      style={{
-                        animation: `fadeUp 0.35s ease ${i * 40}ms both`,
-                      }}
+                      style={{ animation: `fadeUp 0.3s ease ${i * 35}ms both` }}
                     >
-                      <td className="px-6 py-3.5">
+                      <td className="px-5 py-3">
                         <p className="text-sm font-medium text-gray-800">
                           {b.guestName}
                         </p>
                         <p className="text-xs text-gray-400">{b.guestEmail}</p>
                       </td>
-                      <td className="px-6 py-3.5 text-sm text-gray-600 max-w-[140px] truncate">
+                      <td className="px-5 py-3 text-sm text-gray-600 max-w-[120px] truncate">
                         {b.listingName}
                       </td>
-                      <td className="px-6 py-3.5 text-sm text-gray-500 whitespace-nowrap">
+                      <td className="px-5 py-3 text-sm text-gray-500 whitespace-nowrap">
                         {fmtDate(b.checkIn)}
                       </td>
-                      <td className="px-6 py-3.5">
+                      <td className="px-5 py-3">
                         <StatusPill status={b.status} />
                       </td>
-                      <td
-                        className="px-6 py-3.5 relative"
-                        ref={actionsOpen === b.id ? actionsRef : null}
-                      >
+                      <td className="px-5 py-3 relative">
                         <button
                           onClick={() =>
-                            setActionsOpen(actionsOpen === b.id ? null : b.id)
+                            setActions(actions === b.id ? null : b.id)
                           }
-                          className="w-7 h-7 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
+                          className="w-7 h-7 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400 transition-colors"
                         >
                           <EllipsisHorizontalIcon className="w-4 h-4" />
                         </button>
-                        {actionsOpen === b.id && (
-                          <div className="absolute right-4 top-10 bg-white border border-gray-100 rounded-xl shadow-xl z-30 overflow-hidden w-40">
+                        {actions === b.id && (
+                          <div
+                            className="absolute right-2 top-9 bg-white border border-gray-100 rounded-xl shadow-xl z-30 overflow-hidden min-w-[148px]"
+                            onMouseLeave={() => setActions(null)}
+                          >
                             {b.status !== "confirmed" && (
                               <button
-                                onClick={() =>
-                                  handleStatusChange(b.id, "confirmed")
-                                }
-                                className="w-full text-left px-4 py-2.5 text-sm text-emerald-600 hover:bg-emerald-50 transition-colors font-medium"
+                                onClick={() => changeStatus(b.id, "confirmed")}
+                                className="w-full text-left px-4 py-2.5 text-sm text-emerald-600 hover:bg-emerald-50 font-medium"
                               >
                                 ✓ Confirm
                               </button>
                             )}
                             {b.status !== "cancelled" && (
                               <button
-                                onClick={() =>
-                                  handleStatusChange(b.id, "cancelled")
-                                }
-                                className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors font-medium"
+                                onClick={() => changeStatus(b.id, "cancelled")}
+                                className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 font-medium"
                               >
                                 ✕ Decline
                               </button>
                             )}
                             {b.status !== "pending" && (
                               <button
-                                onClick={() =>
-                                  handleStatusChange(b.id, "pending")
-                                }
-                                className="w-full text-left px-4 py-2.5 text-sm text-amber-600 hover:bg-amber-50 transition-colors font-medium"
+                                onClick={() => changeStatus(b.id, "pending")}
+                                className="w-full text-left px-4 py-2.5 text-sm text-amber-600 hover:bg-amber-50 font-medium"
                               >
                                 ⏳ Set Pending
                               </button>
                             )}
-                            <div className="border-t border-gray-50" />
-                            <button className="w-full text-left px-4 py-2.5 text-sm text-gray-500 hover:bg-gray-50 transition-colors">
-                              View Details
-                            </button>
                           </div>
                         )}
                       </td>
@@ -693,46 +2274,74 @@ const HostContent = ({
           )}
         </div>
 
-        {/* ── Your Properties panel ── */}
+        {/* Properties panel */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-            <h3 className="font-bold text-gray-900 text-base">
-              Your Properties
-            </h3>
+            <h3 className="font-bold text-gray-900">Your Properties</h3>
             <button
               onClick={() => onNavigate("properties")}
-              className="text-xs font-semibold text-[#C9A96E] hover:underline flex items-center gap-1"
+              className="text-xs font-semibold text-[#C9A96E] hover:underline"
             >
               View all →
             </button>
           </div>
-
-          <div className="flex-1 px-5 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
             {loading ? (
-              <div className="py-4 space-y-3">
-                {[...Array(4)].map((_, i) => (
+              <div className="p-4 space-y-3">
+                {[...Array(3)].map((_, i) => (
                   <Sk key={i} h="h-14" />
                 ))}
               </div>
             ) : hotels.length === 0 ? (
-              <div className="py-10 text-center">
+              <div className="p-8 text-center">
                 <BuildingOffice2Icon className="w-8 h-8 text-gray-200 mx-auto mb-2" />
                 <p className="text-gray-400 text-sm">No listings yet</p>
                 <button
                   onClick={() => onNavigate("properties")}
-                  className="mt-2 flex items-center gap-1 text-xs font-semibold text-[#C9A96E] mx-auto hover:underline"
+                  className="mt-2 text-xs font-semibold text-[#C9A96E] hover:underline flex items-center gap-1 mx-auto"
                 >
-                  <PlusIcon className="w-3.5 h-3.5" /> Add listing
+                  <PlusIcon className="w-3 h-3" />
+                  Add listing
                 </button>
               </div>
             ) : (
-              hotels.map((h) => <PropMini key={h.id} hotel={h} />)
+              hotels.map((h) => (
+                <div
+                  key={h.id}
+                  className="flex items-center gap-3 p-3 hover:bg-gray-50 transition-colors cursor-pointer group"
+                  onClick={() => onBook?.(h)}
+                >
+                  <div className="w-12 h-10 rounded-lg overflow-hidden shrink-0">
+                    <img
+                      src={
+                        h.thumbnail ||
+                        "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=200"
+                      }
+                      alt={h.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src =
+                          "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=200";
+                      }}
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-gray-800 truncate">
+                      {h.name}
+                    </p>
+                    <p className="text-xs text-[#C9A96E] font-bold">
+                      {fmt$(h.pricePerNight)}
+                      <span className="text-gray-400 font-normal">/n</span>
+                    </p>
+                  </div>
+                </div>
+              ))
             )}
           </div>
         </div>
       </div>
 
-      {/* Property cards grid */}
+      {/* All property cards */}
       {!loading && hotels.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-4">
@@ -741,16 +2350,51 @@ const HostContent = ({
               onClick={() => onNavigate("properties")}
               className="text-sm font-semibold text-[#C9A96E] hover:underline"
             >
-              Manage all →
+              Manage →
             </button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {hotels.map((h, i) => (
               <div
                 key={h.id}
-                style={{ animation: `fadeUp 0.4s ease ${i * 60}ms both` }}
+                className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-all group cursor-pointer"
+                style={{ animation: `fadeUp 0.4s ease ${i * 55}ms both` }}
+                onClick={() => onBook?.(h)}
               >
-                <PropCard hotel={h} onBook={onBook} />
+                <div className="relative h-40 overflow-hidden">
+                  <img
+                    src={
+                      h.thumbnail ||
+                      "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400"
+                    }
+                    alt={h.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src =
+                        "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400";
+                    }}
+                  />
+                  {h.featured && (
+                    <span className="absolute top-2 left-2 bg-[#C9A96E] text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase">
+                      Featured
+                    </span>
+                  )}
+                </div>
+                <div className="p-3.5">
+                  <p className="font-bold text-gray-800 text-sm truncate">
+                    {h.name}
+                  </p>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <MapPinIcon className="w-3 h-3 text-[#C9A96E]" />
+                    <p className="text-xs text-gray-400 truncate">{h.city}</p>
+                  </div>
+                  <p className="font-bold text-gray-900 mt-1 text-sm">
+                    {fmt$(h.pricePerNight)}
+                    <span className="text-xs text-gray-400 font-normal">
+                      /night
+                    </span>
+                  </p>
+                </div>
               </div>
             ))}
           </div>
@@ -761,9 +2405,9 @@ const HostContent = ({
 };
 
 /* ═══════════════════════════════════════════════════════════
-   GUEST DASHBOARD CONTENT
+   GUEST DASHBOARD HOME  (upgraded UI)
 ═══════════════════════════════════════════════════════════ */
-const GuestContent = ({
+const GuestHome = ({
   onNavigate,
   onBook,
 }: {
@@ -780,11 +2424,12 @@ const GuestContent = ({
     const wids = user.wishlist ?? [];
     Promise.all([
       BookingsDB.byGuest(user.id),
-      wids.length > 0
-        ? Promise.all(wids.map((id) => ListingsDB.getById(id))).then((r) =>
-            r
-              .filter((item): item is Listing => item !== null)
-              .map(listingToHotel),
+      wids.length
+        ? Promise.all(wids.map((id) => ListingsDB.getById(id))).then(
+            (r) =>
+              r
+                .filter(Boolean)
+                .map((l) => listingToHotel(l as Listing)) as Hotel[],
           )
         : Promise.resolve([] as Hotel[]),
     ])
@@ -795,77 +2440,86 @@ const GuestContent = ({
       .finally(() => setLoading(false));
   }, [user]);
 
+  const now = new Date();
   const upcoming = bookings.filter(
-    (b) => b.status === "confirmed" && new Date(b.checkIn) >= new Date(),
+    (b) => b.status !== "cancelled" && new Date(b.checkIn) >= now,
   );
-  const past = bookings.filter((b) => new Date(b.checkOut) < new Date());
-  const totalNights = bookings
+  const past = bookings.filter((b) => new Date(b.checkOut) < now);
+  const nights = bookings
     .filter((b) => b.status === "confirmed")
     .reduce((s, b) => s + b.nights, 0);
-  const totalSpent = bookings
+  const spent = bookings
     .filter((b) => b.status === "confirmed")
     .reduce((s, b) => s + b.totalAmount, 0);
 
   return (
     <div
-      className="p-6 space-y-6 bg-gray-50 min-h-full"
-      style={{ animation: "fadeUp 0.35s ease both" }}
+      className="flex-1 overflow-y-auto bg-gray-50"
+      style={{ animation: "fadeUp 0.3s ease both" }}
     >
-      <div>
-        <h2 className="text-3xl font-bold text-gray-900">
-          {greeting()}, {user?.firstName} ✈️
-        </h2>
-        <p className="text-gray-400 mt-1 text-sm">
-          Your luxury travel overview — all in one place.
-        </p>
+      {/* Hero welcome banner */}
+      <div
+        className="relative overflow-hidden px-6 py-8 mx-6 mt-6 rounded-3xl text-white"
+        style={{
+          background:
+            "linear-gradient(135deg,#1a3a4a 0%,#0d2535 60%,#1a3a4a 100%)",
+        }}
+      >
+        <div
+          className="absolute inset-0 opacity-10"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 80% 50%,#6EADC9 0%,transparent 60%)",
+          }}
+        />
+        <div className="relative z-10 flex items-start justify-between">
+          <div>
+            <p className="text-[#6EADC9] text-xs font-semibold uppercase tracking-widest mb-1">
+              {greeting()}
+            </p>
+            <h2 className="text-2xl md:text-3xl font-bold text-white mb-1">
+              {user?.firstName} {user?.lastName} ✈️
+            </h2>
+            <p className="text-white/50 text-sm">
+              Your luxury travel hub — everything in one place
+            </p>
+          </div>
+          <div className="hidden md:flex flex-col items-end gap-1">
+            <p className="text-[10px] text-white/40 uppercase tracking-wider">
+              Total Spent
+            </p>
+            <p className="font-['Cormorant_Garamond'] text-3xl font-bold text-[#6EADC9]">
+              {fmt$(spent)}
+            </p>
+          </div>
+        </div>
+        <div className="relative z-10 flex gap-6 mt-6 pt-5 border-t border-white/10">
+          {[
+            { label: "Upcoming", value: upcoming.length },
+            { label: "Total Trips", value: bookings.length },
+            { label: "Nights Stayed", value: nights },
+            { label: "Saved", value: wishlist.length },
+          ].map(({ label, value }) => (
+            <div key={label}>
+              <p className="text-xl font-bold text-white">{value}</p>
+              <p className="text-[10px] text-white/45 mt-0.5 uppercase tracking-wider">
+                {label}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Stat cards */}
-      <div className="flex gap-4 flex-wrap">
-        {loading ? (
-          [...Array(4)].map((_, i) => (
-            <div
-              key={i}
-              className="flex-1 min-w-[140px] bg-white rounded-2xl p-5 border border-gray-100 h-20 animate-pulse"
-            />
-          ))
-        ) : (
-          <>
-            <StatCard
-              icon={<CalendarDaysIcon className="w-5 h-5 text-[#6EADC9]" />}
-              label="Upcoming Stays"
-              value={upcoming.length}
-              delay={0}
-            />
-            <StatCard
-              icon={<GlobeAltIcon className="w-5 h-5 text-[#6EADC9]" />}
-              label="Total Trips"
-              value={bookings.length}
-              delay={60}
-            />
-            <StatCard
-              icon={<ClockIcon className="w-5 h-5 text-[#6EADC9]" />}
-              label="Nights Travelled"
-              value={totalNights}
-              delay={120}
-            />
-            <StatCard
-              icon={<BanknotesIcon className="w-5 h-5 text-[#6EADC9]" />}
-              label="Total Spent"
-              value={fmt$(totalSpent)}
-              delay={180}
-            />
-          </>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-6">
-        {/* Upcoming bookings */}
+      <div className="p-6 space-y-6">
+        {/* Upcoming stays */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-            <h3 className="font-bold text-gray-900 text-base">
-              Upcoming Stays
-            </h3>
+            <div>
+              <h3 className="font-bold text-gray-900">Upcoming Stays</h3>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {upcoming.length} confirmed
+              </p>
+            </div>
             <button
               onClick={() => onNavigate("bookings")}
               className="text-xs font-semibold text-[#6EADC9] hover:underline flex items-center gap-1"
@@ -873,216 +2527,199 @@ const GuestContent = ({
               All bookings <ChevronRightIcon className="w-3.5 h-3.5" />
             </button>
           </div>
-
           {loading ? (
             <div className="p-6 space-y-3">
-              {[...Array(4)].map((_, i) => (
+              {[...Array(3)].map((_, i) => (
                 <Sk key={i} h="h-16" />
               ))}
             </div>
           ) : upcoming.length === 0 ? (
-            <div className="p-12 text-center">
-              <GlobeAltIcon className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-              <p className="text-gray-400 text-sm">No upcoming stays</p>
-              <button className="mt-2 text-xs font-semibold text-[#6EADC9] hover:underline">
-                Explore properties →
-              </button>
+            <div className="p-10 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-[#6EADC9]/10 flex items-center justify-center mx-auto mb-3">
+                <SparklesIcon className="w-6 h-6 text-[#6EADC9]" />
+              </div>
+              <p className="text-gray-500 text-sm font-medium">
+                No upcoming stays
+              </p>
+              <p className="text-gray-400 text-xs mt-1">
+                Time to plan your next luxury escape
+              </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-100">
-                    {[
-                      "Property",
-                      "Check-in",
-                      "Check-out",
-                      "Nights",
-                      "Total",
-                      "Status",
-                    ].map((h) => (
-                      <th
-                        key={h}
-                        className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-6 py-3"
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {upcoming.slice(0, 6).map((b, i) => (
-                    <tr
-                      key={b.id}
-                      className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
-                      style={{
-                        animation: `fadeUp 0.35s ease ${i * 40}ms both`,
-                      }}
-                    >
-                      <td className="px-6 py-3.5">
-                        <p className="text-sm font-medium text-gray-800 line-clamp-1">
-                          {b.listingName}
-                        </p>
-                        <p className="text-xs text-gray-400">{b.ref}</p>
-                      </td>
-                      <td className="px-6 py-3.5 text-sm text-gray-500 whitespace-nowrap">
-                        {fmtDate(b.checkIn)}
-                      </td>
-                      <td className="px-6 py-3.5 text-sm text-gray-500 whitespace-nowrap">
-                        {fmtDate(b.checkOut)}
-                      </td>
-                      <td className="px-6 py-3.5 text-sm text-gray-500">
-                        {b.nights}
-                      </td>
-                      <td className="px-6 py-3.5 text-sm font-bold text-gray-800">
-                        {fmt$(b.totalAmount)}
-                      </td>
-                      <td className="px-6 py-3.5">
-                        <StatusPill status={b.status} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="divide-y divide-gray-50">
+              {upcoming.slice(0, 4).map((b, i) => (
+                <div
+                  key={b.id}
+                  className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50/60 transition-colors"
+                  style={{ animation: `fadeUp 0.3s ease ${i * 40}ms both` }}
+                >
+                  <div
+                    className="w-14 h-14 rounded-2xl flex flex-col items-center justify-center shrink-0 text-white"
+                    style={{
+                      background: "linear-gradient(135deg,#6EADC9,#4a8aad)",
+                    }}
+                  >
+                    <p className="text-[10px] font-bold uppercase leading-none">
+                      {new Date(b.checkIn).toLocaleDateString("en", {
+                        month: "short",
+                      })}
+                    </p>
+                    <p className="font-['Cormorant_Garamond'] text-2xl font-bold leading-none mt-0.5">
+                      {new Date(b.checkIn).getDate()}
+                    </p>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-800 text-sm line-clamp-1">
+                      {b.listingName}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {fmtDate(b.checkIn)} → {fmtDate(b.checkOut)} · {b.nights}{" "}
+                      night{b.nights !== 1 ? "s" : ""}
+                    </p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      Ref:{" "}
+                      <span className="text-[#6EADC9] font-medium">
+                        {b.ref}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="font-bold text-gray-900 text-sm">
+                      {fmt$(b.totalAmount)}
+                    </p>
+                    <StatusPill status={b.status} />
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
 
-        {/* Wishlist panel */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-            <h3 className="font-bold text-gray-900 text-base">
-              Saved Properties
-            </h3>
-            <button
-              onClick={() => onNavigate("wishlist")}
-              className="text-xs font-semibold text-[#6EADC9] hover:underline"
-            >
-              View all →
-            </button>
-          </div>
-          <div className="flex-1 px-5 overflow-y-auto">
+        {/* 2-col: wishlist + history snippet */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          {/* Wishlist */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <HeartSolid className="w-4 h-4 text-rose-400" />
+                <h3 className="font-bold text-gray-900">Saved Properties</h3>
+              </div>
+              <button
+                onClick={() => onNavigate("wishlist")}
+                className="text-xs font-semibold text-[#6EADC9] hover:underline"
+              >
+                View all →
+              </button>
+            </div>
             {loading ? (
-              <div className="py-4 space-y-3">
+              <div className="p-4 space-y-3">
                 {[...Array(3)].map((_, i) => (
-                  <Sk key={i} h="h-14" />
+                  <Sk key={i} h="h-16" />
                 ))}
               </div>
             ) : wishlist.length === 0 ? (
-              <div className="py-10 text-center">
+              <div className="p-8 text-center">
                 <HeartIcon className="w-8 h-8 text-gray-200 mx-auto mb-2" />
                 <p className="text-gray-400 text-sm">No saved properties</p>
               </div>
             ) : (
-              wishlist.map((h) => <PropMini key={h.id} hotel={h} />)
+              <div className="divide-y divide-gray-50">
+                {wishlist.slice(0, 4).map((h, i) => (
+                  <div
+                    key={h.id}
+                    className="flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors cursor-pointer group"
+                    onClick={() => onBook?.(h)}
+                    style={{ animation: `fadeUp 0.3s ease ${i * 40}ms both` }}
+                  >
+                    <div className="w-14 h-12 rounded-xl overflow-hidden shrink-0">
+                      <img
+                        src={
+                          h.thumbnail ||
+                          "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=200"
+                        }
+                        alt={h.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src =
+                            "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=200";
+                        }}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-800 truncate">
+                        {h.name}
+                      </p>
+                      <div className="flex items-center gap-1">
+                        <MapPinIcon className="w-3 h-3 text-[#6EADC9]" />
+                        <p className="text-xs text-gray-400 truncate">
+                          {h.city}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-sm font-bold text-gray-900 shrink-0">
+                      {fmt$(h.pricePerNight)}
+                      <span className="text-xs text-gray-400 font-normal">
+                        /n
+                      </span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Recent history */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <GlobeAltIcon className="w-4 h-4 text-[#6EADC9]" />
+                <h3 className="font-bold text-gray-900">Recent Trips</h3>
+              </div>
+              <button
+                onClick={() => onNavigate("history")}
+                className="text-xs font-semibold text-[#6EADC9] hover:underline"
+              >
+                View all →
+              </button>
+            </div>
+            {loading ? (
+              <div className="p-4 space-y-3">
+                {[...Array(3)].map((_, i) => (
+                  <Sk key={i} h="h-14" />
+                ))}
+              </div>
+            ) : past.length === 0 ? (
+              <div className="p-8 text-center">
+                <GlobeAltIcon className="w-8 h-8 text-gray-200 mx-auto mb-2" />
+                <p className="text-gray-400 text-sm">No past trips yet</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {past.slice(0, 4).map((b, i) => (
+                  <div
+                    key={b.id}
+                    className="px-5 py-3.5 hover:bg-gray-50/50 transition-colors"
+                    style={{ animation: `fadeUp 0.3s ease ${i * 40}ms both` }}
+                  >
+                    <div className="flex items-start justify-between">
+                      <p className="text-sm font-semibold text-gray-800 truncate pr-3 flex-1">
+                        {b.listingName}
+                      </p>
+                      <StatusPill status={b.status} />
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {fmtDate(b.checkIn)} — {fmtDate(b.checkOut)}
+                    </p>
+                    <p className="text-sm font-bold text-gray-800 mt-0.5">
+                      {fmt$(b.totalAmount)}
+                    </p>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>
       </div>
-
-      {/* Travel history */}
-      {!loading && past.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-            <h3 className="font-bold text-gray-900 text-base">
-              Travel History
-            </h3>
-            <button
-              onClick={() => onNavigate("history")}
-              className="text-xs font-semibold text-[#6EADC9] hover:underline flex items-center gap-1"
-            >
-              View all <ChevronRightIcon className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-gray-50">
-            {past.slice(0, 3).map((b, i) => (
-              <div
-                key={b.id}
-                className="p-5"
-                style={{ animation: `fadeUp 0.4s ease ${i * 60}ms both` }}
-              >
-                <div className="flex justify-between mb-1.5">
-                  <p className="text-sm font-semibold text-gray-800 truncate pr-2">
-                    {b.listingName}
-                  </p>
-                  <StatusPill status={b.status} />
-                </div>
-                <p className="text-xs text-gray-400">
-                  {fmtDate(b.checkIn)} — {fmtDate(b.checkOut)}
-                </p>
-                <p className="text-base font-bold text-gray-900 mt-1">
-                  {fmt$(b.totalAmount)}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Wishlist property cards */}
-      {!loading && wishlist.length > 0 && (
-        <div>
-          <h3 className="font-bold text-gray-900 mb-4">
-            Properties You've Saved
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {wishlist.map((h, i) => (
-              <div
-                key={h.id}
-                style={{ animation: `fadeUp 0.4s ease ${i * 60}ms both` }}
-              >
-                <PropCard hotel={h} onBook={onBook} />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-/* ═══════════════════════════════════════════════════════════
-   PLACEHOLDER for other nav sections
-═══════════════════════════════════════════════════════════ */
-const PlaceholderSection = ({
-  navKey,
-  onBack,
-}: {
-  navKey: NavKey;
-  onBack: () => void;
-}) => {
-  const icons: Record<string, React.ElementType> = {
-    properties: BuildingOffice2Icon,
-    bookings: CalendarDaysIcon,
-    reviews: StarIcon,
-    earnings: BanknotesIcon,
-    messages: ChatBubbleLeftRightIcon,
-    settings: Cog6ToothIcon,
-    wishlist: HeartIcon,
-    history: GlobeAltIcon,
-  };
-  const Icon = icons[navKey] ?? HomeIcon;
-  const label = navKey.charAt(0).toUpperCase() + navKey.slice(1);
-
-  return (
-    <div
-      className="flex-1 bg-gray-50 flex flex-col items-center justify-center p-10 text-center"
-      style={{ animation: "fadeUp 0.35s ease both" }}
-    >
-      <div className="w-16 h-16 rounded-2xl bg-[#C9A96E]/10 border border-[#C9A96E]/20 flex items-center justify-center mb-4">
-        <Icon className="w-7 h-7 text-[#C9A96E]" />
-      </div>
-      <h2 className="text-2xl font-bold text-gray-800 mb-1">{label}</h2>
-      <p className="text-gray-400 text-sm max-w-xs">
-        This section is ready — connect your {label.toLowerCase()} components
-        here.
-      </p>
-      <button
-        onClick={onBack}
-        className="mt-6 text-sm font-semibold text-[#C9A96E] hover:underline"
-      >
-        ← Back to Dashboard
-      </button>
     </div>
   );
 };
@@ -1099,15 +2736,14 @@ const Dashboard = ({ onBook, onLogout }: DashboardProps) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const role = (user?.role ?? "guest") as "host" | "guest";
-
-  const [activeNav, setActiveNav] = useState<NavKey>("dashboard");
+  const [active, setActive] = useState<NavKey>("dashboard");
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [pendingCount, setPendingCount] = useState(0);
+  const [pending, setPending] = useState(0);
 
   useEffect(() => {
     if (!user || role !== "host") return;
     BookingsDB.byHost(user.id).then((b) =>
-      setPendingCount(b.filter((bk) => bk.status === "pending").length),
+      setPending(b.filter((bk) => bk.status === "pending").length),
     );
   }, [user, role]);
 
@@ -1117,10 +2753,10 @@ const Dashboard = ({ onBook, onLogout }: DashboardProps) => {
     else navigate("/login");
   }, [logout, navigate, onLogout]);
 
-  const PAGE_TITLE: Record<NavKey, string> = {
+  const PAGE_TITLES: Record<NavKey, string> = {
     dashboard: "Dashboard",
     properties: "My Properties",
-    bookings: "Bookings",
+    bookings: role === "host" ? "Bookings" : "My Bookings",
     reviews: "Reviews",
     earnings: "Earnings",
     messages: "Messages",
@@ -1129,85 +2765,94 @@ const Dashboard = ({ onBook, onLogout }: DashboardProps) => {
     history: "Travel History",
   };
 
-  if (!user) {
+  if (!user)
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-[#C9A96E] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-gray-400 text-sm">Loading…</p>
-        </div>
+        <div className="w-8 h-8 border-2 border-[#C9A96E] border-t-transparent rounded-full animate-spin" />
       </div>
     );
-  }
+
+  const content = () => {
+    if (role === "host")
+      switch (active) {
+        case "dashboard":
+          return <HostHome onNavigate={setActive} onBook={onBook} />;
+        case "properties":
+          return <PropertiesSection onBook={onBook} />;
+        case "bookings":
+          return <HostBookings />;
+        case "reviews":
+          return <ReviewsSection />;
+        case "earnings":
+          return <EarningsSection />;
+        case "messages":
+          return <Messages />;
+        case "settings":
+          return <SettingsSection />;
+        default:
+          return <HostHome onNavigate={setActive} onBook={onBook} />;
+      }
+    switch (active) {
+      case "dashboard":
+        return <GuestHome onNavigate={setActive} onBook={onBook} />;
+      case "bookings":
+        return <GuestBookings />;
+      case "wishlist":
+        return <WishlistSection onBook={onBook} />;
+      case "history":
+        return <TravelHistory />;
+      case "messages":
+        return <Messages />;
+      case "settings":
+        return <SettingsSection />;
+      default:
+        return <GuestHome onNavigate={setActive} onBook={onBook} />;
+    }
+  };
 
   return (
     <div className="min-h-screen flex overflow-hidden bg-gray-50">
       <style>{`
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(14px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes slideIn {
-          from { transform: translateX(-100%); }
-          to   { transform: translateX(0); }
-        }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
       `}</style>
 
-      {/* Mobile overlay */}
       {mobileOpen && (
         <div
           className="fixed inset-0 bg-black/60 z-40 lg:hidden"
           onClick={() => setMobileOpen(false)}
         />
       )}
-
-      {/* Mobile drawer */}
       <div
         className={`fixed inset-y-0 left-0 z-50 lg:hidden transition-transform duration-300 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
       >
         <Sidebar
           role={role}
-          active={activeNav}
-          onNav={setActiveNav}
-          pendingCount={pendingCount}
+          active={active}
+          onNav={setActive}
+          pending={pending}
           onClose={() => setMobileOpen(false)}
           onLogout={handleLogout}
           isMobile
         />
       </div>
-
-      {/* Desktop sidebar */}
       <div className="hidden lg:flex shrink-0">
         <Sidebar
           role={role}
-          active={activeNav}
-          onNav={setActiveNav}
-          pendingCount={pendingCount}
+          active={active}
+          onNav={setActive}
+          pending={pending}
           onLogout={handleLogout}
         />
       </div>
 
-      {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <TopBar
-          title={PAGE_TITLE[activeNav]}
+          title={PAGE_TITLES[active]}
           onHamburger={() => setMobileOpen(true)}
-          pendingCount={pendingCount}
+          pending={pending}
         />
-
-        <main className="flex-1 overflow-y-auto">
-          {activeNav === "dashboard" && role === "host" && (
-            <HostContent onNavigate={setActiveNav} onBook={onBook} />
-          )}
-          {activeNav === "dashboard" && role === "guest" && (
-            <GuestContent onNavigate={setActiveNav} onBook={onBook} />
-          )}
-          {activeNav !== "dashboard" && (
-            <PlaceholderSection
-              navKey={activeNav}
-              onBack={() => setActiveNav("dashboard")}
-            />
-          )}
+        <main className="flex-1 overflow-hidden flex flex-col">
+          {content()}
         </main>
       </div>
     </div>
