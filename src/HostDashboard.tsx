@@ -1,3 +1,12 @@
+// src/pages/Dashboard.tsx
+// ─────────────────────────────────────────────────────────────────────────────
+// Complete dashboard — every nav section live-connected to Supabase.
+//
+// HOST sections:    Dashboard · My Properties (Add/Edit/Delete) · Bookings · Reviews · Earnings · Settings
+// GUEST sections:   Dashboard · My Bookings · Wishlist · Travel History · Settings
+// Shared:           Messages (placeholder) · Hamburger mobile drawer · Dark wood sidebar
+// ─────────────────────────────────────────────────────────────────────────────
+
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -26,12 +35,8 @@ import {
   PhotoIcon,
   UserIcon,
   ArrowTrendingUpIcon,
-  SparklesIcon,
 } from "@heroicons/react/24/outline";
-import {
-  StarIcon as StarSolid,
-  HeartIcon as HeartSolid,
-} from "@heroicons/react/24/solid";
+import { StarIcon as StarSolid } from "@heroicons/react/24/solid";
 import { useAuth } from "./AuthContext";
 import {
   ListingsDB,
@@ -41,6 +46,7 @@ import {
   type Booking,
   type Listing,
 } from "./index";
+import GuestDashboard from "./GuestDashboard";
 
 /* ─────────────────────────────────────────────────────────
    TYPES
@@ -67,10 +73,6 @@ const fmtDate = (d: string) =>
     day: "numeric",
     year: "numeric",
   });
-const greeting = () => {
-  const h = new Date().getHours();
-  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
-};
 
 /* ─────────────────────────────────────────────────────────
    SKELETON
@@ -1671,383 +1673,6 @@ const SettingsSection = () => {
   );
 };
 
-/* ═══════════════════════════════════════════════════════════
-   GUEST: MY BOOKINGS
-═══════════════════════════════════════════════════════════ */
-const GuestBookings = () => {
-  const { user } = useAuth();
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"all" | "upcoming" | "past">("all");
-
-  useEffect(() => {
-    if (!user) return;
-    BookingsDB.byGuest(user.id)
-      .then(setBookings)
-      .finally(() => setLoading(false));
-  }, [user]);
-
-  const now = new Date();
-  const upcoming = bookings.filter(
-    (b) => b.status !== "cancelled" && new Date(b.checkIn) >= now,
-  );
-  const past = bookings.filter((b) => new Date(b.checkOut) < now);
-  const show =
-    filter === "upcoming" ? upcoming : filter === "past" ? past : bookings;
-
-  return (
-    <div
-      className="flex-1 overflow-y-auto bg-gray-50 p-6"
-      style={{ animation: "fadeUp 0.3s ease both" }}
-    >
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">My Bookings</h2>
-        <p className="text-gray-400 text-sm mt-0.5">
-          {bookings.length} total reservation{bookings.length !== 1 ? "s" : ""}
-        </p>
-      </div>
-      <div className="flex gap-2 mb-5">
-        {(["all", "upcoming", "past"] as const).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`text-xs font-semibold px-4 py-2 rounded-full border transition-all ${filter === f ? "text-white border-transparent shadow-sm" : "border-gray-200 text-gray-500 bg-white hover:border-[#6EADC9]"}`}
-            style={filter === f ? { background: "#6EADC9" } : {}}
-          >
-            {f.charAt(0).toUpperCase() + f.slice(1)} (
-            {f === "all"
-              ? bookings.length
-              : f === "upcoming"
-                ? upcoming.length
-                : past.length}
-            )
-          </button>
-        ))}
-      </div>
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        {loading ? (
-          <div className="p-6 space-y-3">
-            {[...Array(4)].map((_, i) => (
-              <Sk key={i} h="h-14" />
-            ))}
-          </div>
-        ) : show.length === 0 ? (
-          <div className="p-12 text-center">
-            <CalendarDaysIcon className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-            <p className="text-gray-400 text-sm">
-              No {filter !== "all" ? filter : ""} bookings
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  {[
-                    "Property",
-                    "Check-in",
-                    "Check-out",
-                    "Nights",
-                    "Total",
-                    "Status",
-                  ].map((h) => (
-                    <th
-                      key={h}
-                      className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-6 py-3"
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {show.map((b, i) => (
-                  <tr
-                    key={b.id}
-                    className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
-                    style={{ animation: `fadeUp 0.3s ease ${i * 30}ms both` }}
-                  >
-                    <td className="px-6 py-3.5">
-                      <p className="text-sm font-semibold text-gray-800 line-clamp-1">
-                        {b.listingName}
-                      </p>
-                      <p className="text-xs text-gray-400">{b.ref}</p>
-                    </td>
-                    <td className="px-6 py-3.5 text-sm text-gray-500 whitespace-nowrap">
-                      {fmtDate(b.checkIn)}
-                    </td>
-                    <td className="px-6 py-3.5 text-sm text-gray-500 whitespace-nowrap">
-                      {fmtDate(b.checkOut)}
-                    </td>
-                    <td className="px-6 py-3.5 text-sm text-gray-500">
-                      {b.nights}
-                    </td>
-                    <td className="px-6 py-3.5 text-sm font-bold text-gray-800">
-                      {fmt$(b.totalAmount)}
-                    </td>
-                    <td className="px-6 py-3.5">
-                      <StatusPill status={b.status} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-/* ═══════════════════════════════════════════════════════════
-   GUEST: WISHLIST
-═══════════════════════════════════════════════════════════ */
-const WishlistSection = ({ onBook }: { onBook?: (h: Hotel) => void }) => {
-  const { user, updateUser } = useAuth();
-  const [hotels, setHotels] = useState<Hotel[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!user) return;
-    const ids = user.wishlist ?? [];
-    if (!ids.length) {
-      setLoading(false);
-      return;
-    }
-    Promise.all(ids.map((id) => ListingsDB.getById(id)))
-      .then((r) =>
-        setHotels((r.filter(Boolean) as Listing[]).map(listingToHotel)),
-      )
-      .finally(() => setLoading(false));
-  }, [user]);
-
-  const remove = async (id: string) => {
-    const next = (user?.wishlist ?? []).filter((w) => w !== id);
-    await updateUser({ wishlist: next });
-    setHotels((prev) => prev.filter((h) => h.id !== id));
-  };
-
-  return (
-    <div
-      className="flex-1 overflow-y-auto bg-gray-50 p-6"
-      style={{ animation: "fadeUp 0.3s ease both" }}
-    >
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Wishlist</h2>
-        <p className="text-gray-400 text-sm mt-0.5">
-          {loading
-            ? "Loading…"
-            : `${hotels.length} saved propert${hotels.length !== 1 ? "ies" : "y"}`}
-        </p>
-      </div>
-      {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {[...Array(3)].map((_, i) => (
-            <Sk key={i} h="h-64" rounded="rounded-2xl" />
-          ))}
-        </div>
-      ) : hotels.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-[#6EADC9]/10 border border-[#6EADC9]/20 flex items-center justify-center mb-4">
-            <HeartIcon className="w-7 h-7 text-[#6EADC9]" />
-          </div>
-          <h3 className="text-lg font-bold text-gray-600 mb-1">
-            No saved properties
-          </h3>
-          <p className="text-gray-400 text-sm">
-            Heart a property on the listings page to save it here.
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {hotels.map((h, i) => (
-            <div
-              key={h.id}
-              className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-all group"
-              style={{ animation: `fadeUp 0.4s ease ${i * 55}ms both` }}
-            >
-              <div
-                className="relative h-44 overflow-hidden cursor-pointer"
-                onClick={() => onBook?.(h)}
-              >
-                <img
-                  src={
-                    h.thumbnail ||
-                    "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400"
-                  }
-                  alt={h.name}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src =
-                      "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400";
-                  }}
-                />
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    remove(h.id);
-                  }}
-                  className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 flex items-center justify-center hover:bg-red-50 transition-colors shadow-sm"
-                >
-                  <HeartSolid className="w-4 h-4 text-rose-500" />
-                </button>
-              </div>
-              <div className="p-4">
-                <p className="font-bold text-gray-800 text-sm truncate">
-                  {h.name}
-                </p>
-                <div className="flex items-center gap-1 mt-0.5 mb-3">
-                  <MapPinIcon className="w-3 h-3 text-[#6EADC9]" />
-                  <p className="text-xs text-gray-400 truncate">{h.city}</p>
-                </div>
-                <div className="flex items-center justify-between">
-                  <p className="font-bold text-gray-900">
-                    {fmt$(h.pricePerNight)}
-                    <span className="text-xs text-gray-400 font-normal">
-                      /night
-                    </span>
-                  </p>
-                  <button
-                    onClick={() => onBook?.(h)}
-                    className="text-xs font-semibold text-[#6EADC9] hover:underline"
-                  >
-                    Book Now →
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-/* ═══════════════════════════════════════════════════════════
-   GUEST: TRAVEL HISTORY
-═══════════════════════════════════════════════════════════ */
-const TravelHistory = () => {
-  const { user } = useAuth();
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!user) return;
-    BookingsDB.byGuest(user.id)
-      .then((b) =>
-        setBookings(b.filter((bk) => new Date(bk.checkOut) < new Date())),
-      )
-      .finally(() => setLoading(false));
-  }, [user]);
-
-  const nights = bookings.reduce((s, b) => s + b.nights, 0);
-  const spent = bookings.reduce((s, b) => s + b.totalAmount, 0);
-
-  return (
-    <div
-      className="flex-1 overflow-y-auto bg-gray-50 p-6"
-      style={{ animation: "fadeUp 0.3s ease both" }}
-    >
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Travel History</h2>
-        <p className="text-gray-400 text-sm mt-0.5">
-          {bookings.length} completed trip{bookings.length !== 1 ? "s" : ""}
-        </p>
-      </div>
-      <div className="flex gap-4 flex-wrap mb-6">
-        <StatCard
-          icon={<GlobeAltIcon className="w-5 h-5 text-[#6EADC9]" />}
-          label="Trips Completed"
-          value={bookings.length}
-          delay={0}
-          accent="#6EADC9"
-        />
-        <StatCard
-          icon={<ClockIcon className="w-5 h-5 text-[#6EADC9]" />}
-          label="Nights Stayed"
-          value={nights}
-          delay={60}
-          accent="#6EADC9"
-        />
-        <StatCard
-          icon={<BanknotesIcon className="w-5 h-5 text-[#6EADC9]" />}
-          label="Total Spent"
-          value={fmt$(spent)}
-          delay={120}
-          accent="#6EADC9"
-        />
-      </div>
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100">
-          <h3 className="font-bold text-gray-900">Past Stays</h3>
-        </div>
-        {loading ? (
-          <div className="p-6 space-y-3">
-            {[...Array(4)].map((_, i) => (
-              <Sk key={i} h="h-11" />
-            ))}
-          </div>
-        ) : bookings.length === 0 ? (
-          <div className="p-12 text-center">
-            <GlobeAltIcon className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-            <p className="text-gray-400 text-sm">No past trips yet</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  {["Property", "Dates", "Nights", "Total", "Status"].map(
-                    (h) => (
-                      <th
-                        key={h}
-                        className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-6 py-3"
-                      >
-                        {h}
-                      </th>
-                    ),
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {bookings.map((b, i) => (
-                  <tr
-                    key={b.id}
-                    className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
-                    style={{ animation: `fadeUp 0.3s ease ${i * 30}ms both` }}
-                  >
-                    <td className="px-6 py-3.5">
-                      <p className="text-sm font-semibold text-gray-800 line-clamp-1">
-                        {b.listingName}
-                      </p>
-                      <p className="text-xs text-gray-400">{b.ref}</p>
-                    </td>
-                    <td className="px-6 py-3.5 text-sm text-gray-500 whitespace-nowrap">
-                      {fmtDate(b.checkIn)} → {fmtDate(b.checkOut)}
-                    </td>
-                    <td className="px-6 py-3.5 text-sm text-gray-500">
-                      {b.nights}
-                    </td>
-                    <td className="px-6 py-3.5 text-sm font-bold text-gray-800">
-                      {fmt$(b.totalAmount)}
-                    </td>
-                    <td className="px-6 py-3.5">
-                      <StatusPill status={b.status} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-/* ═══════════════════════════════════════════════════════════
-   MESSAGES (shared placeholder)
-═══════════════════════════════════════════════════════════ */
 const Messages = () => (
   <div
     className="flex-1 flex flex-col items-center justify-center bg-gray-50 p-10 text-center"
@@ -2407,325 +2032,11 @@ const HostHome = ({
 /* ═══════════════════════════════════════════════════════════
    GUEST DASHBOARD HOME  (upgraded UI)
 ═══════════════════════════════════════════════════════════ */
-const GuestHome = ({
-  onNavigate,
-  onBook,
-}: {
-  onNavigate: (k: NavKey) => void;
-  onBook?: (h: Hotel) => void;
-}) => {
-  const { user } = useAuth();
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [wishlist, setWishlist] = useState<Hotel[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!user) return;
-    const wids = user.wishlist ?? [];
-    Promise.all([
-      BookingsDB.byGuest(user.id),
-      wids.length
-        ? Promise.all(wids.map((id) => ListingsDB.getById(id))).then(
-            (r) =>
-              r
-                .filter(Boolean)
-                .map((l) => listingToHotel(l as Listing)) as Hotel[],
-          )
-        : Promise.resolve([] as Hotel[]),
-    ])
-      .then(([b, w]) => {
-        setBookings(b);
-        setWishlist(w);
-      })
-      .finally(() => setLoading(false));
-  }, [user]);
-
-  const now = new Date();
-  const upcoming = bookings.filter(
-    (b) => b.status !== "cancelled" && new Date(b.checkIn) >= now,
-  );
-  const past = bookings.filter((b) => new Date(b.checkOut) < now);
-  const nights = bookings
-    .filter((b) => b.status === "confirmed")
-    .reduce((s, b) => s + b.nights, 0);
-  const spent = bookings
-    .filter((b) => b.status === "confirmed")
-    .reduce((s, b) => s + b.totalAmount, 0);
-
-  return (
-    <div
-      className="flex-1 overflow-y-auto bg-gray-50"
-      style={{ animation: "fadeUp 0.3s ease both" }}
-    >
-      {/* Hero welcome banner */}
-      <div
-        className="relative overflow-hidden px-6 py-8 mx-6 mt-6 rounded-3xl text-white"
-        style={{
-          background:
-            "linear-gradient(135deg,#1a3a4a 0%,#0d2535 60%,#1a3a4a 100%)",
-        }}
-      >
-        <div
-          className="absolute inset-0 opacity-10"
-          style={{
-            backgroundImage:
-              "radial-gradient(circle at 80% 50%,#6EADC9 0%,transparent 60%)",
-          }}
-        />
-        <div className="relative z-10 flex items-start justify-between">
-          <div>
-            <p className="text-[#6EADC9] text-xs font-semibold uppercase tracking-widest mb-1">
-              {greeting()}
-            </p>
-            <h2 className="text-2xl md:text-3xl font-bold text-white mb-1">
-              {user?.firstName} {user?.lastName} ✈️
-            </h2>
-            <p className="text-white/50 text-sm">
-              Your luxury travel hub — everything in one place
-            </p>
-          </div>
-          <div className="hidden md:flex flex-col items-end gap-1">
-            <p className="text-[10px] text-white/40 uppercase tracking-wider">
-              Total Spent
-            </p>
-            <p className="font-['Cormorant_Garamond'] text-3xl font-bold text-[#6EADC9]">
-              {fmt$(spent)}
-            </p>
-          </div>
-        </div>
-        <div className="relative z-10 flex gap-6 mt-6 pt-5 border-t border-white/10">
-          {[
-            { label: "Upcoming", value: upcoming.length },
-            { label: "Total Trips", value: bookings.length },
-            { label: "Nights Stayed", value: nights },
-            { label: "Saved", value: wishlist.length },
-          ].map(({ label, value }) => (
-            <div key={label}>
-              <p className="text-xl font-bold text-white">{value}</p>
-              <p className="text-[10px] text-white/45 mt-0.5 uppercase tracking-wider">
-                {label}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="p-6 space-y-6">
-        {/* Upcoming stays */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-            <div>
-              <h3 className="font-bold text-gray-900">Upcoming Stays</h3>
-              <p className="text-xs text-gray-400 mt-0.5">
-                {upcoming.length} confirmed
-              </p>
-            </div>
-            <button
-              onClick={() => onNavigate("bookings")}
-              className="text-xs font-semibold text-[#6EADC9] hover:underline flex items-center gap-1"
-            >
-              All bookings <ChevronRightIcon className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          {loading ? (
-            <div className="p-6 space-y-3">
-              {[...Array(3)].map((_, i) => (
-                <Sk key={i} h="h-16" />
-              ))}
-            </div>
-          ) : upcoming.length === 0 ? (
-            <div className="p-10 text-center">
-              <div className="w-12 h-12 rounded-2xl bg-[#6EADC9]/10 flex items-center justify-center mx-auto mb-3">
-                <SparklesIcon className="w-6 h-6 text-[#6EADC9]" />
-              </div>
-              <p className="text-gray-500 text-sm font-medium">
-                No upcoming stays
-              </p>
-              <p className="text-gray-400 text-xs mt-1">
-                Time to plan your next luxury escape
-              </p>
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-50">
-              {upcoming.slice(0, 4).map((b, i) => (
-                <div
-                  key={b.id}
-                  className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50/60 transition-colors"
-                  style={{ animation: `fadeUp 0.3s ease ${i * 40}ms both` }}
-                >
-                  <div
-                    className="w-14 h-14 rounded-2xl flex flex-col items-center justify-center shrink-0 text-white"
-                    style={{
-                      background: "linear-gradient(135deg,#6EADC9,#4a8aad)",
-                    }}
-                  >
-                    <p className="text-[10px] font-bold uppercase leading-none">
-                      {new Date(b.checkIn).toLocaleDateString("en", {
-                        month: "short",
-                      })}
-                    </p>
-                    <p className="font-['Cormorant_Garamond'] text-2xl font-bold leading-none mt-0.5">
-                      {new Date(b.checkIn).getDate()}
-                    </p>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-800 text-sm line-clamp-1">
-                      {b.listingName}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {fmtDate(b.checkIn)} → {fmtDate(b.checkOut)} · {b.nights}{" "}
-                      night{b.nights !== 1 ? "s" : ""}
-                    </p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">
-                      Ref:{" "}
-                      <span className="text-[#6EADC9] font-medium">
-                        {b.ref}
-                      </span>
-                    </p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="font-bold text-gray-900 text-sm">
-                      {fmt$(b.totalAmount)}
-                    </p>
-                    <StatusPill status={b.status} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* 2-col: wishlist + history snippet */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          {/* Wishlist */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <div className="flex items-center gap-2">
-                <HeartSolid className="w-4 h-4 text-rose-400" />
-                <h3 className="font-bold text-gray-900">Saved Properties</h3>
-              </div>
-              <button
-                onClick={() => onNavigate("wishlist")}
-                className="text-xs font-semibold text-[#6EADC9] hover:underline"
-              >
-                View all →
-              </button>
-            </div>
-            {loading ? (
-              <div className="p-4 space-y-3">
-                {[...Array(3)].map((_, i) => (
-                  <Sk key={i} h="h-16" />
-                ))}
-              </div>
-            ) : wishlist.length === 0 ? (
-              <div className="p-8 text-center">
-                <HeartIcon className="w-8 h-8 text-gray-200 mx-auto mb-2" />
-                <p className="text-gray-400 text-sm">No saved properties</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-50">
-                {wishlist.slice(0, 4).map((h, i) => (
-                  <div
-                    key={h.id}
-                    className="flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors cursor-pointer group"
-                    onClick={() => onBook?.(h)}
-                    style={{ animation: `fadeUp 0.3s ease ${i * 40}ms both` }}
-                  >
-                    <div className="w-14 h-12 rounded-xl overflow-hidden shrink-0">
-                      <img
-                        src={
-                          h.thumbnail ||
-                          "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=200"
-                        }
-                        alt={h.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src =
-                            "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=200";
-                        }}
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-800 truncate">
-                        {h.name}
-                      </p>
-                      <div className="flex items-center gap-1">
-                        <MapPinIcon className="w-3 h-3 text-[#6EADC9]" />
-                        <p className="text-xs text-gray-400 truncate">
-                          {h.city}
-                        </p>
-                      </div>
-                    </div>
-                    <p className="text-sm font-bold text-gray-900 shrink-0">
-                      {fmt$(h.pricePerNight)}
-                      <span className="text-xs text-gray-400 font-normal">
-                        /n
-                      </span>
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Recent history */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <div className="flex items-center gap-2">
-                <GlobeAltIcon className="w-4 h-4 text-[#6EADC9]" />
-                <h3 className="font-bold text-gray-900">Recent Trips</h3>
-              </div>
-              <button
-                onClick={() => onNavigate("history")}
-                className="text-xs font-semibold text-[#6EADC9] hover:underline"
-              >
-                View all →
-              </button>
-            </div>
-            {loading ? (
-              <div className="p-4 space-y-3">
-                {[...Array(3)].map((_, i) => (
-                  <Sk key={i} h="h-14" />
-                ))}
-              </div>
-            ) : past.length === 0 ? (
-              <div className="p-8 text-center">
-                <GlobeAltIcon className="w-8 h-8 text-gray-200 mx-auto mb-2" />
-                <p className="text-gray-400 text-sm">No past trips yet</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-50">
-                {past.slice(0, 4).map((b, i) => (
-                  <div
-                    key={b.id}
-                    className="px-5 py-3.5 hover:bg-gray-50/50 transition-colors"
-                    style={{ animation: `fadeUp 0.3s ease ${i * 40}ms both` }}
-                  >
-                    <div className="flex items-start justify-between">
-                      <p className="text-sm font-semibold text-gray-800 truncate pr-3 flex-1">
-                        {b.listingName}
-                      </p>
-                      <StatusPill status={b.status} />
-                    </div>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {fmtDate(b.checkIn)} — {fmtDate(b.checkOut)}
-                    </p>
-                    <p className="text-sm font-bold text-gray-800 mt-0.5">
-                      {fmt$(b.totalAmount)}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 /* ═══════════════════════════════════════════════════════════
    MAIN EXPORT
+   - Guests → GuestDashboard (full standalone, new UI)
+   - Hosts  → existing host shell with sidebar + sections
 ═══════════════════════════════════════════════════════════ */
 interface DashboardProps {
   onBook?: (hotel: Hotel) => void;
@@ -2736,16 +2047,6 @@ const Dashboard = ({ onBook, onLogout }: DashboardProps) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const role = (user?.role ?? "guest") as "host" | "guest";
-  const [active, setActive] = useState<NavKey>("dashboard");
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [pending, setPending] = useState(0);
-
-  useEffect(() => {
-    if (!user || role !== "host") return;
-    BookingsDB.byHost(user.id).then((b) =>
-      setPending(b.filter((bk) => bk.status === "pending").length),
-    );
-  }, [user, role]);
 
   const handleLogout = useCallback(async () => {
     await logout();
@@ -2753,10 +2054,50 @@ const Dashboard = ({ onBook, onLogout }: DashboardProps) => {
     else navigate("/login");
   }, [logout, navigate, onLogout]);
 
+  // ── Guests go straight to the new GuestDashboard — no host shell ──
+  if (!user)
+    return (
+      <div className="min-h-screen bg-[#0e0d0b] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-[#C9A96E] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+
+  if (role === "guest") {
+    return <GuestDashboard onBook={onBook} onLogout={onLogout} />;
+  }
+
+  // ── Host shell ──
+  return <HostDashboardShell onBook={onBook} onLogout={handleLogout} />;
+};
+
+export default Dashboard;
+
+/* ═══════════════════════════════════════════════════════════
+   HOST DASHBOARD SHELL  (extracted so Dashboard stays clean)
+═══════════════════════════════════════════════════════════ */
+const HostDashboardShell = ({
+  onBook,
+  onLogout,
+}: {
+  onBook?: (hotel: Hotel) => void;
+  onLogout: () => void;
+}) => {
+  const [active, setActive] = useState<NavKey>("dashboard");
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [pending, setPending] = useState(0);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (!user) return;
+    BookingsDB.byHost(user.id).then((b) =>
+      setPending(b.filter((bk) => bk.status === "pending").length),
+    );
+  }, [user]);
+
   const PAGE_TITLES: Record<NavKey, string> = {
     dashboard: "Dashboard",
     properties: "My Properties",
-    bookings: role === "host" ? "Bookings" : "My Bookings",
+    bookings: "Bookings",
     reviews: "Reviews",
     earnings: "Earnings",
     messages: "Messages",
@@ -2765,48 +2106,24 @@ const Dashboard = ({ onBook, onLogout }: DashboardProps) => {
     history: "Travel History",
   };
 
-  if (!user)
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#C9A96E] border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-
   const content = () => {
-    if (role === "host")
-      switch (active) {
-        case "dashboard":
-          return <HostHome onNavigate={setActive} onBook={onBook} />;
-        case "properties":
-          return <PropertiesSection onBook={onBook} />;
-        case "bookings":
-          return <HostBookings />;
-        case "reviews":
-          return <ReviewsSection />;
-        case "earnings":
-          return <EarningsSection />;
-        case "messages":
-          return <Messages />;
-        case "settings":
-          return <SettingsSection />;
-        default:
-          return <HostHome onNavigate={setActive} onBook={onBook} />;
-      }
     switch (active) {
       case "dashboard":
-        return <GuestHome onNavigate={setActive} onBook={onBook} />;
+        return <HostHome onNavigate={setActive} onBook={onBook} />;
+      case "properties":
+        return <PropertiesSection onBook={onBook} />;
       case "bookings":
-        return <GuestBookings />;
-      case "wishlist":
-        return <WishlistSection onBook={onBook} />;
-      case "history":
-        return <TravelHistory />;
+        return <HostBookings />;
+      case "reviews":
+        return <ReviewsSection />;
+      case "earnings":
+        return <EarningsSection />;
       case "messages":
         return <Messages />;
       case "settings":
         return <SettingsSection />;
       default:
-        return <GuestHome onNavigate={setActive} onBook={onBook} />;
+        return <HostHome onNavigate={setActive} onBook={onBook} />;
     }
   };
 
@@ -2816,35 +2133,41 @@ const Dashboard = ({ onBook, onLogout }: DashboardProps) => {
         @keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
       `}</style>
 
+      {/* Mobile overlay */}
       {mobileOpen && (
         <div
           className="fixed inset-0 bg-black/60 z-40 lg:hidden"
           onClick={() => setMobileOpen(false)}
         />
       )}
+
+      {/* Mobile drawer */}
       <div
         className={`fixed inset-y-0 left-0 z-50 lg:hidden transition-transform duration-300 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
       >
         <Sidebar
-          role={role}
+          role="host"
           active={active}
           onNav={setActive}
           pending={pending}
           onClose={() => setMobileOpen(false)}
-          onLogout={handleLogout}
+          onLogout={onLogout}
           isMobile
         />
       </div>
+
+      {/* Desktop sidebar */}
       <div className="hidden lg:flex shrink-0">
         <Sidebar
-          role={role}
+          role="host"
           active={active}
           onNav={setActive}
           pending={pending}
-          onLogout={handleLogout}
+          onLogout={onLogout}
         />
       </div>
 
+      {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <TopBar
           title={PAGE_TITLES[active]}
@@ -2858,5 +2181,3 @@ const Dashboard = ({ onBook, onLogout }: DashboardProps) => {
     </div>
   );
 };
-
-export default Dashboard;
