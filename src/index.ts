@@ -18,17 +18,14 @@ import { createClient } from "@supabase/supabase-js";
 
 /* ─────────────── Client ─────────────── */
 
-console.log("URL:", import.meta.env.VITE_SUPABASE_URL);
-console.log("KEY:", import.meta.env.VITE_SUPABASE_ANON_KEY);
-console.log("Supabase initialized");
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-const SUPABASE_URL =
-  import.meta.env.VITE_SUPABASE_URL ||
-  "https://bwfftarbhvbhywucgftx.supabase.co";
-
-const SUPABASE_ANON =
-  import.meta.env.VITE_SUPABASE_ANON_KEY ||
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ3ZmZ0YXJiaHZiaHl3dWNnZnR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3NDA0MzAsImV4cCI6MjA5MzMxNjQzMH0.fEHW44Z-L2XmDfu143fdjbkEGIu9Wm12CnqioSqUW0I";
+if (!SUPABASE_URL || !SUPABASE_ANON) {
+  throw new Error(
+    "Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY in .env.local",
+  );
+}
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
 
@@ -729,3 +726,373 @@ export async function searchHotels(params: SearchParams): Promise<Hotel[]> {
 export function seedDemoData(): void {
   // Demo data is seeded via schema.sql. Nothing to do here.
 }
+
+/* ─────────────── TYPES: Reviews & Messages ─────────────── */
+
+export interface Review {
+  id: string;
+  bookingId: string;
+  listingId: string;
+  guestId: string;
+  hostId: string;
+  guestName: string;
+  guestAvatar: string;
+  rating: number;
+  title: string;
+  body: string;
+  cleanliness?: number;
+  service?: number;
+  location?: number;
+  value?: number;
+  helpful: number;
+  hostReply?: string;
+  createdAt: string;
+}
+
+export interface Conversation {
+  id: string;
+  guestId: string;
+  hostId: string;
+  listingId?: string;
+  listingName: string;
+  guestName: string;
+  hostName: string;
+  lastMessage: string;
+  lastAt: string;
+  unreadHost: number;
+  unreadGuest: number;
+  createdAt: string;
+}
+
+export interface Message {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar: string;
+  senderRole: "host" | "guest";
+  body: string;
+  read: boolean;
+  createdAt: string;
+}
+
+/* ─────────────── Row mappers ─────────────── */
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toReview(r: any): Review {
+  return {
+    id: r.id,
+    bookingId: r.booking_id,
+    listingId: r.listing_id,
+    guestId: r.guest_id,
+    hostId: r.host_id,
+    guestName: r.guest_name ?? "",
+    guestAvatar: r.guest_avatar ?? "",
+    rating: r.rating,
+    title: r.title ?? "",
+    body: r.body ?? "",
+    cleanliness: r.cleanliness ?? undefined,
+    service: r.service ?? undefined,
+    location: r.location ?? undefined,
+    value: r.value ?? undefined,
+    helpful: r.helpful ?? 0,
+    hostReply: r.host_reply ?? undefined,
+    createdAt: r.created_at,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toConversation(r: any): Conversation {
+  return {
+    id: r.id,
+    guestId: r.guest_id,
+    hostId: r.host_id,
+    listingId: r.listing_id ?? undefined,
+    listingName: r.listing_name ?? "",
+    guestName: r.guest_name ?? "",
+    hostName: r.host_name ?? "",
+    lastMessage: r.last_message ?? "",
+    lastAt: r.last_at,
+    unreadHost: r.unread_host ?? 0,
+    unreadGuest: r.unread_guest ?? 0,
+    createdAt: r.created_at,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toMessage(r: any): Message {
+  return {
+    id: r.id,
+    conversationId: r.conversation_id,
+    senderId: r.sender_id,
+    senderName: r.sender_name ?? "",
+    senderAvatar: r.sender_avatar ?? "",
+    senderRole: r.sender_role,
+    body: r.body,
+    read: r.read ?? false,
+    createdAt: r.created_at,
+  };
+}
+
+/* ─────────────── ReviewsDB ─────────────── */
+
+export const ReviewsDB = {
+  async add(data: {
+    bookingId: string;
+    listingId: string;
+    guestId: string;
+    hostId: string;
+    guestName: string;
+    guestAvatar: string;
+    rating: number;
+    title: string;
+    body: string;
+    cleanliness?: number;
+    service?: number;
+    location?: number;
+    value?: number;
+  }): Promise<Review> {
+    const { data: row, error } = await supabase
+      .from("reviews")
+      .insert({
+        booking_id: data.bookingId,
+        listing_id: data.listingId,
+        guest_id: data.guestId,
+        host_id: data.hostId,
+        guest_name: data.guestName,
+        guest_avatar: data.guestAvatar,
+        rating: data.rating,
+        title: data.title,
+        body: data.body,
+        cleanliness: data.cleanliness ?? null,
+        service: data.service ?? null,
+        location: data.location ?? null,
+        value: data.value ?? null,
+      })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return toReview(row);
+  },
+
+  async byListing(listingId: string): Promise<Review[]> {
+    const { data, error } = await supabase
+      .from("reviews")
+      .select("*")
+      .eq("listing_id", listingId)
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("ReviewsDB.byListing:", error.message);
+      return [];
+    }
+    return (data ?? []).map(toReview);
+  },
+
+  async byHost(hostId: string): Promise<Review[]> {
+    const { data, error } = await supabase
+      .from("reviews")
+      .select("*")
+      .eq("host_id", hostId)
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("ReviewsDB.byHost:", error.message);
+      return [];
+    }
+    return (data ?? []).map(toReview);
+  },
+
+  async byGuest(guestId: string): Promise<Review[]> {
+    const { data, error } = await supabase
+      .from("reviews")
+      .select("*")
+      .eq("guest_id", guestId)
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("ReviewsDB.byGuest:", error.message);
+      return [];
+    }
+    return (data ?? []).map(toReview);
+  },
+
+  async addHostReply(reviewId: string, reply: string): Promise<void> {
+    const { error } = await supabase
+      .from("reviews")
+      .update({ host_reply: reply })
+      .eq("id", reviewId);
+    if (error) console.error("ReviewsDB.addHostReply:", error.message);
+  },
+
+  async markHelpful(reviewId: string, currentCount: number): Promise<void> {
+    const { error } = await supabase
+      .from("reviews")
+      .update({ helpful: currentCount + 1 })
+      .eq("id", reviewId);
+    if (error) console.error("ReviewsDB.markHelpful:", error.message);
+  },
+
+  /** Check if a booking already has a review */
+  async existsForBooking(bookingId: string): Promise<boolean> {
+    const { data } = await supabase
+      .from("reviews")
+      .select("id")
+      .eq("booking_id", bookingId)
+      .maybeSingle();
+    return !!data;
+  },
+};
+
+/* ─────────────── MessagesDB ─────────────── */
+
+export const MessagesDB = {
+  /** Get or create a conversation between a guest and host about a listing */
+  async getOrCreateConversation(data: {
+    guestId: string;
+    hostId: string;
+    listingId?: string;
+    listingName: string;
+    guestName: string;
+    hostName: string;
+  }): Promise<Conversation> {
+    // Try to find existing conversation
+    let q = supabase
+      .from("conversations")
+      .select("*")
+      .eq("guest_id", data.guestId)
+      .eq("host_id", data.hostId);
+    if (data.listingId) q = q.eq("listing_id", data.listingId);
+    const { data: existing } = await q.maybeSingle();
+    if (existing) return toConversation(existing);
+
+    // Create new
+    const { data: created, error } = await supabase
+      .from("conversations")
+      .insert({
+        guest_id: data.guestId,
+        host_id: data.hostId,
+        listing_id: data.listingId ?? null,
+        listing_name: data.listingName,
+        guest_name: data.guestName,
+        host_name: data.hostName,
+        last_message: "",
+        last_at: new Date().toISOString(),
+        unread_host: 0,
+        unread_guest: 0,
+      })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return toConversation(created);
+  },
+
+  async conversationsByUser(
+    userId: string,
+    role: "host" | "guest",
+  ): Promise<Conversation[]> {
+    const col = role === "host" ? "host_id" : "guest_id";
+    const { data, error } = await supabase
+      .from("conversations")
+      .select("*")
+      .eq(col, userId)
+      .order("last_at", { ascending: false });
+    if (error) {
+      console.error("MessagesDB.byUser:", error.message);
+      return [];
+    }
+    return (data ?? []).map(toConversation);
+  },
+
+  async messagesByConversation(conversationId: string): Promise<Message[]> {
+    const { data, error } = await supabase
+      .from("messages")
+      .select("*")
+      .eq("conversation_id", conversationId)
+      .order("created_at", { ascending: true });
+    if (error) {
+      console.error("MessagesDB.messages:", error.message);
+      return [];
+    }
+    return (data ?? []).map(toMessage);
+  },
+
+  async sendMessage(data: {
+    conversationId: string;
+    senderId: string;
+    senderName: string;
+    senderAvatar: string;
+    senderRole: "host" | "guest";
+    body: string;
+  }): Promise<Message> {
+    const { data: row, error } = await supabase
+      .from("messages")
+      .insert({
+        conversation_id: data.conversationId,
+        sender_id: data.senderId,
+        sender_name: data.senderName,
+        sender_avatar: data.senderAvatar,
+        sender_role: data.senderRole,
+        body: data.body,
+        read: false,
+      })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+
+    // Update conversation last_message + unread count
+    const unreadCol =
+      data.senderRole === "host" ? "unread_guest" : "unread_host";
+    await supabase
+      .from("conversations")
+      .update({
+        last_message: data.body,
+        last_at: new Date().toISOString(),
+        [unreadCol]: supabase.rpc as unknown as number, // incremented below
+      })
+      .eq("id", data.conversationId);
+
+    // Increment unread separately (Supabase doesn't support SQL increment in update easily)
+    await supabase
+      .rpc("increment_unread", {
+        conv_id: data.conversationId,
+        col: unreadCol,
+      })
+      .match(() => {
+        // Fallback: just update last message without incrementing (non-critical)
+        supabase
+          .from("conversations")
+          .update({
+            last_message: data.body,
+            last_at: new Date().toISOString(),
+          })
+          .eq("id", data.conversationId);
+      });
+
+    return toMessage(row);
+  },
+
+  async markRead(
+    conversationId: string,
+    role: "host" | "guest",
+  ): Promise<void> {
+    const col = role === "host" ? "unread_host" : "unread_guest";
+    await supabase
+      .from("conversations")
+      .update({ [col]: 0 })
+      .eq("id", conversationId);
+    // Mark individual messages as read
+    await supabase
+      .from("messages")
+      .update({ read: true })
+      .eq("conversation_id", conversationId)
+      .neq("sender_role", role);
+  },
+
+  async totalUnread(userId: string, role: "host" | "guest"): Promise<number> {
+    const col = role === "host" ? "host_id" : "guest_id";
+    const ucol = role === "host" ? "unread_host" : "unread_guest";
+    const { data } = await supabase
+      .from("conversations")
+      .select(ucol)
+      .eq(col, userId);
+    return (data ?? []).reduce((s: number, r: any) => s + (r[ucol] ?? 0), 0);
+  },
+};
