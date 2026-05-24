@@ -12,62 +12,16 @@ import {
   ChevronDownIcon,
 } from "@heroicons/react/24/outline";
 import { StarIcon, HeartIcon as HeartSolid } from "@heroicons/react/24/solid";
-import { type Hotel } from "../index";
+import { useAuth } from "../AuthContext";
+import { BookingsDB, type Hotel } from "../index";
 
-const REVIEWS = [
-  {
-    id: 1,
-    name: "Isabelle Fontaine",
-    avatar: "IF",
-    location: "Paris, France",
-    rating: 5,
-    date: "March 2025",
-    title: "Absolute perfection above the ocean",
-    body: "Waking up to the Indian Ocean from your private deck never gets old. The butler remembered every preference from day one — cold brew at sunrise, champagne at sunset. The house reef snorkeling directly from the villa steps was otherworldly.",
-    helpful: 47,
-  },
-  {
-    id: 2,
-    name: "James Okafor",
-    avatar: "JO",
-    location: "Lagos, Nigeria",
-    rating: 5,
-    date: "February 2025",
-    title: "Honeymoon beyond imagination",
-    body: "We celebrated our honeymoon here and the team went above and beyond to make every moment magical. Private sunset cruise, flower-petal bath, floating breakfast — all arranged without us asking. Worth every penny.",
-    helpful: 38,
-  },
-  {
-    id: 3,
-    name: "Mei Lin",
-    avatar: "ML",
-    location: "Shanghai, China",
-    rating: 4,
-    date: "January 2025",
-    title: "Stunning but transfer timing matters",
-    body: "The villa itself is extraordinary — glass floors, private infinity pool, direct ocean access. One note: book the seaplane transfer as early as possible. The speedboat alternative takes much longer and is weather-dependent.",
-    helpful: 29,
-  },
-  {
-    id: 4,
-    name: "Alejandro Reyes",
-    avatar: "AR",
-    location: "Mexico City, Mexico",
-    rating: 5,
-    date: "December 2024",
-    title: "The finest resort stay of my life",
-    body: "Having stayed at over 30 luxury resorts globally, this set a new benchmark. The Spa Island alone is worth the visit — a full day of treatments surrounded by nothing but open ocean. Exceptional in every dimension.",
-    helpful: 61,
-  },
-];
-
+/* ─────────────── Room types ─────────────── */
 const makeRoomTypes = (hotel: Hotel) => {
   const bedroomLabel =
     hotel.bedrooms > 1 ? `${hotel.bedrooms} bedrooms` : "1 bedroom";
   const baseFeatures = hotel.amenities.slice(0, 5);
   const standardPrice = hotel.pricePerNight;
   const premiumPrice = Math.round(standardPrice * 1.2);
-
   return [
     {
       id: "standard",
@@ -94,7 +48,6 @@ const makeRoomTypes = (hotel: Hotel) => {
   ];
 };
 
-/* ─── Amenity icon map ─── */
 const amenityIcons: Record<string, string> = {
   "Free WiFi": "📶",
   "Private Pool": "🏊",
@@ -110,9 +63,54 @@ const amenityIcons: Record<string, string> = {
   "Overwater Bungalow": "🌊",
 };
 
-/* ─────────────────────────────────────────────────────────────── */
-/*  Gallery Component                                                */
-/* ─────────────────────────────────────────────────────────────── */
+const MOCK_REVIEWS = [
+  {
+    id: 1,
+    name: "Isabelle Fontaine",
+    avatar: "IF",
+    location: "Paris, France",
+    rating: 5,
+    date: "March 2025",
+    title: "Absolute perfection above the ocean",
+    body: "Waking up to the Indian Ocean from your private deck never gets old. The butler remembered every preference from day one — cold brew at sunrise, champagne at sunset.",
+    helpful: 47,
+  },
+  {
+    id: 2,
+    name: "James Okafor",
+    avatar: "JO",
+    location: "Lagos, Nigeria",
+    rating: 5,
+    date: "February 2025",
+    title: "Honeymoon beyond imagination",
+    body: "We celebrated our honeymoon here and the team went above and beyond to make every moment magical. Private sunset cruise, floating breakfast — all arranged without asking.",
+    helpful: 38,
+  },
+  {
+    id: 3,
+    name: "Mei Lin",
+    avatar: "ML",
+    location: "Shanghai, China",
+    rating: 4,
+    date: "January 2025",
+    title: "Stunning but transfer timing matters",
+    body: "The villa itself is extraordinary — glass floors, private infinity pool, direct ocean access. Book the seaplane transfer early — the speedboat alternative is weather-dependent.",
+    helpful: 29,
+  },
+  {
+    id: 4,
+    name: "Alejandro Reyes",
+    avatar: "AR",
+    location: "Mexico City",
+    rating: 5,
+    date: "December 2024",
+    title: "The finest resort stay of my life",
+    body: "Having stayed at over 30 luxury resorts globally, this set a new benchmark. The Spa Island alone is worth the visit. Exceptional in every dimension.",
+    helpful: 61,
+  },
+];
+
+/* ─────────────── Gallery ─────────────── */
 type GalleryProps = {
   hotel: Hotel;
   activeImg: number;
@@ -121,7 +119,6 @@ type GalleryProps = {
   prevImg: () => void;
   nextImg: () => void;
 };
-
 const Gallery = ({
   hotel,
   activeImg,
@@ -169,11 +166,7 @@ const Gallery = ({
         <button
           key={i}
           onClick={() => setActiveImg(i)}
-          className={`w-16 h-12 rounded-lg overflow-hidden shrink-0 transition-all ${
-            i === activeImg
-              ? "ring-2 ring-[#C9A96E] opacity-100"
-              : "opacity-40 hover:opacity-70"
-          }`}
+          className={`w-16 h-12 rounded-lg overflow-hidden shrink-0 transition-all ${i === activeImg ? "ring-2 ring-[#C9A96E] opacity-100" : "opacity-40 hover:opacity-70"}`}
         >
           <img
             src={img}
@@ -189,13 +182,21 @@ const Gallery = ({
   </div>
 );
 
-/* ─────────────────────────────────────────────────────────────── */
-/*  BookingPage                                                      */
-/* ─────────────────────────────────────────────────────────────── */
-type Props = { hotel: Hotel; onBack?: () => void };
+/* ─────────────── Props ─────────────── */
+type Props = {
+  hotel: Hotel;
+  onBack?: () => void;
+  /** Called after booking is confirmed and saved to Supabase */
+  onBookingComplete?: () => void;
+};
 
-const BookingPage = ({ hotel, onBack }: Props) => {
-  /* ── state ── */
+/* ═══════════════════════════════════════════════════════════
+   BOOKING PAGE
+═══════════════════════════════════════════════════════════ */
+const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
+  const { user } = useAuth();
+
+  /* ── State ── */
   const [activeImg, setActiveImg] = useState(0);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [wishlisted, setWishlisted] = useState(false);
@@ -207,21 +208,23 @@ const BookingPage = ({ hotel, onBack }: Props) => {
   const [step, setStep] = useState<"idle" | "form" | "confirm" | "done">(
     "idle",
   );
-  const [bookingRef] = useState(
-    () => `ZB-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-  );
-  const [guestInfo, setGuestInfo] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    requests: "",
-  });
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [bookingRef, setBookingRef] = useState("");
   const [showAllAmenities, setShowAllAmenities] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "rooms" | "reviews">(
     "overview",
   );
   const heroRef = useRef<HTMLDivElement>(null);
   const [scrolled, setScrolled] = useState(false);
+
+  // Auto-fill guest info from logged-in user
+  const [guestInfo, setGuestInfo] = useState({
+    name: user ? `${user.firstName} ${user.lastName}`.trim() : "",
+    email: user?.email ?? "",
+    phone: user?.phone ?? "",
+    requests: "",
+  });
 
   const today = new Date().toISOString().split("T")[0];
 
@@ -252,6 +255,36 @@ const BookingPage = ({ hotel, onBack }: Props) => {
   const prevImg = () =>
     setActiveImg((i) => (i - 1 + hotel.images.length) % hotel.images.length);
 
+  /* ── Confirm reservation → save to Supabase ── */
+  const handleConfirm = async () => {
+    setSaving(true);
+    setSaveError("");
+    try {
+      const booking = await BookingsDB.add({
+        guestId: user?.id ?? "guest_anonymous",
+        guestName: guestInfo.name,
+        guestEmail: guestInfo.email,
+        listingId: hotel.id,
+        listingName: hotel.name,
+        hostId: hotel.hostId,
+        checkIn: checkIn || new Date().toISOString().split("T")[0],
+        checkOut:
+          checkOut ||
+          new Date(Date.now() + 86400000).toISOString().split("T")[0],
+        guests,
+        nights: Math.max(nights, 1),
+        totalAmount: total,
+        specialRequests: guestInfo.requests,
+      });
+      setBookingRef(booking.ref);
+      setStep("done");
+    } catch (err: any) {
+      setSaveError(err.message ?? "Failed to save booking. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   /* ── Booking Modal ── */
   const BookingModal = () => (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-6">
@@ -260,6 +293,7 @@ const BookingPage = ({ hotel, onBack }: Props) => {
         onClick={() => setStep("idle")}
       />
       <div className="relative z-10 bg-white w-full md:max-w-lg md:rounded-3xl shadow-2xl max-h-[92vh] overflow-y-auto">
+        {/* ── STEP: form ── */}
         {step === "form" && (
           <>
             <div className="sticky top-0 bg-white px-6 pt-6 pb-4 border-b border-gray-100 flex items-center justify-between">
@@ -279,9 +313,8 @@ const BookingPage = ({ hotel, onBack }: Props) => {
                 <XMarkIcon className="w-4 h-4 text-gray-600" />
               </button>
             </div>
-
             <div className="p-6 space-y-4">
-              {/* Summary card */}
+              {/* Summary */}
               <div className="bg-[#faf8f5] rounded-2xl p-4 flex gap-4 items-center">
                 <img
                   src={room.image}
@@ -305,6 +338,7 @@ const BookingPage = ({ hotel, onBack }: Props) => {
                 </div>
               </div>
 
+              {/* Dates */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-1.5">
@@ -332,48 +366,42 @@ const BookingPage = ({ hotel, onBack }: Props) => {
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-1.5">
-                  Full Name
-                </label>
-                <input
-                  type="text"
-                  value={guestInfo.name}
-                  onChange={(e) =>
-                    setGuestInfo((g) => ({ ...g, name: e.target.value }))
-                  }
-                  placeholder="Your full name"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#C9A96E] transition-colors placeholder:text-gray-300"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-1.5">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  value={guestInfo.email}
-                  onChange={(e) =>
-                    setGuestInfo((g) => ({ ...g, email: e.target.value }))
-                  }
-                  placeholder="your@email.com"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#C9A96E] transition-colors placeholder:text-gray-300"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-1.5">
-                  Phone (optional)
-                </label>
-                <input
-                  type="tel"
-                  value={guestInfo.phone}
-                  onChange={(e) =>
-                    setGuestInfo((g) => ({ ...g, phone: e.target.value }))
-                  }
-                  placeholder="+1 234 567 8900"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#C9A96E] transition-colors placeholder:text-gray-300"
-                />
-              </div>
+              {/* Guest fields */}
+              {[
+                {
+                  label: "Full Name",
+                  key: "name",
+                  type: "text",
+                  placeholder: "Your full name",
+                },
+                {
+                  label: "Email Address",
+                  key: "email",
+                  type: "email",
+                  placeholder: "your@email.com",
+                },
+                {
+                  label: "Phone (optional)",
+                  key: "phone",
+                  type: "tel",
+                  placeholder: "+1 234 567 8900",
+                },
+              ].map(({ label, key, type, placeholder }) => (
+                <div key={key}>
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-1.5">
+                    {label}
+                  </label>
+                  <input
+                    type={type}
+                    value={guestInfo[key as keyof typeof guestInfo]}
+                    onChange={(e) =>
+                      setGuestInfo((g) => ({ ...g, [key]: e.target.value }))
+                    }
+                    placeholder={placeholder}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#C9A96E] transition-colors placeholder:text-gray-300"
+                  />
+                </div>
+              ))}
               <div>
                 <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-1.5">
                   Special Requests
@@ -417,15 +445,15 @@ const BookingPage = ({ hotel, onBack }: Props) => {
               >
                 Continue to Payment
               </button>
-
               <div className="flex items-center gap-2 justify-center text-xs text-gray-400">
-                <ShieldCheckIcon className="w-4 h-4" />
-                Free cancellation up to 48 hours before check-in
+                <ShieldCheckIcon className="w-4 h-4" /> Free cancellation up to
+                48 hours before check-in
               </div>
             </div>
           </>
         )}
 
+        {/* ── STEP: confirm ── */}
         {step === "confirm" && (
           <>
             <div className="sticky top-0 bg-white px-6 pt-6 pb-4 border-b border-gray-100 flex items-center justify-between">
@@ -439,9 +467,7 @@ const BookingPage = ({ hotel, onBack }: Props) => {
                 ← Edit details
               </button>
             </div>
-
             <div className="p-6 space-y-4">
-              {/* Reservation summary */}
               <div className="bg-[#faf8f5] rounded-2xl p-5 space-y-3">
                 <h3 className="font-semibold text-gray-900 text-sm">
                   Reservation Summary
@@ -476,20 +502,35 @@ const BookingPage = ({ hotel, onBack }: Props) => {
                 <div className="text-2xl">💳</div>
                 <p className="font-medium text-gray-500">Secure Payment</p>
                 <p className="text-xs">
-                  Connect your payment gateway (Stripe, PayStack, etc.) here
+                  Connect your payment gateway (Stripe, Paystack, etc.) here
                 </p>
               </div>
 
+              {saveError && (
+                <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3">
+                  {saveError}
+                </div>
+              )}
+
               <button
-                onClick={() => setStep("done")}
-                className="w-full bg-gray-900 text-white font-semibold py-3.5 rounded-2xl text-sm hover:bg-gray-800 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                onClick={handleConfirm}
+                disabled={saving}
+                className="w-full bg-gray-900 text-white font-semibold py-3.5 rounded-2xl text-sm hover:bg-gray-800 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-60"
               >
-                Confirm Reservation
+                {saving ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{" "}
+                    Saving reservation…
+                  </>
+                ) : (
+                  "Confirm Reservation"
+                )}
               </button>
             </div>
           </>
         )}
 
+        {/* ── STEP: done ── */}
         {step === "done" && (
           <div className="p-8 flex flex-col items-center text-center">
             <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mb-5">
@@ -499,9 +540,9 @@ const BookingPage = ({ hotel, onBack }: Props) => {
               Booking Confirmed!
             </h2>
             <p className="text-gray-500 text-sm leading-relaxed max-w-xs mb-6">
-              Your reservation at <strong>{hotel.name}</strong> has been
-              confirmed. A detailed itinerary has been sent to{" "}
-              <strong>{guestInfo.email}</strong>.
+              Your reservation at <strong>{hotel.name}</strong> has been saved.
+              A confirmation has been sent to <strong>{guestInfo.email}</strong>
+              .
             </p>
             <div className="bg-[#faf8f5] rounded-2xl px-6 py-4 w-full mb-6 text-sm">
               <p className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-3">
@@ -513,21 +554,19 @@ const BookingPage = ({ hotel, onBack }: Props) => {
             </div>
             <button
               onClick={() => {
-                if (onBack) {
-                  onBack();
-                } else {
-                  setStep("idle");
-                  setGuestInfo({
-                    name: "",
-                    email: "",
-                    phone: "",
-                    requests: "",
-                  });
-                }
+                setStep("idle");
+                setGuestInfo({
+                  name: user ? `${user.firstName} ${user.lastName}`.trim() : "",
+                  email: user?.email ?? "",
+                  phone: user?.phone ?? "",
+                  requests: "",
+                });
+                if (onBookingComplete) onBookingComplete();
+                else if (onBack) onBack();
               }}
               className="text-sm font-semibold text-[#C9A96E] hover:underline"
             >
-              Back to property
+              Back to dashboard
             </button>
           </div>
         )}
@@ -535,9 +574,11 @@ const BookingPage = ({ hotel, onBack }: Props) => {
     </div>
   );
 
+  /* ═══════════════════════════════════════════════════════════
+     MAIN RENDER
+  ═══════════════════════════════════════════════════════════ */
   return (
     <div className="min-h-screen bg-[#faf9f7] font-sans text-gray-900">
-      {/* ── Gallery ── */}
       {galleryOpen && (
         <Gallery
           hotel={hotel}
@@ -548,12 +589,9 @@ const BookingPage = ({ hotel, onBack }: Props) => {
           nextImg={nextImg}
         />
       )}
-      {step !== "idle" && (
-        // eslint-disable-next-line
-        <BookingModal />
-      )}
+      {step !== "idle" && <BookingModal />}
 
-      {/* ── Sticky nav ── */}
+      {/* Sticky nav */}
       <header
         className={`sticky top-0 z-40 transition-all duration-300 ${scrolled ? "bg-white/95 backdrop-blur-md shadow-sm border-b border-gray-100" : "bg-transparent"}`}
       >
@@ -600,10 +638,9 @@ const BookingPage = ({ hotel, onBack }: Props) => {
         </div>
       </header>
 
-      {/* ── Hero image grid ── */}
+      {/* Hero image grid */}
       <div ref={heroRef} className="max-w-7xl mx-auto px-4 md:px-8 pt-4 pb-6">
         <div className="grid grid-cols-4 grid-rows-2 gap-2 rounded-3xl overflow-hidden h-[420px] md:h-[520px]">
-          {/* Main large image */}
           <button
             onClick={() => setGalleryOpen(true)}
             className="col-span-2 row-span-2 relative overflow-hidden group"
@@ -618,7 +655,6 @@ const BookingPage = ({ hotel, onBack }: Props) => {
             />
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
           </button>
-          {/* Side images */}
           {hotel.images.slice(1, 5).map((img, i) => (
             <button
               key={i}
@@ -649,10 +685,10 @@ const BookingPage = ({ hotel, onBack }: Props) => {
         </div>
       </div>
 
-      {/* ── Main content ── */}
+      {/* Main content */}
       <div className="max-w-7xl mx-auto px-4 md:px-8 pb-24">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-10">
-          {/* ── LEFT ── */}
+          {/* LEFT */}
           <div>
             {/* Title block */}
             <div className="mb-6">
@@ -665,15 +701,15 @@ const BookingPage = ({ hotel, onBack }: Props) => {
                     Featured
                   </span>
                 )}
-                <span className="bg-gray-100 text-gray-600 text-xs font-medium px-3 py-1 rounded-full">
-                  {hotel.region}
-                </span>
+                {hotel.region && (
+                  <span className="bg-gray-100 text-gray-600 text-xs font-medium px-3 py-1 rounded-full">
+                    {hotel.region}
+                  </span>
+                )}
               </div>
-
               <h1 className="font-playfair text-3xl md:text-4xl font-semibold text-gray-900 leading-tight mb-3">
                 {hotel.name}
               </h1>
-
               <div className="flex items-center gap-4 flex-wrap">
                 <div className="flex items-center gap-1.5">
                   {Array.from({ length: 5 }).map((_, i) => (
@@ -694,8 +730,6 @@ const BookingPage = ({ hotel, onBack }: Props) => {
                   {hotel.location}
                 </div>
               </div>
-
-              {/* Tags */}
               <div className="flex flex-wrap gap-2 mt-4">
                 {hotel.tags.map((t) => (
                   <span
@@ -723,10 +757,9 @@ const BookingPage = ({ hotel, onBack }: Props) => {
               </div>
             </div>
 
-            {/* ── OVERVIEW TAB ── */}
+            {/* OVERVIEW */}
             {activeTab === "overview" && (
               <div className="space-y-10">
-                {/* Quick stats */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {[
                     { icon: "🛏", label: "Bedrooms", val: hotel.bedrooms },
@@ -752,8 +785,6 @@ const BookingPage = ({ hotel, onBack }: Props) => {
                     </div>
                   ))}
                 </div>
-
-                {/* Description */}
                 <div>
                   <h2 className="font-playfair text-xl font-semibold text-gray-900 mb-4">
                     About this property
@@ -762,8 +793,6 @@ const BookingPage = ({ hotel, onBack }: Props) => {
                     {hotel.description}
                   </p>
                 </div>
-
-                {/* Amenities */}
                 <div>
                   <h2 className="font-playfair text-xl font-semibold text-gray-900 mb-4">
                     Amenities
@@ -798,8 +827,6 @@ const BookingPage = ({ hotel, onBack }: Props) => {
                     </button>
                   )}
                 </div>
-
-                {/* Policies */}
                 <div>
                   <h2 className="font-playfair text-xl font-semibold text-gray-900 mb-4">
                     Policies
@@ -857,7 +884,7 @@ const BookingPage = ({ hotel, onBack }: Props) => {
               </div>
             )}
 
-            {/* ── ROOMS TAB ── */}
+            {/* ROOMS */}
             {activeTab === "rooms" && (
               <div className="space-y-5">
                 <p className="text-gray-500 text-sm">
@@ -932,10 +959,9 @@ const BookingPage = ({ hotel, onBack }: Props) => {
               </div>
             )}
 
-            {/* ── REVIEWS TAB ── */}
+            {/* REVIEWS */}
             {activeTab === "reviews" && (
               <div className="space-y-6">
-                {/* Summary */}
                 <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm flex flex-col md:flex-row items-center gap-6">
                   <div className="text-center shrink-0">
                     <p className="text-5xl font-bold text-gray-900 font-playfair">
@@ -979,10 +1005,8 @@ const BookingPage = ({ hotel, onBack }: Props) => {
                     ))}
                   </div>
                 </div>
-
-                {/* Review cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  {REVIEWS.map((r) => (
+                  {MOCK_REVIEWS.map((r) => (
                     <div
                       key={r.id}
                       className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm"
@@ -1024,10 +1048,9 @@ const BookingPage = ({ hotel, onBack }: Props) => {
             )}
           </div>
 
-          {/* ── RIGHT — Booking widget ── */}
+          {/* RIGHT — Booking widget */}
           <div className="lg:sticky lg:top-24 self-start">
             <div className="bg-white rounded-3xl border border-gray-100 shadow-xl overflow-hidden">
-              {/* Room selector */}
               <div className="bg-gradient-to-br from-[#1a1a1a] to-[#2d2418] p-6 text-white">
                 <p className="text-[#C9A96E] text-xs font-semibold uppercase tracking-wider mb-3">
                   Selected Room
@@ -1045,11 +1068,10 @@ const BookingPage = ({ hotel, onBack }: Props) => {
                   <span className="text-white/50 text-sm">/ night</span>
                 </div>
               </div>
-
               <div className="p-5 space-y-4">
                 {/* Date pickers */}
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="border border-gray-200 rounded-xl px-3 py-2.5 hover:border-[#C9A96E] transition-colors group">
+                  <div className="border border-gray-200 rounded-xl px-3 py-2.5 hover:border-[#C9A96E] transition-colors">
                     <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
                       Check-in
                     </p>
@@ -1077,7 +1099,6 @@ const BookingPage = ({ hotel, onBack }: Props) => {
                     />
                   </div>
                 </div>
-
                 {/* Guests */}
                 <div className="border border-gray-200 rounded-xl px-4 py-3 flex items-center justify-between">
                   <div>
@@ -1108,8 +1129,7 @@ const BookingPage = ({ hotel, onBack }: Props) => {
                     </button>
                   </div>
                 </div>
-
-                {/* Room selector mini */}
+                {/* Room type mini selector */}
                 <div>
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
                     Room Type
@@ -1131,7 +1151,6 @@ const BookingPage = ({ hotel, onBack }: Props) => {
                     ))}
                   </div>
                 </div>
-
                 {/* Price breakdown */}
                 {nights > 0 && (
                   <div className="border-t border-gray-100 pt-4 space-y-2">
@@ -1151,7 +1170,6 @@ const BookingPage = ({ hotel, onBack }: Props) => {
                     </div>
                   </div>
                 )}
-
                 <button
                   onClick={() => setStep("form")}
                   className="w-full bg-[#C9A96E] text-white font-semibold py-4 rounded-2xl text-sm hover:bg-[#b8935a] transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-[#C9A96E]/30"
@@ -1161,13 +1179,10 @@ const BookingPage = ({ hotel, onBack }: Props) => {
                     ? `$${total.toLocaleString()}`
                     : `From $${room.price.toLocaleString()}`}
                 </button>
-
                 <div className="flex items-center gap-2 justify-center text-xs text-gray-400">
-                  <ShieldCheckIcon className="w-4 h-4" />
-                  Free cancellation · No charge until confirmed
+                  <ShieldCheckIcon className="w-4 h-4" /> Free cancellation · No
+                  charge until confirmed
                 </div>
-
-                {/* Contact concierge */}
                 <div className="border-t border-gray-100 pt-4 flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-gray-900 flex items-center justify-center shrink-0">
                     <UserIcon className="w-4 h-4 text-white" />
@@ -1186,8 +1201,6 @@ const BookingPage = ({ hotel, onBack }: Props) => {
                 </div>
               </div>
             </div>
-
-            {/* Trust badges */}
             <div className="mt-4 grid grid-cols-3 gap-2 text-center">
               {[
                 ["🔒", "Secure", "256-bit SSL"],
@@ -1210,7 +1223,7 @@ const BookingPage = ({ hotel, onBack }: Props) => {
         </div>
       </div>
 
-      {/* ── Mobile CTA bar ── */}
+      {/* Mobile CTA */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-4 py-3 flex items-center justify-between z-30">
         <div>
           <p className="font-bold text-gray-900 text-base">
