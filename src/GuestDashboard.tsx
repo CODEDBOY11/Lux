@@ -272,6 +272,7 @@ const Sidebar = ({
   mobile?: boolean;
 }) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   return (
     <aside
       className="w-60 h-full flex flex-col relative overflow-hidden"
@@ -358,7 +359,10 @@ const Sidebar = ({
           <p className="text-[9px] uppercase tracking-[0.2em] text-white/20 px-3 mb-2 font-bold">
             Quick Links
           </p>
-          <button className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm text-white/40 hover:text-white/70 hover:bg-white/4 transition-all">
+          <button
+            onClick={() => navigate("/explore")}
+            className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm text-white/40 hover:text-white/70 hover:bg-white/4 transition-all"
+          >
             <MagnifyingGlassIcon
               style={{ width: 16, height: 16 }}
               className="shrink-0"
@@ -423,6 +427,7 @@ const Overview = ({
   onTabSwitch: (t: Tab) => void;
   onBook?: (h: Hotel) => void;
 }) => {
+  const navigate = useNavigate();
   const now = new Date();
   const upcoming = bookings
     .filter((b) => b.status !== "cancelled" && new Date(b.checkIn) >= now)
@@ -664,7 +669,10 @@ const Overview = ({
             Explore our curated collection of luxury properties and book your
             first stay.
           </p>
-          <button className="flex items-center gap-2 bg-[#C9A96E] text-[#0e0d0b] font-semibold text-sm px-6 py-3 rounded-xl hover:bg-[#dfc08a] transition-all hover:scale-105">
+          <button
+            onClick={() => navigate("/explore")}
+            className="flex items-center gap-2 bg-[#C9A96E] text-[#0e0d0b] font-semibold text-sm px-6 py-3 rounded-xl hover:bg-[#dfc08a] transition-all hover:scale-105"
+          >
             <MagnifyingGlassIcon className="w-4 h-4" /> Explore Stays
           </button>
         </div>
