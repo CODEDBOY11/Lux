@@ -15,7 +15,8 @@ import {
   StarIcon as StarSolid,
 } from "@heroicons/react/24/solid";
 import { useAuth } from "./AuthContext";
-import { ListingsDB, type Listing } from "./index";
+import { ListingsDB, type Listing, type Hotel } from "./index";
+import BookingPage from "./Components/BookingPage";
 
 /* ─────────────────────────────────────────────────────────
    TYPES & CONSTANTS
@@ -376,6 +377,7 @@ export default function ExplorePage() {
   const [allListings, setAllListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [searched, setSearched] = useState(false);
+  const [selectedHotel, setSelectedHotel] = useState<Hotel | null>(null);
 
   const sortRef = useRef<HTMLDivElement>(null);
 
@@ -452,6 +454,17 @@ export default function ExplorePage() {
 
   const hasFilters =
     query || guests || category || minPrice || maxPrice || minBeds;
+
+  /* ── If a property is selected, show BookingPage full-screen ── */
+  if (selectedHotel) {
+    return (
+      <BookingPage
+        hotel={selectedHotel}
+        onBack={() => setSelectedHotel(null)}
+        onBookingComplete={() => setSelectedHotel(null)}
+      />
+    );
+  }
 
   /* ─────────────────────────────────────────────────────────
      RENDER
