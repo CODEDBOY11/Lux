@@ -110,6 +110,7 @@ export interface Booking {
   status: "confirmed" | "pending" | "cancelled";
   specialRequests: string;
   createdAt: string;
+  guestPhone: string;
 }
 
 /* ─────────────── Row mappers  snake_case → camelCase ─────────────── */
@@ -184,6 +185,7 @@ function toBooking(r: any): Booking {
     status: r.status,
     specialRequests: r.special_requests ?? "",
     createdAt: r.created_at,
+    guestPhone: r.guest_phone ?? "",
   };
 }
 
@@ -602,6 +604,7 @@ export const BookingsDB = {
     nights: number;
     totalAmount: number;
     specialRequests?: string;
+    guestPhone: string;
   }): Promise<Booking> {
     const { data: row, error } = await supabase
       .from("bookings")
@@ -619,6 +622,7 @@ export const BookingsDB = {
         total_amount: data.totalAmount,
         special_requests: data.specialRequests ?? "",
         status: "confirmed",
+        guest_phone: data.guestPhone,
       })
       .select()
       .single();
@@ -747,11 +751,13 @@ export interface Review {
   helpful: number;
   hostReply?: string;
   createdAt: string;
+  guestPhone: string;
 }
 
 export interface Conversation {
   id: string;
   guestId: string;
+  guestPhone: string;
   hostId: string;
   listingId?: string;
   listingName: string;
@@ -782,6 +788,7 @@ export interface Message {
 function toReview(r: any): Review {
   return {
     id: r.id,
+    guestPhone: r.guest_phone ?? "",
     bookingId: r.booking_id,
     listingId: r.listing_id,
     guestId: r.guest_id,
@@ -806,6 +813,7 @@ function toConversation(r: any): Conversation {
   return {
     id: r.id,
     guestId: r.guest_id,
+    guestPhone: r.guest_phone ?? "",
     hostId: r.host_id,
     listingId: r.listing_id ?? undefined,
     listingName: r.listing_name ?? "",
@@ -838,6 +846,7 @@ function toMessage(r: any): Message {
 
 export const ReviewsDB = {
   async add(data: {
+    guestPhone: string;
     bookingId: string;
     listingId: string;
     guestId: string;
@@ -868,6 +877,7 @@ export const ReviewsDB = {
         service: data.service ?? null,
         location: data.location ?? null,
         value: data.value ?? null,
+        guest_phone: data.guestPhone ?? "",
       })
       .select()
       .single();

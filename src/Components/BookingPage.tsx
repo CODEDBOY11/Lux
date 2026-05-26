@@ -11,44 +11,32 @@ import {
   ShareIcon,
   ChevronDownIcon,
 } from "@heroicons/react/24/outline";
-import { StarIcon, HeartIcon as HeartSolid } from "@heroicons/react/24/solid";
+import {
+  StarIcon,
+  HeartIcon as HeartSolid,
+  CheckCircleIcon,
+} from "@heroicons/react/24/solid";
 import { useAuth } from "../AuthContext";
 import { BookingsDB, type Hotel } from "../index";
 
-/* ─────────────── Room types ─────────────── */
-const makeRoomTypes = (hotel: Hotel) => {
-  const bedroomLabel =
-    hotel.bedrooms > 1 ? `${hotel.bedrooms} bedrooms` : "1 bedroom";
-  const baseFeatures = hotel.amenities.slice(0, 5);
-  const standardPrice = hotel.pricePerNight;
-  const premiumPrice = Math.round(standardPrice * 1.2);
-  return [
-    {
-      id: "standard",
-      name: `${hotel.category} Retreat`,
-      size: `${Math.max(hotel.bedrooms * 28, 60)} m²`,
-      guests: hotel.maxGuests,
-      bed: bedroomLabel,
-      price: standardPrice,
-      features: baseFeatures,
-      image: hotel.images[0] ?? hotel.thumbnail,
-      badge: hotel.featured ? "Featured" : null,
-    },
-    {
-      id: "premium",
-      name: "Premium Stay",
-      size: `${Math.max(hotel.bedrooms * 32, 70)} m²`,
-      guests: hotel.maxGuests,
-      bed: bedroomLabel,
-      price: premiumPrice,
-      features: baseFeatures,
-      image: hotel.images[1] ?? hotel.images[0] ?? hotel.thumbnail,
-      badge: hotel.featured ? "Best seller" : null,
-    },
-  ];
-};
+/* ─────────────── Supabase BookingsDB.add payload ─────────────── */
+// Your BookingsDB.add() should now accept and insert these fields.
+// See the schema card above for the full Supabase table definition.
+// Make sure your existing BookingsDB.add() maps snake_case columns:
+//   guest_id, guest_name, guest_email, guest_phone,
+//   listing_id, listing_name, host_id, room_type,
+//   check_in, check_out, nights, guests,
+//   price_per_night, subtotal, taxes, total_amount,
+//   status ('pending' by default), special_requests
 
-const amenityIcons: Record<string, string> = {
+/* ─────────────── Helpers ─────────────── */
+const DEFAULT_IMAGE =
+  "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=75";
+
+const getSafeImage = (url?: string) =>
+  !url || url.includes("bing.com") ? DEFAULT_IMAGE : url;
+
+const AMENITY_ICONS: Record<string, string> = {
   "Free WiFi": "📶",
   "Private Pool": "🏊",
   "Butler Service": "🛎",
@@ -61,6 +49,16 @@ const amenityIcons: Record<string, string> = {
   "Fine Dining": "🍽",
   "Kids Club": "🧒",
   "Overwater Bungalow": "🌊",
+  "Sea View": "🌊",
+  "Air Conditioning": "❄️",
+  BBQ: "🍖",
+  "Wine Cellar": "🍷",
+  Netflix: "🎬",
+  "Daily Cleaning": "🧹",
+  Gym: "🏋️",
+  Parking: "🚗",
+  Concierge: "🔔",
+  "Hot Tub": "♨️",
 };
 
 const MOCK_REVIEWS = [
@@ -110,97 +108,387 @@ const MOCK_REVIEWS = [
   },
 ];
 
-/* ─────────────── Gallery ─────────────── */
-type GalleryProps = {
-  hotel: Hotel;
-  activeImg: number;
-  setActiveImg: (i: number) => void;
-  setGalleryOpen: (b: boolean) => void;
-  prevImg: () => void;
-  nextImg: () => void;
+/* ─────────────── Mini Calendar ─────────────── */
+function MiniCalendar({
+  value,
+  onChange,
+  min,
+  label,
+}: {
+  value: string;
+  onChange: (d: string) => void;
+  min?: string;
+  label: string;
+}) {
+  const today = new Date();
+  const initial = value ? new Date(value + "T00:00:00") : today;
+  const [viewYear, setViewYear] = useState(initial.getFullYear());
+  const [viewMonth, setViewMonth] = useState(initial.getMonth());
+
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const minDate = min ? new Date(min + "T00:00:00") : today;
+
+  const MONTHS = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
+  const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+  const selected = value ? new Date(value + "T00:00:00") : null;
+  const toISO = (y: number, m: number, d: number) =>
+    `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+
+  const prev = () => {
+    if (viewMonth === 0) {
+      setViewYear((y) => y - 1);
+      setViewMonth(11);
+    } else setViewMonth((m) => m - 1);
+  };
+  const next = () => {
+    if (viewMonth === 11) {
+      setViewYear((y) => y + 1);
+      setViewMonth(0);
+    } else setViewMonth((m) => m + 1);
+  };
+
+  return (
+    <div style={{ width: "100%" }}>
+      <p
+        style={{
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: "0.15em",
+          color: "rgba(245,240,232,0.4)",
+          textTransform: "uppercase",
+          marginBottom: 8,
+        }}
+      >
+        {label}
+      </p>
+
+      {/* Month nav */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 10,
+        }}
+      >
+        <button onClick={prev} style={navBtn}>
+          ‹
+        </button>
+        <span style={{ fontSize: 13, fontWeight: 600, color: "#f5f0e8" }}>
+          {MONTHS[viewMonth]} {viewYear}
+        </span>
+        <button onClick={next} style={navBtn}>
+          ›
+        </button>
+      </div>
+
+      {/* Day labels */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(7, 1fr)",
+          marginBottom: 4,
+        }}
+      >
+        {DAYS.map((d) => (
+          <div
+            key={d}
+            style={{
+              textAlign: "center",
+              fontSize: 10,
+              color: "rgba(245,240,232,0.3)",
+              fontWeight: 600,
+              padding: "2px 0",
+            }}
+          >
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Cells */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(7, 1fr)",
+          gap: 2,
+        }}
+      >
+        {Array.from({ length: firstDay }).map((_, i) => (
+          <div key={`e${i}`} />
+        ))}
+        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
+          const iso = toISO(viewYear, viewMonth, day);
+          const isSelected = selected && iso === value;
+          const isDisabled = new Date(iso + "T00:00:00") < minDate;
+          const isToday =
+            iso ===
+            toISO(today.getFullYear(), today.getMonth(), today.getDate());
+
+          return (
+            <button
+              key={day}
+              disabled={isDisabled}
+              onClick={() => onChange(iso)}
+              style={{
+                padding: "5px 0",
+                borderRadius: 6,
+                fontSize: 12,
+                fontWeight: isSelected ? 700 : 400,
+                border:
+                  isToday && !isSelected
+                    ? "1px solid rgba(201,169,110,0.4)"
+                    : "1px solid transparent",
+                background: isSelected ? "#C9A96E" : "transparent",
+                color: isSelected
+                  ? "#0e0d0b"
+                  : isDisabled
+                    ? "rgba(245,240,232,0.18)"
+                    : "#f5f0e8",
+                cursor: isDisabled ? "not-allowed" : "pointer",
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={(e) => {
+                if (!isSelected && !isDisabled)
+                  (e.target as HTMLButtonElement).style.background =
+                    "rgba(201,169,110,0.15)";
+              }}
+              onMouseLeave={(e) => {
+                if (!isSelected)
+                  (e.target as HTMLButtonElement).style.background =
+                    "transparent";
+              }}
+            >
+              {day}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const navBtn: React.CSSProperties = {
+  width: 28,
+  height: 28,
+  borderRadius: "50%",
+  background: "rgba(245,240,232,0.06)",
+  border: "none",
+  color: "#f5f0e8",
+  fontSize: 16,
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
 };
-const Gallery = ({
+
+/* ─────────────── Gallery overlay ─────────────── */
+function Gallery({
   hotel,
   activeImg,
   setActiveImg,
   setGalleryOpen,
   prevImg,
   nextImg,
-}: GalleryProps) => (
-  <div className="fixed inset-0 z-[60] bg-black/95 flex flex-col">
-    <div className="flex items-center justify-between px-6 py-4">
-      <span className="text-white/60 text-sm font-medium">
-        {activeImg + 1} / {hotel.images.length}
-      </span>
-      <button
-        onClick={() => setGalleryOpen(false)}
-        className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
-      >
-        <XMarkIcon className="w-5 h-5 text-white" />
-      </button>
-    </div>
-    <div className="flex-1 flex items-center justify-center relative px-4">
-      <button
-        onClick={prevImg}
-        className="absolute left-4 md:left-8 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all hover:scale-105"
-      >
-        <ChevronLeftIcon className="w-5 h-5 text-white" />
-      </button>
-      <img
-        src={hotel.images[activeImg]}
-        alt=""
-        className="max-h-[75vh] max-w-full object-contain rounded-xl"
-        onError={(e) => {
-          (e.target as HTMLImageElement).src = hotel.thumbnail;
+}: {
+  hotel: Hotel;
+  activeImg: number;
+  setActiveImg: (i: number) => void;
+  setGalleryOpen: (b: boolean) => void;
+  prevImg: () => void;
+  nextImg: () => void;
+}) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 60,
+        background: "rgba(0,0,0,0.97)",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "20px 24px",
         }}
-      />
-      <button
-        onClick={nextImg}
-        className="absolute right-4 md:right-8 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all hover:scale-105"
       >
-        <ChevronRightIcon className="w-5 h-5 text-white" />
-      </button>
-    </div>
-    <div className="flex gap-3 justify-center pb-6 overflow-x-auto px-4">
-      {hotel.images.map((img, i) => (
+        <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>
+          {activeImg + 1} / {hotel.images.length}
+        </span>
         <button
-          key={i}
-          onClick={() => setActiveImg(i)}
-          className={`w-16 h-12 rounded-lg overflow-hidden shrink-0 transition-all ${i === activeImg ? "ring-2 ring-[#C9A96E] opacity-100" : "opacity-40 hover:opacity-70"}`}
+          onClick={() => setGalleryOpen(false)}
+          style={{ ...circleBtn, background: "rgba(255,255,255,0.1)" }}
         >
-          <img
-            src={img}
-            alt=""
-            className="w-full h-full object-cover"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = hotel.thumbnail;
-            }}
-          />
+          <XMarkIcon style={{ width: 18, height: 18 }} />
         </button>
-      ))}
+      </div>
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          position: "relative",
+          padding: "0 16px",
+        }}
+      >
+        <button
+          onClick={prevImg}
+          style={{
+            ...circleBtn,
+            position: "absolute",
+            left: 24,
+            background: "rgba(255,255,255,0.08)",
+          }}
+        >
+          <ChevronLeftIcon style={{ width: 20, height: 20 }} />
+        </button>
+        <img
+          src={getSafeImage(hotel.images[activeImg])}
+          alt=""
+          style={{
+            maxHeight: "75vh",
+            maxWidth: "100%",
+            objectFit: "contain",
+            borderRadius: 12,
+          }}
+        />
+        <button
+          onClick={nextImg}
+          style={{
+            ...circleBtn,
+            position: "absolute",
+            right: 24,
+            background: "rgba(255,255,255,0.08)",
+          }}
+        >
+          <ChevronRightIcon style={{ width: 20, height: 20 }} />
+        </button>
+      </div>
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          justifyContent: "center",
+          padding: "0 16px 24px",
+          overflowX: "auto",
+        }}
+      >
+        {hotel.images.map((img, i) => (
+          <button
+            key={i}
+            onClick={() => setActiveImg(i)}
+            style={{
+              width: 64,
+              height: 44,
+              borderRadius: 8,
+              overflow: "hidden",
+              flexShrink: 0,
+              border: `2px solid ${i === activeImg ? "#C9A96E" : "transparent"}`,
+              opacity: i === activeImg ? 1 : 0.4,
+              cursor: "pointer",
+              padding: 0,
+            }}
+          >
+            <img
+              src={getSafeImage(img)}
+              alt=""
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          </button>
+        ))}
+      </div>
     </div>
-  </div>
-);
+  );
+}
 
-/* ─────────────── Props ─────────────── */
+const circleBtn: React.CSSProperties = {
+  width: 40,
+  height: 40,
+  borderRadius: "50%",
+  border: "none",
+  color: "#fff",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
+/* ─────────────── Room config ─────────────── */
+const makeRoomTypes = (hotel: Hotel) => {
+  const baseFeatures = hotel.amenities.slice(0, 5);
+  const stdPrice = hotel.pricePerNight;
+  const premPrice = Math.round(stdPrice * 1.22);
+  return [
+    {
+      id: "standard",
+      name: `${hotel.category} Suite`,
+      size: `${Math.max(hotel.bedrooms * 28, 60)} m²`,
+      guests: hotel.maxGuests,
+      bed: hotel.bedrooms > 1 ? `${hotel.bedrooms} bedrooms` : "1 bedroom",
+      price: stdPrice,
+      features: baseFeatures,
+      image: hotel.images[0],
+      badge: hotel.featured ? "Featured" : null,
+    },
+    {
+      id: "premium",
+      name: "Grand Reserve",
+      size: `${Math.max(hotel.bedrooms * 34, 80)} m²`,
+      guests: hotel.maxGuests,
+      bed: hotel.bedrooms > 1 ? `${hotel.bedrooms} bedrooms` : "1 bedroom",
+      price: premPrice,
+      features: baseFeatures,
+      image: hotel.images[1] ?? hotel.images[0],
+      badge: "Best Value",
+    },
+  ];
+};
+
+/* ═══════════════════════════════════════════════════════════
+   PROPS
+═══════════════════════════════════════════════════════════ */
 type Props = {
   hotel: Hotel;
+
   onBack?: () => void;
-  /** Called after booking is confirmed and saved to Supabase */
   onBookingComplete?: () => void;
 };
 
 /* ═══════════════════════════════════════════════════════════
    BOOKING PAGE
 ═══════════════════════════════════════════════════════════ */
-const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
+export default function BookingPage({
+  hotel,
+  onBack,
+  onBookingComplete,
+}: Props) {
   const { user } = useAuth();
 
-  /* ── State ── */
+  const roomTypes = makeRoomTypes(hotel);
   const [activeImg, setActiveImg] = useState(0);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [wishlisted, setWishlisted] = useState(false);
-  const roomTypes = makeRoomTypes(hotel);
   const [selectedRoom, setSelectedRoom] = useState(roomTypes[0].id);
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
@@ -215,10 +503,11 @@ const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
   const [activeTab, setActiveTab] = useState<"overview" | "rooms" | "reviews">(
     "overview",
   );
-  const heroRef = useRef<HTMLDivElement>(null);
   const [scrolled, setScrolled] = useState(false);
+  const [showCheckInCal, setShowCheckInCal] = useState(false);
+  const [showCheckOutCal, setShowCheckOutCal] = useState(false);
+  const [imgErrors, setImgErrors] = useState<Record<number, boolean>>({});
 
-  // Auto-fill guest info from logged-in user
   const [guestInfo, setGuestInfo] = useState({
     name: user ? `${user.firstName} ${user.lastName}`.trim() : "",
     email: user?.email ?? "",
@@ -227,6 +516,12 @@ const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
   });
 
   const today = new Date().toISOString().split("T")[0];
+
+  useEffect(() => {
+    const handler = () => setScrolled(window.scrollY > 60);
+    window.addEventListener("scroll", handler, { passive: true });
+    return () => window.removeEventListener("scroll", handler);
+  }, []);
 
   const nights = (() => {
     if (!checkIn || !checkOut) return 0;
@@ -243,19 +538,21 @@ const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
   const taxes = Math.round(subtotal * 0.12);
   const total = subtotal + taxes;
 
-  useEffect(() => {
-    const el = heroRef.current?.parentElement;
-    if (!el) return;
-    const handler = () => setScrolled(window.scrollY > 60);
-    window.addEventListener("scroll", handler, { passive: true });
-    return () => window.removeEventListener("scroll", handler);
-  }, []);
-
   const nextImg = () => setActiveImg((i) => (i + 1) % hotel.images.length);
   const prevImg = () =>
     setActiveImg((i) => (i - 1 + hotel.images.length) % hotel.images.length);
 
-  /* ── Confirm reservation → save to Supabase ── */
+  const formatDate = (iso: string) => {
+    if (!iso) return "Select date";
+    const d = new Date(iso + "T00:00:00");
+    return d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
+  /* ── Confirm → Supabase ── */
   const handleConfirm = async () => {
     setSaving(true);
     setSaveError("");
@@ -264,10 +561,11 @@ const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
         guestId: user?.id ?? "guest_anonymous",
         guestName: guestInfo.name,
         guestEmail: guestInfo.email,
+        guestPhone: guestInfo.phone,
         listingId: hotel.id,
         listingName: hotel.name,
         hostId: hotel.hostId,
-        checkIn: checkIn || new Date().toISOString().split("T")[0],
+        checkIn: checkIn || today,
         checkOut:
           checkOut ||
           new Date(Date.now() + 86400000).toISOString().split("T")[0],
@@ -285,85 +583,265 @@ const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
     }
   };
 
-  /* ── Booking Modal ── */
+  /* ── Calendar popover close on outside click ── */
+  const calInRef = useRef<HTMLDivElement>(null);
+  const calOutRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (calInRef.current && !calInRef.current.contains(e.target as Node))
+        setShowCheckInCal(false);
+      if (calOutRef.current && !calOutRef.current.contains(e.target as Node))
+        setShowCheckOutCal(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  /* ══════════════════════════════
+     BOOKING MODAL (dark luxury)
+  ══════════════════════════════ */
   const BookingModal = () => (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-6">
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 50,
+        display: "flex",
+        alignItems: "flex-end",
+        justifyContent: "center",
+      }}
+      className="md:items-center"
+    >
+      {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={() => setStep("idle")}
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: "rgba(0,0,0,0.75)",
+          backdropFilter: "blur(8px)",
+        }}
       />
-      <div className="relative z-10 bg-white w-full md:max-w-lg md:rounded-3xl shadow-2xl max-h-[92vh] overflow-y-auto">
+
+      <div
+        style={{
+          position: "relative",
+          zIndex: 10,
+          background: "#141210",
+          border: "1px solid rgba(245,240,232,0.1)",
+          width: "100%",
+          maxWidth: 520,
+          borderRadius: "24px 24px 0 0",
+          maxHeight: "92vh",
+          overflowY: "auto",
+        }}
+        className="md:rounded-3xl md:mb-0"
+      >
         {/* ── STEP: form ── */}
         {step === "form" && (
           <>
-            <div className="sticky top-0 bg-white px-6 pt-6 pb-4 border-b border-gray-100 flex items-center justify-between">
+            <div
+              style={{
+                position: "sticky",
+                top: 0,
+                background: "#141210",
+                borderBottom: "1px solid rgba(245,240,232,0.08)",
+                padding: "20px 24px 16px",
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                zIndex: 2,
+              }}
+            >
               <div>
-                <h2 className="font-playfair text-xl font-semibold text-gray-900">
-                  Guest Details
+                <p
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.2em",
+                    color: "#C9A96E",
+                    textTransform: "uppercase",
+                    marginBottom: 4,
+                  }}
+                >
+                  Your Reservation
+                </p>
+                <h2
+                  style={{
+                    fontFamily: "Cormorant Garamond, serif",
+                    fontSize: 22,
+                    color: "#f5f0e8",
+                    fontWeight: 600,
+                  }}
+                >
+                  {room.name}
                 </h2>
-                <p className="text-gray-400 text-sm mt-0.5">
-                  {room.name} ·{" "}
-                  {nights > 0 ? `${nights} nights` : "Select dates"}
+                <p
+                  style={{
+                    fontSize: 12,
+                    color: "rgba(245,240,232,0.4)",
+                    marginTop: 2,
+                  }}
+                >
+                  {nights > 0
+                    ? `${nights} night${nights > 1 ? "s" : ""}`
+                    : "Select dates below"}{" "}
+                  · {hotel.location}
                 </p>
               </div>
               <button
                 onClick={() => setStep("idle")}
-                className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: "50%",
+                  background: "rgba(245,240,232,0.07)",
+                  border: "none",
+                  color: "#f5f0e8",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  marginTop: 4,
+                }}
               >
-                <XMarkIcon className="w-4 h-4 text-gray-600" />
+                <XMarkIcon style={{ width: 16, height: 16 }} />
               </button>
             </div>
-            <div className="p-6 space-y-4">
-              {/* Summary */}
-              <div className="bg-[#faf8f5] rounded-2xl p-4 flex gap-4 items-center">
+
+            <div
+              style={{
+                padding: "20px 24px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 16,
+              }}
+            >
+              {/* Property summary */}
+              <div
+                style={{
+                  background: "rgba(245,240,232,0.04)",
+                  borderRadius: 16,
+                  border: "1px solid rgba(245,240,232,0.08)",
+                  padding: 16,
+                  display: "flex",
+                  gap: 14,
+                  alignItems: "center",
+                }}
+              >
                 <img
-                  src={room.image}
+                  src={getSafeImage(room.image)}
                   alt=""
-                  className="w-16 h-16 rounded-xl object-cover"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = hotel.thumbnail;
+                  style={{
+                    width: 64,
+                    height: 64,
+                    borderRadius: 10,
+                    objectFit: "cover",
+                    flexShrink: 0,
                   }}
                 />
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900 text-sm truncate">
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p
+                    style={{
+                      fontFamily: "Cormorant Garamond, serif",
+                      fontSize: 15,
+                      color: "#f5f0e8",
+                      fontWeight: 600,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                     {hotel.name}
                   </p>
-                  <p className="text-gray-500 text-xs mt-0.5">{room.name}</p>
-                  <p className="text-[#C9A96E] font-bold text-sm mt-1">
+                  <p
+                    style={{
+                      fontSize: 12,
+                      color: "rgba(245,240,232,0.4)",
+                      marginTop: 2,
+                    }}
+                  >
+                    {room.name}
+                  </p>
+                  <p
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 700,
+                      color: "#C9A96E",
+                      marginTop: 4,
+                    }}
+                  >
                     ${total.toLocaleString()}{" "}
-                    <span className="text-gray-400 font-normal text-xs">
-                      total
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 400,
+                        color: "rgba(245,240,232,0.35)",
+                      }}
+                    >
+                      total est.
                     </span>
                   </p>
                 </div>
               </div>
 
-              {/* Dates */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-1.5">
-                    Check-in
-                  </label>
-                  <input
-                    type="date"
-                    min={today}
-                    value={checkIn}
-                    onChange={(e) => setCheckIn(e.target.value)}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-800 outline-none focus:border-[#C9A96E] transition-colors"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-1.5">
-                    Check-out
-                  </label>
-                  <input
-                    type="date"
-                    min={checkIn || today}
-                    value={checkOut}
-                    onChange={(e) => setCheckOut(e.target.value)}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-800 outline-none focus:border-[#C9A96E] transition-colors"
-                  />
-                </div>
+              {/* Dates in modal */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 10,
+                }}
+              >
+                {[
+                  {
+                    label: "Check-in",
+                    val: checkIn,
+                    setVal: setCheckIn,
+                    minVal: today,
+                  },
+                  {
+                    label: "Check-out",
+                    val: checkOut,
+                    setVal: setCheckOut,
+                    minVal: checkIn || today,
+                  },
+                ].map(({ label, val, setVal, minVal }) => (
+                  <div key={label}>
+                    <label
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: "0.15em",
+                        color: "rgba(245,240,232,0.35)",
+                        textTransform: "uppercase",
+                        display: "block",
+                        marginBottom: 6,
+                      }}
+                    >
+                      {label}
+                    </label>
+                    <input
+                      type="date"
+                      min={minVal}
+                      value={val}
+                      onChange={(e) => setVal(e.target.value)}
+                      style={{
+                        width: "100%",
+                        background: "rgba(245,240,232,0.05)",
+                        border: "1px solid rgba(245,240,232,0.1)",
+                        borderRadius: 10,
+                        padding: "10px 12px",
+                        fontSize: 13,
+                        color: "#f5f0e8",
+                        outline: "none",
+                        boxSizing: "border-box",
+                        colorScheme: "dark",
+                      }}
+                    />
+                  </div>
+                ))}
               </div>
 
               {/* Guest fields */}
@@ -388,7 +866,17 @@ const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
                 },
               ].map(({ label, key, type, placeholder }) => (
                 <div key={key}>
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-1.5">
+                  <label
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: "0.15em",
+                      color: "rgba(245,240,232,0.35)",
+                      textTransform: "uppercase",
+                      display: "block",
+                      marginBottom: 6,
+                    }}
+                  >
                     {label}
                   </label>
                   <input
@@ -398,12 +886,37 @@ const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
                       setGuestInfo((g) => ({ ...g, [key]: e.target.value }))
                     }
                     placeholder={placeholder}
-                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#C9A96E] transition-colors placeholder:text-gray-300"
+                    style={{
+                      width: "100%",
+                      background: "rgba(245,240,232,0.05)",
+                      border: "1px solid rgba(245,240,232,0.1)",
+                      borderRadius: 10,
+                      padding: "10px 14px",
+                      fontSize: 13,
+                      color: "#f5f0e8",
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                    onFocus={(e) => (e.target.style.borderColor = "#C9A96E")}
+                    onBlur={(e) =>
+                      (e.target.style.borderColor = "rgba(245,240,232,0.1)")
+                    }
                   />
                 </div>
               ))}
+
               <div>
-                <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-1.5">
+                <label
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.15em",
+                    color: "rgba(245,240,232,0.35)",
+                    textTransform: "uppercase",
+                    display: "block",
+                    marginBottom: 6,
+                  }}
+                >
                   Special Requests
                 </label>
                 <textarea
@@ -413,26 +926,71 @@ const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
                   }
                   rows={3}
                   placeholder="Early check-in, dietary requirements, celebrations…"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#C9A96E] transition-colors placeholder:text-gray-300 resize-none"
+                  style={{
+                    width: "100%",
+                    background: "rgba(245,240,232,0.05)",
+                    border: "1px solid rgba(245,240,232,0.1)",
+                    borderRadius: 10,
+                    padding: "10px 14px",
+                    fontSize: 13,
+                    color: "#f5f0e8",
+                    outline: "none",
+                    resize: "none",
+                    boxSizing: "border-box",
+                    fontFamily: "inherit",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#C9A96E")}
+                  onBlur={(e) =>
+                    (e.target.style.borderColor = "rgba(245,240,232,0.1)")
+                  }
                 />
               </div>
 
               {/* Price breakdown */}
-              <div className="border-t border-gray-100 pt-4 space-y-2">
-                <div className="flex justify-between text-sm text-gray-500">
-                  <span>
-                    ${room.price.toLocaleString()} × {Math.max(nights, 1)}{" "}
-                    {nights === 1 ? "night" : "nights"}
-                  </span>
-                  <span>${subtotal.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-sm text-gray-500">
-                  <span>Taxes & resort fees (12%)</span>
-                  <span>${taxes.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-base font-bold text-gray-900 pt-2 border-t border-gray-100">
+              <div
+                style={{
+                  borderTop: "1px solid rgba(245,240,232,0.08)",
+                  paddingTop: 14,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                }}
+              >
+                {[
+                  [
+                    `$${room.price.toLocaleString()} × ${Math.max(nights, 1)} ${nights === 1 ? "night" : "nights"}`,
+                    `$${subtotal.toLocaleString()}`,
+                  ],
+                  ["Taxes & resort fees (12%)", `$${taxes.toLocaleString()}`],
+                ].map(([k, v]) => (
+                  <div
+                    key={k}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontSize: 13,
+                      color: "rgba(245,240,232,0.45)",
+                    }}
+                  >
+                    <span>{k}</span>
+                    <span>{v}</span>
+                  </div>
+                ))}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: 16,
+                    fontWeight: 700,
+                    color: "#f5f0e8",
+                    paddingTop: 10,
+                    borderTop: "1px solid rgba(245,240,232,0.08)",
+                  }}
+                >
                   <span>Total</span>
-                  <span>${total.toLocaleString()}</span>
+                  <span style={{ color: "#C9A96E" }}>
+                    ${total.toLocaleString()}
+                  </span>
                 </div>
               </div>
 
@@ -441,13 +999,46 @@ const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
                   if (guestInfo.name && guestInfo.email) setStep("confirm");
                 }}
                 disabled={!guestInfo.name || !guestInfo.email}
-                className="w-full bg-[#C9A96E] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3.5 rounded-2xl text-sm hover:bg-[#b8935a] transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-[#C9A96E]/30"
+                style={{
+                  width: "100%",
+                  background:
+                    guestInfo.name && guestInfo.email
+                      ? "#C9A96E"
+                      : "rgba(201,169,110,0.3)",
+                  color:
+                    guestInfo.name && guestInfo.email
+                      ? "#0e0d0b"
+                      : "rgba(14,13,11,0.5)",
+                  fontWeight: 700,
+                  fontSize: 14,
+                  padding: "16px 0",
+                  borderRadius: 14,
+                  border: "none",
+                  cursor:
+                    guestInfo.name && guestInfo.email
+                      ? "pointer"
+                      : "not-allowed",
+                  transition: "all 0.2s",
+                  letterSpacing: "0.04em",
+                }}
               >
-                Continue to Payment
+                Continue to Payment →
               </button>
-              <div className="flex items-center gap-2 justify-center text-xs text-gray-400">
-                <ShieldCheckIcon className="w-4 h-4" /> Free cancellation up to
-                48 hours before check-in
+
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  justifyContent: "center",
+                  fontSize: 12,
+                  color: "rgba(245,240,232,0.3)",
+                }}
+              >
+                <ShieldCheckIcon
+                  style={{ width: 14, height: 14, color: "#C9A96E" }}
+                />
+                Free cancellation · No charge until confirmed
               </div>
             </div>
           </>
@@ -456,58 +1047,173 @@ const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
         {/* ── STEP: confirm ── */}
         {step === "confirm" && (
           <>
-            <div className="sticky top-0 bg-white px-6 pt-6 pb-4 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="font-playfair text-xl font-semibold text-gray-900">
-                Confirm & Pay
-              </h2>
+            <div
+              style={{
+                position: "sticky",
+                top: 0,
+                background: "#141210",
+                borderBottom: "1px solid rgba(245,240,232,0.08)",
+                padding: "20px 24px 16px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <div>
+                <p
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.2em",
+                    color: "#C9A96E",
+                    textTransform: "uppercase",
+                    marginBottom: 4,
+                  }}
+                >
+                  Final Step
+                </p>
+                <h2
+                  style={{
+                    fontFamily: "Cormorant Garamond, serif",
+                    fontSize: 22,
+                    color: "#f5f0e8",
+                    fontWeight: 600,
+                  }}
+                >
+                  Confirm & Pay
+                </h2>
+              </div>
               <button
                 onClick={() => setStep("form")}
-                className="text-sm text-[#C9A96E] font-medium hover:underline"
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "#C9A96E",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                }}
               >
                 ← Edit details
               </button>
             </div>
-            <div className="p-6 space-y-4">
-              <div className="bg-[#faf8f5] rounded-2xl p-5 space-y-3">
-                <h3 className="font-semibold text-gray-900 text-sm">
+
+            <div
+              style={{
+                padding: "20px 24px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 16,
+              }}
+            >
+              <div
+                style={{
+                  background: "rgba(245,240,232,0.04)",
+                  border: "1px solid rgba(245,240,232,0.08)",
+                  borderRadius: 16,
+                  padding: "20px",
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: "0.12em",
+                    color: "rgba(245,240,232,0.35)",
+                    textTransform: "uppercase",
+                    marginBottom: 14,
+                  }}
+                >
                   Reservation Summary
-                </h3>
-                <div className="space-y-2 text-sm">
-                  {[
-                    ["Property", hotel.name],
-                    ["Room", room.name],
-                    ["Guest", guestInfo.name],
-                    ["Email", guestInfo.email],
-                    ["Check-in", checkIn || "—"],
-                    ["Check-out", checkOut || "—"],
-                    ["Nights", nights || "—"],
-                    ["Guests", guests],
-                  ].map(([k, v]) => (
-                    <div key={String(k)} className="flex justify-between">
-                      <span className="text-gray-400">{k}</span>
-                      <span className="font-medium text-gray-800">{v}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="border-t border-[#e8e0d4] pt-3 flex justify-between text-base font-bold">
-                  <span>Total Charge</span>
-                  <span className="text-[#C9A96E]">
+                </p>
+                {[
+                  ["Property", hotel.name],
+                  ["Room", room.name],
+                  ["Guest", guestInfo.name],
+                  ["Email", guestInfo.email],
+                  ["Check-in", checkIn ? formatDate(checkIn) : "—"],
+                  ["Check-out", checkOut ? formatDate(checkOut) : "—"],
+                  ["Nights", nights || "—"],
+                  ["Guests", guests],
+                ].map(([k, v]) => (
+                  <div
+                    key={String(k)}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontSize: 13,
+                      marginBottom: 10,
+                    }}
+                  >
+                    <span style={{ color: "rgba(245,240,232,0.4)" }}>{k}</span>
+                    <span
+                      style={{
+                        color: "#f5f0e8",
+                        fontWeight: 500,
+                        textAlign: "right",
+                        maxWidth: "55%",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {v}
+                    </span>
+                  </div>
+                ))}
+                <div
+                  style={{
+                    borderTop: "1px solid rgba(245,240,232,0.08)",
+                    paddingTop: 14,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: 16,
+                    fontWeight: 700,
+                  }}
+                >
+                  <span style={{ color: "#f5f0e8" }}>Total Charge</span>
+                  <span style={{ color: "#C9A96E" }}>
                     ${total.toLocaleString()}
                   </span>
                 </div>
               </div>
 
               {/* Payment placeholder */}
-              <div className="border border-dashed border-gray-200 rounded-2xl p-5 text-center text-gray-400 text-sm space-y-2">
-                <div className="text-2xl">💳</div>
-                <p className="font-medium text-gray-500">Secure Payment</p>
-                <p className="text-xs">
-                  Connect your payment gateway (Stripe, Paystack, etc.) here
+              <div
+                style={{
+                  border: "1px dashed rgba(201,169,110,0.25)",
+                  borderRadius: 16,
+                  padding: 20,
+                  textAlign: "center",
+                }}
+              >
+                <div style={{ fontSize: 28, marginBottom: 8 }}>💳</div>
+                <p
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: "rgba(245,240,232,0.7)",
+                    marginBottom: 6,
+                  }}
+                >
+                  Secure Payment
+                </p>
+                <p style={{ fontSize: 12, color: "rgba(245,240,232,0.3)" }}>
+                  Connect Stripe, Paystack, or your preferred gateway here
                 </p>
               </div>
 
               {saveError && (
-                <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3">
+                <div
+                  style={{
+                    background: "rgba(220,60,60,0.12)",
+                    border: "1px solid rgba(220,60,60,0.3)",
+                    borderRadius: 10,
+                    padding: "12px 16px",
+                    fontSize: 13,
+                    color: "#e07070",
+                  }}
+                >
                   {saveError}
                 </div>
               )}
@@ -515,11 +1221,37 @@ const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
               <button
                 onClick={handleConfirm}
                 disabled={saving}
-                className="w-full bg-gray-900 text-white font-semibold py-3.5 rounded-2xl text-sm hover:bg-gray-800 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-60"
+                style={{
+                  width: "100%",
+                  background: "#f5f0e8",
+                  color: "#0e0d0b",
+                  fontWeight: 700,
+                  fontSize: 14,
+                  padding: "16px 0",
+                  borderRadius: 14,
+                  border: "none",
+                  cursor: saving ? "not-allowed" : "pointer",
+                  opacity: saving ? 0.7 : 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  letterSpacing: "0.04em",
+                }}
               >
                 {saving ? (
                   <>
-                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{" "}
+                    <span
+                      style={{
+                        width: 16,
+                        height: 16,
+                        border: "2px solid rgba(0,0,0,0.2)",
+                        borderTopColor: "#0e0d0b",
+                        borderRadius: "50%",
+                        animation: "spin 0.7s linear infinite",
+                        display: "inline-block",
+                      }}
+                    />
                     Saving reservation…
                   </>
                 ) : (
@@ -532,24 +1264,119 @@ const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
 
         {/* ── STEP: done ── */}
         {step === "done" && (
-          <div className="p-8 flex flex-col items-center text-center">
-            <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mb-5">
-              <CheckIcon className="w-8 h-8 text-emerald-500" />
+          <div
+            style={{
+              padding: 40,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              textAlign: "center",
+            }}
+          >
+            <div
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: "50%",
+                background: "rgba(201,169,110,0.12)",
+                border: "2px solid rgba(201,169,110,0.3)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: 20,
+              }}
+            >
+              <CheckCircleIcon
+                style={{ width: 32, height: 32, color: "#C9A96E" }}
+              />
             </div>
-            <h2 className="font-playfair text-2xl font-semibold text-gray-900 mb-2">
-              Booking Confirmed!
-            </h2>
-            <p className="text-gray-500 text-sm leading-relaxed max-w-xs mb-6">
-              Your reservation at <strong>{hotel.name}</strong> has been saved.
-              A confirmation has been sent to <strong>{guestInfo.email}</strong>
-              .
+            <p
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: "0.2em",
+                color: "#C9A96E",
+                textTransform: "uppercase",
+                marginBottom: 10,
+              }}
+            >
+              Booking Confirmed
             </p>
-            <div className="bg-[#faf8f5] rounded-2xl px-6 py-4 w-full mb-6 text-sm">
-              <p className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-3">
+            <h2
+              style={{
+                fontFamily: "Cormorant Garamond, serif",
+                fontSize: 28,
+                color: "#f5f0e8",
+                fontWeight: 600,
+                marginBottom: 10,
+              }}
+            >
+              You're all set!
+            </h2>
+            <p
+              style={{
+                fontSize: 13,
+                color: "rgba(245,240,232,0.45)",
+                lineHeight: 1.7,
+                maxWidth: 320,
+                marginBottom: 24,
+              }}
+            >
+              Your reservation at{" "}
+              <strong style={{ color: "#f5f0e8" }}>{hotel.name}</strong> is
+              confirmed. A summary has been sent to{" "}
+              <strong style={{ color: "#f5f0e8" }}>{guestInfo.email}</strong>.
+            </p>
+            <div
+              style={{
+                background: "rgba(201,169,110,0.06)",
+                border: "1px solid rgba(201,169,110,0.2)",
+                borderRadius: 16,
+                padding: "16px 32px",
+                width: "100%",
+                marginBottom: 24,
+              }}
+            >
+              <p
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: "0.2em",
+                  color: "rgba(245,240,232,0.4)",
+                  textTransform: "uppercase",
+                  marginBottom: 8,
+                }}
+              >
                 Booking Reference
               </p>
-              <p className="text-2xl font-bold tracking-widest text-[#C9A96E] font-mono">
+              <p
+                style={{
+                  fontSize: 26,
+                  fontWeight: 700,
+                  letterSpacing: "0.2em",
+                  color: "#C9A96E",
+                  fontFamily: "monospace",
+                }}
+              >
                 {bookingRef}
+              </p>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                alignItems: "center",
+              }}
+            >
+              <p style={{ fontSize: 12, color: "rgba(245,240,232,0.35)" }}>
+                Status:{" "}
+                <strong style={{ color: "#C9A96E" }}>
+                  Pending host confirmation
+                </strong>
+              </p>
+              <p style={{ fontSize: 11, color: "rgba(245,240,232,0.25)" }}>
+                You'll be notified when the host confirms your booking
               </p>
             </div>
             <button
@@ -564,21 +1391,52 @@ const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
                 if (onBookingComplete) onBookingComplete();
                 else if (onBack) onBack();
               }}
-              className="text-sm font-semibold text-[#C9A96E] hover:underline"
+              style={{
+                marginTop: 28,
+                fontSize: 13,
+                fontWeight: 700,
+                color: "#C9A96E",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                textDecoration: "underline",
+                textUnderlineOffset: 4,
+              }}
             >
-              Back to dashboard
+              Back to Explore →
             </button>
           </div>
         )}
       </div>
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 
   /* ═══════════════════════════════════════════════════════════
-     MAIN RENDER
+     MAIN RENDER — dark luxury theme matching ExplorePage
   ═══════════════════════════════════════════════════════════ */
   return (
-    <div className="min-h-screen bg-[#faf9f7] font-sans text-gray-900">
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#0e0d0b",
+        color: "#f5f0e8",
+        fontFamily: "sans-serif",
+      }}
+    >
+      <style>{`
+        @keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes spin { to { transform:rotate(360deg); } }
+        .tab-btn { background: none; border: none; cursor: pointer; padding: 12px 20px; font-size: 13px; font-weight: 600; color: rgba(245,240,232,0.4); border-bottom: 2px solid transparent; transition: all 0.2s; margin-bottom: -1px; }
+        .tab-btn.active { color: #C9A96E; border-bottom-color: #C9A96E; }
+        .tab-btn:hover:not(.active) { color: rgba(245,240,232,0.7); }
+        .room-card { cursor: pointer; transition: all 0.2s; }
+        .room-card:hover { border-color: rgba(201,169,110,0.3) !important; }
+        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.4; cursor: pointer; }
+        textarea::placeholder, input::placeholder { color: rgba(245,240,232,0.2); }
+      `}</style>
+
       {galleryOpen && (
         <Gallery
           hotel={hotel}
@@ -591,46 +1449,123 @@ const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
       )}
       {step !== "idle" && <BookingModal />}
 
-      {/* Sticky nav */}
+      {/* ── STICKY NAV ── */}
       <header
-        className={`sticky top-0 z-40 transition-all duration-300 ${scrolled ? "bg-white/95 backdrop-blur-md shadow-sm border-b border-gray-100" : "bg-transparent"}`}
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 40,
+          background: scrolled ? "rgba(14,13,11,0.97)" : "transparent",
+          borderBottom: scrolled
+            ? "1px solid rgba(245,240,232,0.07)"
+            : "1px solid transparent",
+          backdropFilter: scrolled ? "blur(12px)" : "none",
+          transition: "all 0.3s",
+        }}
       >
-        <div className="max-w-7xl mx-auto px-4 md:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div
+          style={{
+            maxWidth: 1200,
+            margin: "0 auto",
+            padding: "0 24px",
+            height: 64,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <button
               onClick={onBack}
-              className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: "50%",
+                background: "rgba(245,240,232,0.08)",
+                border: "1px solid rgba(245,240,232,0.1)",
+                color: "#f5f0e8",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
-              <ChevronLeftIcon className="w-4 h-4 text-gray-700" />
+              <ChevronLeftIcon style={{ width: 16, height: 16 }} />
             </button>
             <div
-              className={`transition-all duration-300 ${scrolled ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+              style={{
+                opacity: scrolled ? 1 : 0,
+                transition: "opacity 0.3s",
+                pointerEvents: scrolled ? "auto" : "none",
+              }}
             >
-              <p className="font-semibold text-gray-900 text-sm font-playfair">
+              <p
+                style={{
+                  fontFamily: "Cormorant Garamond, serif",
+                  fontSize: 15,
+                  fontWeight: 600,
+                  color: "#f5f0e8",
+                }}
+              >
                 {hotel.name}
               </p>
-              <p className="text-gray-400 text-xs">
+              <p style={{ fontSize: 11, color: "rgba(245,240,232,0.4)" }}>
                 ${room.price.toLocaleString()} / night
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <button
               onClick={() => setWishlisted((w) => !w)}
-              className="w-9 h-9 rounded-full bg-white border border-gray-200 flex items-center justify-center hover:border-[#C9A96E] transition-all"
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: "50%",
+                background: "rgba(245,240,232,0.06)",
+                border: "1px solid rgba(245,240,232,0.1)",
+                color: wishlisted ? "#e05c6e" : "#f5f0e8",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
               {wishlisted ? (
-                <HeartSolid className="w-4 h-4 text-[#C9A96E]" />
+                <HeartSolid style={{ width: 16, height: 16 }} />
               ) : (
-                <HeartIcon className="w-4 h-4 text-gray-500" />
+                <HeartIcon style={{ width: 16, height: 16 }} />
               )}
             </button>
-            <button className="w-9 h-9 rounded-full bg-white border border-gray-200 flex items-center justify-center hover:border-gray-400 transition-all">
-              <ShareIcon className="w-4 h-4 text-gray-500" />
+            <button
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: "50%",
+                background: "rgba(245,240,232,0.06)",
+                border: "1px solid rgba(245,240,232,0.1)",
+                color: "#f5f0e8",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <ShareIcon style={{ width: 16, height: 16 }} />
             </button>
             <button
               onClick={() => setStep("form")}
-              className="hidden md:flex items-center gap-2 bg-[#C9A96E] text-white text-sm font-semibold px-5 py-2 rounded-full hover:bg-[#b8935a] transition-all hover:scale-105 shadow-md shadow-[#C9A96E]/30"
+              style={{
+                display: "none",
+                background: "#C9A96E",
+                color: "#0e0d0b",
+                fontWeight: 700,
+                fontSize: 13,
+                padding: "10px 22px",
+                borderRadius: 99,
+                border: "none",
+                cursor: "pointer",
+              }}
+              className="md:flex"
             >
               Reserve Now
             </button>
@@ -638,23 +1573,127 @@ const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
         </div>
       </header>
 
-      {/* Hero image grid */}
-      <div ref={heroRef} className="max-w-7xl mx-auto px-4 md:px-8 pt-4 pb-6">
-        <div className="grid grid-cols-4 grid-rows-2 gap-2 rounded-3xl overflow-hidden h-[420px] md:h-[520px]">
+      {/* ── HERO IMAGE GRID ── */}
+      <div
+        style={{ maxWidth: 1200, margin: "0 auto", padding: "16px 24px 24px" }}
+      >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gridTemplateRows: "1fr 1fr",
+            gap: 4,
+            borderRadius: 20,
+            overflow: "hidden",
+            height: 460,
+          }}
+        >
+          {/* Main large image */}
           <button
             onClick={() => setGalleryOpen(true)}
-            className="col-span-2 row-span-2 relative overflow-hidden group"
+            style={{
+              gridRow: "1 / 3",
+              position: "relative",
+              overflow: "hidden",
+              cursor: "pointer",
+              border: "none",
+              padding: 0,
+            }}
           >
             <img
-              src={hotel.images[0]}
+              src={imgErrors[0] ? DEFAULT_IMAGE : getSafeImage(hotel.images[0])}
               alt={hotel.name}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = hotel.thumbnail;
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                transition: "transform 0.6s",
+              }}
+              onError={() => setImgErrors((e) => ({ ...e, 0: true }))}
+              onMouseOver={(e) =>
+                ((e.target as HTMLImageElement).style.transform = "scale(1.04)")
+              }
+              onMouseOut={(e) =>
+                ((e.target as HTMLImageElement).style.transform = "scale(1)")
+              }
+            />
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                background:
+                  "linear-gradient(to top, rgba(14,13,11,0.5) 0%, transparent 40%)",
               }}
             />
-            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+            {/* Badges */}
+            <div
+              style={{
+                position: "absolute",
+                top: 16,
+                left: 16,
+                display: "flex",
+                gap: 8,
+              }}
+            >
+              <span
+                style={{
+                  background: "rgba(14,13,11,0.75)",
+                  backdropFilter: "blur(10px)",
+                  border: "1px solid rgba(245,240,232,0.1)",
+                  borderRadius: 99,
+                  padding: "6px 14px",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: "#C9A96E",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.12em",
+                }}
+              >
+                {hotel.category}
+              </span>
+              {hotel.featured && (
+                <span
+                  style={{
+                    background: "#C9A96E",
+                    borderRadius: 99,
+                    padding: "6px 14px",
+                    fontSize: 10,
+                    fontWeight: 900,
+                    color: "#0e0d0b",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.1em",
+                  }}
+                >
+                  Featured
+                </span>
+              )}
+            </div>
+            {/* Rating overlay */}
+            <div
+              style={{
+                position: "absolute",
+                bottom: 16,
+                left: 16,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                background: "rgba(14,13,11,0.75)",
+                backdropFilter: "blur(10px)",
+                borderRadius: 99,
+                padding: "6px 12px",
+              }}
+            >
+              <StarIcon style={{ width: 13, height: 13, color: "#C9A96E" }} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#f5f0e8" }}>
+                {hotel.rating}
+              </span>
+              <span style={{ fontSize: 11, color: "rgba(245,240,232,0.4)" }}>
+                ({hotel.reviewCount.toLocaleString()})
+              </span>
+            </div>
           </button>
+
+          {/* 4 smaller images */}
           {hotel.images.slice(1, 5).map((img, i) => (
             <button
               key={i}
@@ -662,20 +1701,46 @@ const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
                 setActiveImg(i + 1);
                 setGalleryOpen(true);
               }}
-              className="relative overflow-hidden group"
+              style={{
+                position: "relative",
+                overflow: "hidden",
+                cursor: "pointer",
+                border: "none",
+                padding: 0,
+              }}
             >
               <img
-                src={img}
+                src={imgErrors[i + 1] ? DEFAULT_IMAGE : getSafeImage(img)}
                 alt=""
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = hotel.thumbnail;
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  transition: "transform 0.5s",
                 }}
+                onError={() => setImgErrors((e) => ({ ...e, [i + 1]: true }))}
+                onMouseOver={(e) =>
+                  ((e.target as HTMLImageElement).style.transform =
+                    "scale(1.06)")
+                }
+                onMouseOut={(e) =>
+                  ((e.target as HTMLImageElement).style.transform = "scale(1)")
+                }
               />
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
               {i === 3 && hotel.images.length > 5 && (
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                  <span className="text-white font-semibold text-sm">
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    background: "rgba(14,13,11,0.6)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <span
+                    style={{ color: "#f5f0e8", fontWeight: 700, fontSize: 14 }}
+                  >
                     +{hotel.images.length - 5} more
                   </span>
                 </div>
@@ -685,129 +1750,254 @@ const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
         </div>
       </div>
 
-      {/* Main content */}
-      <div className="max-w-7xl mx-auto px-4 md:px-8 pb-24">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-10">
-          {/* LEFT */}
-          <div>
-            {/* Title block */}
-            <div className="mb-6">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="bg-[#C9A96E]/10 text-[#C9A96E] text-xs font-semibold px-3 py-1 rounded-full capitalize">
-                  {hotel.category}
-                </span>
-                {hotel.featured && (
-                  <span className="bg-emerald-50 text-emerald-700 text-xs font-semibold px-3 py-1 rounded-full">
-                    Featured
-                  </span>
-                )}
-                {hotel.region && (
-                  <span className="bg-gray-100 text-gray-600 text-xs font-medium px-3 py-1 rounded-full">
-                    {hotel.region}
-                  </span>
-                )}
-              </div>
-              <h1 className="font-playfair text-3xl md:text-4xl font-semibold text-gray-900 leading-tight mb-3">
-                {hotel.name}
-              </h1>
-              <div className="flex items-center gap-4 flex-wrap">
-                <div className="flex items-center gap-1.5">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <StarIcon
-                      key={i}
-                      className={`w-4 h-4 ${i < Math.floor(hotel.rating) ? "text-[#C9A96E]" : "text-gray-200"}`}
-                    />
-                  ))}
-                  <span className="text-sm font-bold text-gray-900 ml-1">
-                    {hotel.rating}
-                  </span>
-                  <span className="text-sm text-gray-400">
-                    ({hotel.reviewCount.toLocaleString()} reviews)
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 text-gray-500 text-sm">
-                  <MapPinIcon className="w-4 h-4 text-[#C9A96E]" />
-                  {hotel.location}
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2 mt-4">
-                {hotel.tags.map((t) => (
+      {/* ── MAIN CONTENT ── */}
+      <div
+        style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px 120px" }}
+      >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 380px",
+            gap: 40,
+            alignItems: "start",
+          }}
+        >
+          {/* ── LEFT ── */}
+          <div style={{ animation: "fadeUp 0.5s ease both" }}>
+            {/* Title */}
+            <div style={{ marginBottom: 24 }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 8,
+                  marginBottom: 12,
+                }}
+              >
+                {hotel.tags.slice(0, 3).map((t) => (
                   <span
                     key={t}
-                    className="text-xs font-medium text-gray-500 bg-white border border-gray-200 px-3 py-1 rounded-full"
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: "#C9A96E",
+                      background: "rgba(201,169,110,0.1)",
+                      border: "1px solid rgba(201,169,110,0.2)",
+                      borderRadius: 99,
+                      padding: "4px 12px",
+                    }}
                   >
                     {t}
                   </span>
                 ))}
               </div>
-            </div>
-
-            {/* Tabs */}
-            <div className="border-b border-gray-200 mb-8">
-              <div className="flex gap-0">
-                {(["overview", "rooms", "reviews"] as const).map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`px-5 py-3 text-sm font-semibold capitalize transition-all border-b-2 -mb-px ${activeTab === tab ? "border-[#C9A96E] text-[#C9A96E]" : "border-transparent text-gray-400 hover:text-gray-600"}`}
+              <h1
+                style={{
+                  fontFamily: "Cormorant Garamond, serif",
+                  fontSize: 38,
+                  fontWeight: 600,
+                  color: "#f5f0e8",
+                  lineHeight: 1.1,
+                  marginBottom: 12,
+                }}
+              >
+                {hotel.name}
+              </h1>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 16,
+                  flexWrap: "wrap",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <StarIcon
+                      key={i}
+                      style={{
+                        width: 14,
+                        height: 14,
+                        color:
+                          i < Math.floor(hotel.rating)
+                            ? "#C9A96E"
+                            : "rgba(245,240,232,0.15)",
+                      }}
+                    />
+                  ))}
+                  <span
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: "#f5f0e8",
+                      marginLeft: 6,
+                    }}
                   >
-                    {tab}
-                  </button>
-                ))}
+                    {hotel.rating}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      color: "rgba(245,240,232,0.4)",
+                      marginLeft: 2,
+                    }}
+                  >
+                    ({hotel.reviewCount.toLocaleString()} reviews)
+                  </span>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: 13,
+                    color: "rgba(245,240,232,0.5)",
+                  }}
+                >
+                  <MapPinIcon
+                    style={{ width: 14, height: 14, color: "#C9A96E" }}
+                  />
+                  {hotel.location}
+                </div>
               </div>
             </div>
 
-            {/* OVERVIEW */}
-            {activeTab === "overview" && (
-              <div className="space-y-10">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {[
-                    { icon: "🛏", label: "Bedrooms", val: hotel.bedrooms },
-                    { icon: "🚿", label: "Bathrooms", val: hotel.bathrooms },
-                    { icon: "👥", label: "Max Guests", val: hotel.maxGuests },
-                    {
-                      icon: "🌃",
-                      label: "Avg / Night",
-                      val: `$${hotel.pricePerNight.toLocaleString()}`,
-                    },
-                  ].map((s) => (
-                    <div
-                      key={s.label}
-                      className="bg-white rounded-2xl border border-gray-100 p-4 text-center shadow-sm"
-                    >
-                      <div className="text-2xl mb-1.5">{s.icon}</div>
-                      <div className="text-base font-bold text-gray-900">
-                        {s.val}
-                      </div>
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        {s.label}
-                      </div>
-                    </div>
-                  ))}
+            {/* Quick stats */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(4, 1fr)",
+                gap: 10,
+                marginBottom: 28,
+              }}
+            >
+              {[
+                { icon: "🛏", label: "Bedrooms", val: hotel.bedrooms },
+                { icon: "🚿", label: "Bathrooms", val: hotel.bathrooms },
+                { icon: "👥", label: "Max Guests", val: hotel.maxGuests },
+                {
+                  icon: "✦",
+                  label: "Per Night",
+                  val: `$${hotel.pricePerNight.toLocaleString()}`,
+                },
+              ].map((s) => (
+                <div
+                  key={s.label}
+                  style={{
+                    background: "rgba(245,240,232,0.04)",
+                    border: "1px solid rgba(245,240,232,0.07)",
+                    borderRadius: 14,
+                    padding: "14px 12px",
+                    textAlign: "center",
+                  }}
+                >
+                  <div style={{ fontSize: 20, marginBottom: 6 }}>{s.icon}</div>
+                  <div
+                    style={{ fontSize: 15, fontWeight: 700, color: "#f5f0e8" }}
+                  >
+                    {s.val}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "rgba(245,240,232,0.35)",
+                      marginTop: 2,
+                    }}
+                  >
+                    {s.label}
+                  </div>
                 </div>
+              ))}
+            </div>
+
+            {/* Tabs */}
+            <div
+              style={{
+                borderBottom: "1px solid rgba(245,240,232,0.08)",
+                marginBottom: 28,
+                display: "flex",
+                gap: 0,
+              }}
+            >
+              {(["overview", "rooms", "reviews"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  className={`tab-btn${activeTab === tab ? " active" : ""}`}
+                  onClick={() => setActiveTab(tab)}
+                  style={{ textTransform: "capitalize" }}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+
+            {/* ── OVERVIEW TAB ── */}
+            {activeTab === "overview" && (
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 32 }}
+              >
                 <div>
-                  <h2 className="font-playfair text-xl font-semibold text-gray-900 mb-4">
+                  <h2
+                    style={{
+                      fontFamily: "Cormorant Garamond, serif",
+                      fontSize: 22,
+                      fontWeight: 600,
+                      color: "#f5f0e8",
+                      marginBottom: 12,
+                    }}
+                  >
                     About this property
                   </h2>
-                  <p className="text-gray-600 leading-relaxed text-sm md:text-base">
+                  <p
+                    style={{
+                      fontSize: 14,
+                      color: "rgba(245,240,232,0.6)",
+                      lineHeight: 1.8,
+                    }}
+                  >
                     {hotel.description}
                   </p>
                 </div>
+
                 <div>
-                  <h2 className="font-playfair text-xl font-semibold text-gray-900 mb-4">
+                  <h2
+                    style={{
+                      fontFamily: "Cormorant Garamond, serif",
+                      fontSize: 22,
+                      fontWeight: 600,
+                      color: "#f5f0e8",
+                      marginBottom: 14,
+                    }}
+                  >
                     Amenities
                   </h2>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(3, 1fr)",
+                      gap: 10,
+                    }}
+                  >
                     {(showAllAmenities
                       ? hotel.amenities
                       : hotel.amenities.slice(0, 6)
                     ).map((a) => (
                       <div
                         key={a}
-                        className="flex items-center gap-3 bg-white rounded-xl border border-gray-100 px-4 py-3 shadow-sm text-sm font-medium text-gray-700"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          background: "rgba(245,240,232,0.04)",
+                          border: "1px solid rgba(245,240,232,0.07)",
+                          borderRadius: 12,
+                          padding: "10px 14px",
+                          fontSize: 13,
+                          color: "rgba(245,240,232,0.7)",
+                        }}
                       >
-                        <span className="text-base">
-                          {amenityIcons[a] || "✦"}
+                        <span style={{ fontSize: 16 }}>
+                          {AMENITY_ICONS[a] || "✦"}
                         </span>
                         {a}
                       </div>
@@ -816,37 +2006,69 @@ const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
                   {hotel.amenities.length > 6 && (
                     <button
                       onClick={() => setShowAllAmenities((s) => !s)}
-                      className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-[#C9A96E] hover:underline"
+                      style={{
+                        marginTop: 12,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: "#C9A96E",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                      }}
                     >
                       {showAllAmenities
                         ? "Show less"
                         : `Show all ${hotel.amenities.length} amenities`}
                       <ChevronDownIcon
-                        className={`w-4 h-4 transition-transform ${showAllAmenities ? "rotate-180" : ""}`}
+                        style={{
+                          width: 14,
+                          height: 14,
+                          transform: showAllAmenities
+                            ? "rotate(180deg)"
+                            : "none",
+                        }}
                       />
                     </button>
                   )}
                 </div>
+
                 <div>
-                  <h2 className="font-playfair text-xl font-semibold text-gray-900 mb-4">
+                  <h2
+                    style={{
+                      fontFamily: "Cormorant Garamond, serif",
+                      fontSize: 22,
+                      fontWeight: 600,
+                      color: "#f5f0e8",
+                      marginBottom: 14,
+                    }}
+                  >
                     Policies
                   </h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: 10,
+                    }}
+                  >
                     {[
                       {
                         icon: "🕐",
                         title: "Check-in",
-                        desc: "From 3:00 PM · Early check-in subject to availability",
+                        desc: "From 3:00 PM · Early check-in on request",
                       },
                       {
                         icon: "🧳",
                         title: "Check-out",
-                        desc: "Until 12:00 PM · Late check-out available on request",
+                        desc: "Until 12:00 PM · Late check-out available",
                       },
                       {
                         icon: "❌",
                         title: "Cancellation",
-                        desc: "Free cancellation up to 48 hours before arrival",
+                        desc: "Free cancellation up to 48h before arrival",
                       },
                       {
                         icon: "🐾",
@@ -866,14 +2088,37 @@ const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
                     ].map((p) => (
                       <div
                         key={p.title}
-                        className="flex items-start gap-3 bg-white rounded-xl border border-gray-100 p-4 shadow-sm"
+                        style={{
+                          background: "rgba(245,240,232,0.04)",
+                          border: "1px solid rgba(245,240,232,0.07)",
+                          borderRadius: 14,
+                          padding: "14px 16px",
+                          display: "flex",
+                          gap: 12,
+                          alignItems: "flex-start",
+                        }}
                       >
-                        <span className="text-xl mt-0.5">{p.icon}</span>
+                        <span style={{ fontSize: 20, marginTop: 1 }}>
+                          {p.icon}
+                        </span>
                         <div>
-                          <p className="text-sm font-semibold text-gray-800">
+                          <p
+                            style={{
+                              fontSize: 13,
+                              fontWeight: 700,
+                              color: "#f5f0e8",
+                              marginBottom: 4,
+                            }}
+                          >
                             {p.title}
                           </p>
-                          <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                          <p
+                            style={{
+                              fontSize: 12,
+                              color: "rgba(245,240,232,0.4)",
+                              lineHeight: 1.5,
+                            }}
+                          >
                             {p.desc}
                           </p>
                         </div>
@@ -884,102 +2129,265 @@ const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
               </div>
             )}
 
-            {/* ROOMS */}
+            {/* ── ROOMS TAB ── */}
             {activeTab === "rooms" && (
-              <div className="space-y-5">
-                <p className="text-gray-500 text-sm">
-                  Select your preferred room type to see pricing.
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 14 }}
+              >
+                <p
+                  style={{
+                    fontSize: 13,
+                    color: "rgba(245,240,232,0.45)",
+                    marginBottom: 4,
+                  }}
+                >
+                  Select your preferred room type.
                 </p>
                 {roomTypes.map((rt) => (
-                  <button
+                  <div
                     key={rt.id}
+                    className="room-card"
                     onClick={() => setSelectedRoom(rt.id)}
-                    className={`w-full text-left bg-white rounded-2xl border-2 transition-all duration-200 overflow-hidden shadow-sm hover:shadow-md ${selectedRoom === rt.id ? "border-[#C9A96E] shadow-[#C9A96E]/10" : "border-gray-100 hover:border-gray-200"}`}
+                    style={{
+                      background: "rgba(245,240,232,0.03)",
+                      border: `2px solid ${selectedRoom === rt.id ? "#C9A96E" : "rgba(245,240,232,0.07)"}`,
+                      borderRadius: 18,
+                      overflow: "hidden",
+                      transition: "border-color 0.2s",
+                    }}
                   >
-                    <div className="flex flex-col md:flex-row">
-                      <div className="md:w-52 h-44 md:h-auto shrink-0 overflow-hidden">
+                    <div style={{ display: "flex" }}>
+                      <div
+                        style={{
+                          width: 180,
+                          flexShrink: 0,
+                          overflow: "hidden",
+                        }}
+                      >
                         <img
-                          src={rt.image}
+                          src={getSafeImage(rt.image)}
                           alt={rt.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src =
-                              hotel.thumbnail;
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            minHeight: 140,
                           }}
                         />
                       </div>
-                      <div className="flex-1 p-5">
-                        <div className="flex items-start justify-between gap-2 mb-1">
+                      <div style={{ flex: 1, padding: 20 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "flex-start",
+                            marginBottom: 6,
+                          }}
+                        >
                           <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <h3 className="font-playfair text-base font-semibold text-gray-900">
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 8,
+                                marginBottom: 4,
+                              }}
+                            >
+                              <h3
+                                style={{
+                                  fontFamily: "Cormorant Garamond, serif",
+                                  fontSize: 17,
+                                  fontWeight: 600,
+                                  color: "#f5f0e8",
+                                }}
+                              >
                                 {rt.name}
                               </h3>
                               {rt.badge && (
-                                <span className="text-[10px] font-bold text-[#C9A96E] bg-[#C9A96E]/10 px-2 py-0.5 rounded-full">
+                                <span
+                                  style={{
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    color: "#C9A96E",
+                                    background: "rgba(201,169,110,0.12)",
+                                    borderRadius: 99,
+                                    padding: "3px 10px",
+                                  }}
+                                >
                                   {rt.badge}
                                 </span>
                               )}
                             </div>
-                            <p className="text-gray-400 text-xs">
+                            <p
+                              style={{
+                                fontSize: 12,
+                                color: "rgba(245,240,232,0.4)",
+                              }}
+                            >
                               {rt.size} · {rt.bed} · Up to {rt.guests} guests
                             </p>
                           </div>
-                          <div className="text-right shrink-0">
-                            <p className="text-[#C9A96E] font-bold text-lg">
+                          <div style={{ textAlign: "right", flexShrink: 0 }}>
+                            <p
+                              style={{
+                                fontFamily: "Cormorant Garamond, serif",
+                                fontSize: 20,
+                                fontWeight: 700,
+                                color: "#C9A96E",
+                              }}
+                            >
                               ${rt.price.toLocaleString()}
                             </p>
-                            <p className="text-gray-400 text-xs">/ night</p>
+                            <p
+                              style={{
+                                fontSize: 11,
+                                color: "rgba(245,240,232,0.35)",
+                              }}
+                            >
+                              / night
+                            </p>
                           </div>
                         </div>
-                        <div className="flex flex-wrap gap-2 mt-3">
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: 6,
+                            marginTop: 10,
+                          }}
+                        >
                           {rt.features.map((f) => (
                             <span
                               key={f}
-                              className="flex items-center gap-1.5 text-xs text-gray-600 bg-gray-50 px-3 py-1 rounded-full"
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 4,
+                                fontSize: 11,
+                                color: "rgba(245,240,232,0.55)",
+                                background: "rgba(245,240,232,0.05)",
+                                border: "1px solid rgba(245,240,232,0.08)",
+                                borderRadius: 99,
+                                padding: "3px 10px",
+                              }}
                             >
-                              <CheckIcon className="w-3 h-3 text-[#C9A96E]" />
+                              <CheckIcon
+                                style={{
+                                  width: 10,
+                                  height: 10,
+                                  color: "#C9A96E",
+                                }}
+                              />{" "}
                               {f}
                             </span>
                           ))}
                         </div>
                       </div>
-                      <div className="flex md:flex-col items-center justify-end p-4 md:pl-0 gap-2">
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          padding: "0 16px",
+                        }}
+                      >
                         <div
-                          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${selectedRoom === rt.id ? "bg-[#C9A96E] border-[#C9A96E]" : "border-gray-300"}`}
+                          style={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: "50%",
+                            border: `2px solid ${selectedRoom === rt.id ? "#C9A96E" : "rgba(245,240,232,0.2)"}`,
+                            background:
+                              selectedRoom === rt.id
+                                ? "#C9A96E"
+                                : "transparent",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            transition: "all 0.2s",
+                          }}
                         >
                           {selectedRoom === rt.id && (
-                            <CheckIcon className="w-3 h-3 text-white" />
+                            <CheckIcon
+                              style={{
+                                width: 11,
+                                height: 11,
+                                color: "#0e0d0b",
+                              }}
+                            />
                           )}
                         </div>
                       </div>
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
             )}
 
-            {/* REVIEWS */}
+            {/* ── REVIEWS TAB ── */}
             {activeTab === "reviews" && (
-              <div className="space-y-6">
-                <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm flex flex-col md:flex-row items-center gap-6">
-                  <div className="text-center shrink-0">
-                    <p className="text-5xl font-bold text-gray-900 font-playfair">
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 20 }}
+              >
+                {/* Rating summary */}
+                <div
+                  style={{
+                    background: "rgba(245,240,232,0.04)",
+                    border: "1px solid rgba(245,240,232,0.07)",
+                    borderRadius: 18,
+                    padding: 24,
+                    display: "flex",
+                    gap: 32,
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div style={{ textAlign: "center", flexShrink: 0 }}>
+                    <p
+                      style={{
+                        fontFamily: "Cormorant Garamond, serif",
+                        fontSize: 52,
+                        fontWeight: 700,
+                        color: "#f5f0e8",
+                        lineHeight: 1,
+                      }}
+                    >
                       {hotel.rating}
                     </p>
-                    <div className="flex gap-1 justify-center my-2">
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 3,
+                        justifyContent: "center",
+                        margin: "8px 0",
+                      }}
+                    >
                       {Array.from({ length: 5 }).map((_, i) => (
                         <StarIcon
                           key={i}
-                          className={`w-4 h-4 ${i < Math.floor(hotel.rating) ? "text-[#C9A96E]" : "text-gray-200"}`}
+                          style={{
+                            width: 14,
+                            height: 14,
+                            color:
+                              i < Math.floor(hotel.rating)
+                                ? "#C9A96E"
+                                : "rgba(245,240,232,0.15)",
+                          }}
                         />
                       ))}
                     </div>
-                    <p className="text-gray-400 text-xs">
+                    <p style={{ fontSize: 12, color: "rgba(245,240,232,0.4)" }}>
                       {hotel.reviewCount.toLocaleString()} reviews
                     </p>
                   </div>
-                  <div className="flex-1 space-y-2 w-full">
+                  <div
+                    style={{
+                      flex: 1,
+                      minWidth: 200,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 8,
+                    }}
+                  >
                     {[
                       ["Cleanliness", 98],
                       ["Service", 97],
@@ -989,56 +2397,155 @@ const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
                     ].map(([k, v]) => (
                       <div
                         key={String(k)}
-                        className="flex items-center gap-3 text-sm"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                        }}
                       >
-                        <span className="text-gray-500 w-24 shrink-0">{k}</span>
-                        <div className="flex-1 bg-gray-100 rounded-full h-1.5">
+                        <span
+                          style={{
+                            fontSize: 12,
+                            color: "rgba(245,240,232,0.45)",
+                            width: 80,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {k}
+                        </span>
+                        <div
+                          style={{
+                            flex: 1,
+                            height: 4,
+                            background: "rgba(245,240,232,0.08)",
+                            borderRadius: 99,
+                          }}
+                        >
                           <div
-                            className="h-1.5 rounded-full bg-[#C9A96E]"
-                            style={{ width: `${v}%` }}
+                            style={{
+                              height: "100%",
+                              borderRadius: 99,
+                              background: "#C9A96E",
+                              width: `${v}%`,
+                            }}
                           />
                         </div>
-                        <span className="text-gray-700 font-semibold text-xs w-8 text-right">
+                        <span
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: "rgba(245,240,232,0.6)",
+                            width: 24,
+                          }}
+                        >
                           {Number(v) / 20}
                         </span>
                       </div>
                     ))}
                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 14,
+                  }}
+                >
                   {MOCK_REVIEWS.map((r) => (
                     <div
                       key={r.id}
-                      className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm"
+                      style={{
+                        background: "rgba(245,240,232,0.04)",
+                        border: "1px solid rgba(245,240,232,0.07)",
+                        borderRadius: 16,
+                        padding: 20,
+                      }}
                     >
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-full bg-[#C9A96E]/10 flex items-center justify-center font-bold text-[#C9A96E] text-sm">
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                          marginBottom: 12,
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 38,
+                            height: 38,
+                            borderRadius: "50%",
+                            background: "rgba(201,169,110,0.12)",
+                            border: "1px solid rgba(201,169,110,0.2)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: "#C9A96E",
+                            flexShrink: 0,
+                          }}
+                        >
                           {r.avatar}
                         </div>
-                        <div>
-                          <p className="font-semibold text-gray-900 text-sm">
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p
+                            style={{
+                              fontSize: 13,
+                              fontWeight: 600,
+                              color: "#f5f0e8",
+                            }}
+                          >
                             {r.name}
                           </p>
-                          <p className="text-gray-400 text-xs">
+                          <p
+                            style={{
+                              fontSize: 11,
+                              color: "rgba(245,240,232,0.35)",
+                            }}
+                          >
                             {r.location} · {r.date}
                           </p>
                         </div>
-                        <div className="ml-auto flex items-center gap-0.5">
+                        <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
                           {Array.from({ length: r.rating }).map((_, i) => (
                             <StarIcon
                               key={i}
-                              className="w-3.5 h-3.5 text-[#C9A96E]"
+                              style={{
+                                width: 11,
+                                height: 11,
+                                color: "#C9A96E",
+                              }}
                             />
                           ))}
                         </div>
                       </div>
-                      <p className="font-semibold text-gray-800 text-sm mb-1.5">
+                      <p
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: "rgba(245,240,232,0.85)",
+                          marginBottom: 6,
+                        }}
+                      >
                         {r.title}
                       </p>
-                      <p className="text-gray-500 text-xs leading-relaxed">
+                      <p
+                        style={{
+                          fontSize: 12,
+                          color: "rgba(245,240,232,0.45)",
+                          lineHeight: 1.65,
+                        }}
+                      >
                         {r.body}
                       </p>
-                      <p className="text-gray-300 text-xs mt-3">
+                      <p
+                        style={{
+                          fontSize: 11,
+                          color: "rgba(245,240,232,0.2)",
+                          marginTop: 10,
+                        }}
+                      >
                         {r.helpful} people found this helpful
                       </p>
                     </div>
@@ -1048,102 +2555,392 @@ const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
             )}
           </div>
 
-          {/* RIGHT — Booking widget */}
-          <div className="lg:sticky lg:top-24 self-start">
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-xl overflow-hidden">
-              <div className="bg-gradient-to-br from-[#1a1a1a] to-[#2d2418] p-6 text-white">
-                <p className="text-[#C9A96E] text-xs font-semibold uppercase tracking-wider mb-3">
+          {/* ── RIGHT — Booking widget ── */}
+          <div
+            style={{
+              position: "sticky",
+              top: 88,
+              alignSelf: "start",
+              animation: "fadeUp 0.5s ease 100ms both",
+            }}
+          >
+            <div
+              style={{
+                background: "#141210",
+                border: "1px solid rgba(245,240,232,0.1)",
+                borderRadius: 24,
+                overflow: "hidden",
+                boxShadow: "0 32px 64px rgba(0,0,0,0.5)",
+              }}
+            >
+              {/* Dark header */}
+              <div
+                style={{
+                  background: "rgba(201,169,110,0.06)",
+                  borderBottom: "1px solid rgba(245,240,232,0.08)",
+                  padding: "22px 24px",
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.2em",
+                    color: "#C9A96E",
+                    textTransform: "uppercase",
+                    marginBottom: 6,
+                  }}
+                >
                   Selected Room
                 </p>
-                <h3 className="font-playfair text-xl font-semibold mb-1">
+                <h3
+                  style={{
+                    fontFamily: "Cormorant Garamond, serif",
+                    fontSize: 20,
+                    fontWeight: 600,
+                    color: "#f5f0e8",
+                    marginBottom: 2,
+                  }}
+                >
                   {room.name}
                 </h3>
-                <p className="text-white/50 text-xs mb-4">
+                <p
+                  style={{
+                    fontSize: 12,
+                    color: "rgba(245,240,232,0.35)",
+                    marginBottom: 14,
+                  }}
+                >
                   {room.size} · {room.bed} · Up to {room.guests} guests
                 </p>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-3xl font-bold">
+                <div
+                  style={{ display: "flex", alignItems: "baseline", gap: 4 }}
+                >
+                  <span
+                    style={{
+                      fontFamily: "Cormorant Garamond, serif",
+                      fontSize: 32,
+                      fontWeight: 700,
+                      color: "#f5f0e8",
+                    }}
+                  >
                     ${room.price.toLocaleString()}
                   </span>
-                  <span className="text-white/50 text-sm">/ night</span>
+                  <span
+                    style={{ fontSize: 13, color: "rgba(245,240,232,0.35)" }}
+                  >
+                    / night
+                  </span>
                 </div>
               </div>
-              <div className="p-5 space-y-4">
-                {/* Date pickers */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="border border-gray-200 rounded-xl px-3 py-2.5 hover:border-[#C9A96E] transition-colors">
-                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
-                      Check-in
-                    </p>
-                    <input
-                      type="date"
-                      min={today}
-                      value={checkIn}
-                      onChange={(e) => setCheckIn(e.target.value)}
-                      className="w-full text-sm font-medium text-gray-800 outline-none bg-transparent cursor-pointer"
-                    />
+
+              <div
+                style={{
+                  padding: "20px 24px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 14,
+                }}
+              >
+                {/* Calendar date pickers */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 8,
+                  }}
+                >
+                  {/* Check-in */}
+                  <div style={{ position: "relative" }} ref={calInRef}>
+                    <button
+                      onClick={() => {
+                        setShowCheckInCal((s) => !s);
+                        setShowCheckOutCal(false);
+                      }}
+                      style={{
+                        width: "100%",
+                        background: "rgba(245,240,232,0.05)",
+                        border: `1px solid ${showCheckInCal ? "#C9A96E" : "rgba(245,240,232,0.1)"}`,
+                        borderRadius: 12,
+                        padding: "10px 12px",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        transition: "border-color 0.2s",
+                      }}
+                    >
+                      <p
+                        style={{
+                          fontSize: 9,
+                          fontWeight: 700,
+                          letterSpacing: "0.15em",
+                          color: "rgba(245,240,232,0.35)",
+                          textTransform: "uppercase",
+                          marginBottom: 4,
+                        }}
+                      >
+                        Check-in
+                      </p>
+                      <p
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: checkIn ? "#f5f0e8" : "rgba(245,240,232,0.3)",
+                        }}
+                      >
+                        {checkIn ? formatDate(checkIn) : "Select date"}
+                      </p>
+                    </button>
+                    {showCheckInCal && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "calc(100% + 8px)",
+                          left: 0,
+                          zIndex: 50,
+                          background: "#1a1712",
+                          border: "1px solid rgba(245,240,232,0.12)",
+                          borderRadius: 16,
+                          padding: 16,
+                          minWidth: 260,
+                          boxShadow: "0 16px 40px rgba(0,0,0,0.6)",
+                        }}
+                      >
+                        <MiniCalendar
+                          value={checkIn}
+                          onChange={(d) => {
+                            setCheckIn(d);
+                            setShowCheckInCal(false);
+                            if (checkOut && d >= checkOut) setCheckOut("");
+                          }}
+                          min={today}
+                          label="Check-in date"
+                        />
+                      </div>
+                    )}
                   </div>
-                  <div className="border border-gray-200 rounded-xl px-3 py-2.5 hover:border-[#C9A96E] transition-colors">
-                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
-                      Check-out{" "}
-                      {nights > 0 && (
-                        <span className="text-[#C9A96E]">· {nights}n</span>
-                      )}
-                    </p>
-                    <input
-                      type="date"
-                      min={checkIn || today}
-                      value={checkOut}
-                      onChange={(e) => setCheckOut(e.target.value)}
-                      className="w-full text-sm font-medium text-gray-800 outline-none bg-transparent cursor-pointer"
-                    />
+
+                  {/* Check-out */}
+                  <div style={{ position: "relative" }} ref={calOutRef}>
+                    <button
+                      onClick={() => {
+                        setShowCheckOutCal((s) => !s);
+                        setShowCheckInCal(false);
+                      }}
+                      style={{
+                        width: "100%",
+                        background: "rgba(245,240,232,0.05)",
+                        border: `1px solid ${showCheckOutCal ? "#C9A96E" : "rgba(245,240,232,0.1)"}`,
+                        borderRadius: 12,
+                        padding: "10px 12px",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        transition: "border-color 0.2s",
+                      }}
+                    >
+                      <p
+                        style={{
+                          fontSize: 9,
+                          fontWeight: 700,
+                          letterSpacing: "0.15em",
+                          color: "rgba(245,240,232,0.35)",
+                          textTransform: "uppercase",
+                          marginBottom: 4,
+                        }}
+                      >
+                        Check-out{" "}
+                        {nights > 0 && (
+                          <span style={{ color: "#C9A96E" }}>· {nights}n</span>
+                        )}
+                      </p>
+                      <p
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: checkOut ? "#f5f0e8" : "rgba(245,240,232,0.3)",
+                        }}
+                      >
+                        {checkOut ? formatDate(checkOut) : "Select date"}
+                      </p>
+                    </button>
+                    {showCheckOutCal && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "calc(100% + 8px)",
+                          right: 0,
+                          zIndex: 50,
+                          background: "#1a1712",
+                          border: "1px solid rgba(245,240,232,0.12)",
+                          borderRadius: 16,
+                          padding: 16,
+                          minWidth: 260,
+                          boxShadow: "0 16px 40px rgba(0,0,0,0.6)",
+                        }}
+                      >
+                        <MiniCalendar
+                          value={checkOut}
+                          onChange={(d) => {
+                            setCheckOut(d);
+                            setShowCheckOutCal(false);
+                          }}
+                          min={checkIn || today}
+                          label="Check-out date"
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
+
                 {/* Guests */}
-                <div className="border border-gray-200 rounded-xl px-4 py-3 flex items-center justify-between">
+                <div
+                  style={{
+                    background: "rgba(245,240,232,0.05)",
+                    border: "1px solid rgba(245,240,232,0.1)",
+                    borderRadius: 12,
+                    padding: "12px 16px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
                   <div>
-                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                    <p
+                      style={{
+                        fontSize: 9,
+                        fontWeight: 700,
+                        letterSpacing: "0.15em",
+                        color: "rgba(245,240,232,0.35)",
+                        textTransform: "uppercase",
+                        marginBottom: 4,
+                      }}
+                    >
                       Guests
                     </p>
-                    <p className="text-sm font-medium text-gray-800 mt-0.5">
+                    <p
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: "#f5f0e8",
+                      }}
+                    >
                       {guests} {guests === 1 ? "guest" : "guests"}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 10 }}
+                  >
                     <button
                       onClick={() => setGuests((g) => Math.max(1, g - 1))}
-                      className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 font-semibold transition-colors"
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: "50%",
+                        background: "rgba(245,240,232,0.08)",
+                        border: "1px solid rgba(245,240,232,0.1)",
+                        color: "#f5f0e8",
+                        cursor: "pointer",
+                        fontSize: 16,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
                     >
                       −
                     </button>
-                    <span className="text-sm font-semibold w-4 text-center">
+                    <span
+                      style={{
+                        fontSize: 14,
+                        fontWeight: 700,
+                        color: "#f5f0e8",
+                        minWidth: 20,
+                        textAlign: "center",
+                      }}
+                    >
                       {guests}
                     </span>
                     <button
                       onClick={() =>
                         setGuests((g) => Math.min(room.guests, g + 1))
                       }
-                      className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 font-semibold transition-colors"
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: "50%",
+                        background: "rgba(245,240,232,0.08)",
+                        border: "1px solid rgba(245,240,232,0.1)",
+                        color: "#f5f0e8",
+                        cursor: "pointer",
+                        fontSize: 16,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
                     >
                       +
                     </button>
                   </div>
                 </div>
-                {/* Room type mini selector */}
+
+                {/* Room selector mini */}
                 <div>
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                  <p
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: "0.15em",
+                      color: "rgba(245,240,232,0.35)",
+                      textTransform: "uppercase",
+                      marginBottom: 8,
+                    }}
+                  >
                     Room Type
                   </p>
-                  <div className="space-y-1.5">
+                  <div
+                    style={{ display: "flex", flexDirection: "column", gap: 6 }}
+                  >
                     {roomTypes.map((rt) => (
                       <button
                         key={rt.id}
                         onClick={() => setSelectedRoom(rt.id)}
-                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm transition-all ${selectedRoom === rt.id ? "bg-[#C9A96E]/10 border border-[#C9A96E]/30 text-gray-900" : "bg-gray-50 border border-transparent text-gray-600 hover:bg-gray-100"}`}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "10px 14px",
+                          borderRadius: 10,
+                          background:
+                            selectedRoom === rt.id
+                              ? "rgba(201,169,110,0.1)"
+                              : "rgba(245,240,232,0.03)",
+                          border: `1px solid ${selectedRoom === rt.id ? "rgba(201,169,110,0.35)" : "rgba(245,240,232,0.07)"}`,
+                          cursor: "pointer",
+                          transition: "all 0.2s",
+                        }}
                       >
-                        <span className="font-medium truncate">{rt.name}</span>
                         <span
-                          className={`font-bold shrink-0 ml-2 ${selectedRoom === rt.id ? "text-[#C9A96E]" : "text-gray-500"}`}
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 500,
+                            color: "#f5f0e8",
+                            textAlign: "left",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {rt.name}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 700,
+                            color:
+                              selectedRoom === rt.id
+                                ? "#C9A96E"
+                                : "rgba(245,240,232,0.4)",
+                            flexShrink: 0,
+                            marginLeft: 8,
+                          }}
                         >
                           ${rt.price.toLocaleString()}
                         </span>
@@ -1151,57 +2948,174 @@ const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
                     ))}
                   </div>
                 </div>
+
                 {/* Price breakdown */}
                 {nights > 0 && (
-                  <div className="border-t border-gray-100 pt-4 space-y-2">
-                    <div className="flex justify-between text-sm text-gray-500">
-                      <span>
-                        ${room.price.toLocaleString()} × {nights} nights
-                      </span>
-                      <span>${subtotal.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-sm text-gray-500">
-                      <span>Taxes & fees</span>
-                      <span>${taxes.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-base font-bold text-gray-900 pt-2 border-t border-gray-100">
+                  <div
+                    style={{
+                      borderTop: "1px solid rgba(245,240,232,0.07)",
+                      paddingTop: 14,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 8,
+                    }}
+                  >
+                    {[
+                      [
+                        `$${room.price.toLocaleString()} × ${nights} nights`,
+                        `$${subtotal.toLocaleString()}`,
+                      ],
+                      ["Taxes & resort fees", `$${taxes.toLocaleString()}`],
+                    ].map(([k, v]) => (
+                      <div
+                        key={k}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          fontSize: 12,
+                          color: "rgba(245,240,232,0.4)",
+                        }}
+                      >
+                        <span>{k}</span>
+                        <span>{v}</span>
+                      </div>
+                    ))}
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        fontSize: 15,
+                        fontWeight: 700,
+                        color: "#f5f0e8",
+                        paddingTop: 10,
+                        borderTop: "1px solid rgba(245,240,232,0.07)",
+                      }}
+                    >
                       <span>Total</span>
-                      <span>${total.toLocaleString()}</span>
+                      <span style={{ color: "#C9A96E" }}>
+                        ${total.toLocaleString()}
+                      </span>
                     </div>
                   </div>
                 )}
+
+                {/* Reserve CTA */}
                 <button
                   onClick={() => setStep("form")}
-                  className="w-full bg-[#C9A96E] text-white font-semibold py-4 rounded-2xl text-sm hover:bg-[#b8935a] transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-[#C9A96E]/30"
+                  style={{
+                    width: "100%",
+                    background: "#C9A96E",
+                    color: "#0e0d0b",
+                    fontWeight: 700,
+                    fontSize: 14,
+                    padding: "16px 0",
+                    borderRadius: 14,
+                    border: "none",
+                    cursor: "pointer",
+                    letterSpacing: "0.04em",
+                    transition: "background 0.2s",
+                  }}
+                  onMouseOver={(e) =>
+                    ((e.target as HTMLButtonElement).style.background =
+                      "#dfc08a")
+                  }
+                  onMouseOut={(e) =>
+                    ((e.target as HTMLButtonElement).style.background =
+                      "#C9A96E")
+                  }
                 >
                   Reserve ·{" "}
                   {nights > 0
                     ? `$${total.toLocaleString()}`
                     : `From $${room.price.toLocaleString()}`}
                 </button>
-                <div className="flex items-center gap-2 justify-center text-xs text-gray-400">
-                  <ShieldCheckIcon className="w-4 h-4" /> Free cancellation · No
-                  charge until confirmed
+
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    justifyContent: "center",
+                    fontSize: 12,
+                    color: "rgba(245,240,232,0.3)",
+                  }}
+                >
+                  <ShieldCheckIcon
+                    style={{ width: 14, height: 14, color: "#C9A96E" }}
+                  />
+                  Free cancellation · No charge until confirmed
                 </div>
-                <div className="border-t border-gray-100 pt-4 flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-gray-900 flex items-center justify-center shrink-0">
-                    <UserIcon className="w-4 h-4 text-white" />
+
+                {/* Concierge row */}
+                <div
+                  style={{
+                    borderTop: "1px solid rgba(245,240,232,0.07)",
+                    paddingTop: 14,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: "50%",
+                      background: "rgba(245,240,232,0.08)",
+                      border: "1px solid rgba(245,240,232,0.1)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <UserIcon
+                      style={{ width: 16, height: 16, color: "#C9A96E" }}
+                    />
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-gray-800">
+                    <p
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: "#f5f0e8",
+                      }}
+                    >
                       Speak to a Concierge
                     </p>
-                    <p className="text-xs text-gray-400">
+                    <p
+                      style={{ fontSize: 11, color: "rgba(245,240,232,0.35)" }}
+                    >
                       Available 24/7 · Avg reply 4 min
                     </p>
                   </div>
-                  <button className="ml-auto text-xs font-semibold text-[#C9A96E] hover:underline shrink-0">
+                  <button
+                    style={{
+                      marginLeft: "auto",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: "#C9A96E",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      flexShrink: 0,
+                    }}
+                  >
                     Chat →
                   </button>
                 </div>
               </div>
             </div>
-            <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+
+            {/* Trust badges */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr 1fr",
+                gap: 8,
+                marginTop: 10,
+              }}
+            >
               {[
                 ["🔒", "Secure", "256-bit SSL"],
                 ["✓", "Verified", "Official listing"],
@@ -1209,13 +3123,23 @@ const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
               ].map(([icon, title, sub]) => (
                 <div
                   key={String(title)}
-                  className="bg-white rounded-2xl border border-gray-100 py-3 shadow-sm"
+                  style={{
+                    background: "#141210",
+                    border: "1px solid rgba(245,240,232,0.08)",
+                    borderRadius: 14,
+                    padding: "12px 8px",
+                    textAlign: "center",
+                  }}
                 >
-                  <div className="text-lg">{icon}</div>
-                  <p className="text-xs font-semibold text-gray-800 mt-1">
+                  <div style={{ fontSize: 18, marginBottom: 4 }}>{icon}</div>
+                  <p
+                    style={{ fontSize: 11, fontWeight: 700, color: "#f5f0e8" }}
+                  >
                     {title}
                   </p>
-                  <p className="text-[10px] text-gray-400">{sub}</p>
+                  <p style={{ fontSize: 10, color: "rgba(245,240,232,0.3)" }}>
+                    {sub}
+                  </p>
                 </div>
               ))}
             </div>
@@ -1223,32 +3147,70 @@ const BookingPage = ({ hotel, onBack, onBookingComplete }: Props) => {
         </div>
       </div>
 
-      {/* Mobile CTA */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-4 py-3 flex items-center justify-between z-30">
+      {/* ── Mobile CTA ── */}
+      <div
+        style={{
+          position: "fixed",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          background: "rgba(14,13,11,0.97)",
+          backdropFilter: "blur(12px)",
+          borderTop: "1px solid rgba(245,240,232,0.08)",
+          padding: "12px 20px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          zIndex: 30,
+        }}
+        className="lg:hidden"
+      >
         <div>
-          <p className="font-bold text-gray-900 text-base">
+          <p
+            style={{
+              fontFamily: "Cormorant Garamond, serif",
+              fontSize: 20,
+              fontWeight: 700,
+              color: "#f5f0e8",
+            }}
+          >
             ${room.price.toLocaleString()}{" "}
-            <span className="font-normal text-gray-400 text-sm">/ night</span>
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 400,
+                color: "rgba(245,240,232,0.4)",
+              }}
+            >
+              / night
+            </span>
           </p>
-          <div className="flex items-center gap-1">
-            <StarIcon className="w-3.5 h-3.5 text-[#C9A96E]" />
-            <span className="text-xs font-semibold text-gray-700">
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <StarIcon style={{ width: 12, height: 12, color: "#C9A96E" }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#f5f0e8" }}>
               {hotel.rating}
             </span>
-            <span className="text-xs text-gray-400">
+            <span style={{ fontSize: 11, color: "rgba(245,240,232,0.4)" }}>
               ({hotel.reviewCount.toLocaleString()})
             </span>
           </div>
         </div>
         <button
           onClick={() => setStep("form")}
-          className="bg-[#C9A96E] text-white font-semibold px-7 py-3 rounded-2xl text-sm hover:bg-[#b8935a] transition-all shadow-lg shadow-[#C9A96E]/30"
+          style={{
+            background: "#C9A96E",
+            color: "#0e0d0b",
+            fontWeight: 700,
+            fontSize: 14,
+            padding: "12px 28px",
+            borderRadius: 14,
+            border: "none",
+            cursor: "pointer",
+          }}
         >
           Reserve
         </button>
       </div>
     </div>
   );
-};
-
-export default BookingPage;
+}
