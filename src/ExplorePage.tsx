@@ -19,6 +19,28 @@ import { ListingsDB, type Listing, type Hotel } from "./index";
 import BookingPage from "./Components/BookingPage";
 
 /* ─────────────────────────────────────────────────────────
+   IMAGE UTILITY
+───────────────────────────────────────────────────────── */
+const DEFAULT_IMAGE =
+  "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=75";
+
+const getSafeImageUrl = (imageUrl?: string): string => {
+  if (!imageUrl) return DEFAULT_IMAGE;
+
+  // If it's already a good source (Unsplash, Pexels, etc), use it directly
+  if (
+    imageUrl.includes("unsplash.com") ||
+    imageUrl.includes("pexels.com") ||
+    !imageUrl.includes("bing.com")
+  ) {
+    return imageUrl;
+  }
+
+  // Fall back to Unsplash for Bing or problematic sources
+  return DEFAULT_IMAGE;
+};
+
+/* ─────────────────────────────────────────────────────────
    TYPES & CONSTANTS
 ───────────────────────────────────────────────────────── */
 type SortKey = "featured" | "rating" | "price_asc" | "price_desc" | "newest";
@@ -136,14 +158,11 @@ const ListingCard = ({
       {/* Image */}
       <div className="relative h-52 overflow-hidden">
         <img
-          src={
-            imgErr
-              ? "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=500"
-              : listing.images[0] ||
-                "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=500"
-          }
+          src={imgErr ? DEFAULT_IMAGE : getSafeImageUrl(listing.images[0])}
           alt={listing.name}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+          crossOrigin="anonymous"
+          referrerPolicy="no-referrer"
           onError={() => setImgErr(true)}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
@@ -281,14 +300,11 @@ const ListingRow = ({
     >
       <div className="relative w-48 shrink-0 overflow-hidden">
         <img
-          src={
-            imgErr
-              ? "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=300"
-              : listing.images[0] ||
-                "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=300"
-          }
+          src={imgErr ? DEFAULT_IMAGE : getSafeImageUrl(listing.images[0])}
           alt={listing.name}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          crossOrigin="anonymous"
+          referrerPolicy="no-referrer"
           onError={() => setImgErr(true)}
         />
         <span className="absolute top-2 left-2 bg-[rgba(14,13,11,0.8)] backdrop-blur-md border border-[rgba(245,240,232,0.1)] rounded-full px-2 py-0.5 text-[9px] text-[#C9A96E] font-bold uppercase tracking-wider">
@@ -535,6 +551,8 @@ export default function ExplorePage() {
             src="https://images.unsplash.com/photo-1540202404-a2f29d618464?w=1400&q=80"
             alt=""
             className="w-full h-full object-cover opacity-35"
+            crossOrigin="anonymous"
+            referrerPolicy="no-referrer"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-[#0e0d0b]/40 via-[#0e0d0b]/20 to-[#0e0d0b]" />
           <div
@@ -855,7 +873,7 @@ export default function ExplorePage() {
                 index={i}
                 wishlisted={isWishlisted(listing.id)}
                 onWishlist={toggleWishlist}
-                onClick={() => navigate(`/listing/${listing.id}`)}
+                onClick={() => setSelectedHotel(listing as unknown as Hotel)}
               />
             ))}
           </div>
@@ -871,7 +889,7 @@ export default function ExplorePage() {
                 index={i}
                 wishlisted={isWishlisted(listing.id)}
                 onWishlist={toggleWishlist}
-                onClick={() => navigate(`/listing/${listing.id}`)}
+                onClick={() => setSelectedHotel(listing as unknown as Hotel)}
               />
             ))}
           </div>
