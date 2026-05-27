@@ -10,6 +10,8 @@ import {
   HeartIcon,
   ShareIcon,
   ChevronDownIcon,
+  PaperAirplaneIcon,
+  ChatBubbleLeftRightIcon,
 } from "@heroicons/react/24/outline";
 import {
   StarIcon,
@@ -18,16 +20,6 @@ import {
 } from "@heroicons/react/24/solid";
 import { useAuth } from "../AuthContext";
 import { BookingsDB, type Hotel } from "../index";
-
-/* ─────────────── Supabase BookingsDB.add payload ─────────────── */
-// Your BookingsDB.add() should now accept and insert these fields.
-// See the schema card above for the full Supabase table definition.
-// Make sure your existing BookingsDB.add() maps snake_case columns:
-//   guest_id, guest_name, guest_email, guest_phone,
-//   listing_id, listing_name, host_id, room_type,
-//   check_in, check_out, nights, guests,
-//   price_per_night, subtotal, taxes, total_amount,
-//   status ('pending' by default), special_requests
 
 /* ─────────────── Helpers ─────────────── */
 const DEFAULT_IMAGE =
@@ -108,6 +100,437 @@ const MOCK_REVIEWS = [
   },
 ];
 
+/* ─────────────── Concierge Chat ─────────────── */
+type ChatMsg = { role: "user" | "concierge"; text: string; time: string };
+
+const nowTime = () =>
+  new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+const CONCIERGE_RESPONSES = [
+  "Thank you for reaching out! I'd be delighted to assist you. What would you like to know about your stay?",
+  "Great question! Let me check that for you. Our team is available 24/7 to ensure your experience is flawless.",
+  "Absolutely, we can arrange that for you. Would you like me to note this as a special request on your booking?",
+  "Of course! We'd be happy to accommodate that. Is there anything else you'd like to know?",
+  "I've passed your request to our concierge team. You'll receive a confirmation shortly. Is there anything else?",
+  "That's a wonderful choice! I'll make sure everything is prepared before your arrival.",
+  "We'll have that ready for you upon arrival. Our team takes pride in every detail.",
+];
+
+function ConciergeChat({
+  hotel,
+  guestName,
+  onClose,
+}: {
+  hotel: Hotel;
+  guestName?: string;
+  onClose: () => void;
+}) {
+  const [messages, setMessages] = useState<ChatMsg[]>([
+    {
+      role: "concierge",
+      text: `Welcome to ${hotel.name}! I'm your personal concierge${guestName ? `, ${guestName.split(" ")[0]}` : ""}. How can I make your stay exceptional today?`,
+      time: nowTime(),
+    },
+  ]);
+  const [input, setInput] = useState("");
+  const [typing, setTyping] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, typing]);
+
+  const send = () => {
+    const text = input.trim();
+    if (!text) return;
+    setInput("");
+    setMessages((m) => [...m, { role: "user", text, time: nowTime() }]);
+    setTyping(true);
+    setTimeout(
+      () => {
+        const reply =
+          CONCIERGE_RESPONSES[
+            Math.floor(Math.random() * CONCIERGE_RESPONSES.length)
+          ];
+        setMessages((m) => [
+          ...m,
+          { role: "concierge", text: reply, time: nowTime() },
+        ]);
+        setTyping(false);
+      },
+      1200 + Math.random() * 800,
+    );
+  };
+
+  const QUICK_REPLIES = [
+    "Early check-in?",
+    "Airport transfer",
+    "Special occasion",
+    "Dietary needs",
+  ];
+
+  return (
+    /* Full-screen on mobile, floating bottom-right panel on md+ */
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 60,
+        display: "flex",
+        alignItems: "flex-end",
+        justifyContent: "flex-end",
+        pointerEvents: "none",
+      }}
+    >
+      {/* Mobile backdrop */}
+      <div
+        onClick={onClose}
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: "rgba(0,0,0,0.5)",
+          pointerEvents: "auto",
+        }}
+        className="md:hidden"
+      />
+      <div
+        style={{
+          position: "relative",
+          pointerEvents: "auto",
+          display: "flex",
+          flexDirection: "column",
+          background: "#141210",
+          border: "1px solid rgba(245,240,232,0.12)",
+          overflow: "hidden",
+          boxShadow: "0 24px 64px rgba(0,0,0,0.7)",
+        }}
+        /* Full width bottom sheet on mobile, fixed panel on md+ */
+        className="w-full rounded-t-3xl md:w-[390px] md:rounded-3xl md:mr-6 md:mb-6"
+        /* height: fills most of screen on mobile, fixed on desktop */
+        /* Using inline style for height since we need dvh */
+      >
+        {/* Header */}
+        <div
+          style={{
+            background: "rgba(201,169,110,0.08)",
+            borderBottom: "1px solid rgba(245,240,232,0.08)",
+            padding: "18px 20px 14px",
+            flexShrink: 0,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 10,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: "50%",
+                  background: "rgba(201,169,110,0.15)",
+                  border: "1px solid rgba(201,169,110,0.3)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <UserIcon style={{ width: 18, height: 18, color: "#C9A96E" }} />
+              </div>
+              <div>
+                <p style={{ fontSize: 13, fontWeight: 700, color: "#f5f0e8" }}>
+                  Concierge
+                </p>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: "50%",
+                      background: "#4ade80",
+                      display: "inline-block",
+                      animation: "pulse 2s infinite",
+                    }}
+                  />
+                  <span
+                    style={{ fontSize: 11, color: "rgba(245,240,232,0.4)" }}
+                  >
+                    Online · avg reply 4 min
+                  </span>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: "50%",
+                background: "rgba(245,240,232,0.07)",
+                border: "none",
+                color: "#f5f0e8",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <XMarkIcon style={{ width: 16, height: 16 }} />
+            </button>
+          </div>
+          <p style={{ fontSize: 11, color: "rgba(245,240,232,0.3)" }}>
+            {hotel.name}
+          </p>
+        </div>
+
+        {/* Messages */}
+        <div
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            padding: "16px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+            minHeight: 0,
+            height: "min(420px, 55dvh)",
+          }}
+        >
+          {messages.map((m, i) => (
+            <div
+              key={i}
+              style={{
+                display: "flex",
+                gap: 8,
+                flexDirection: m.role === "user" ? "row-reverse" : "row",
+                alignItems: "flex-end",
+              }}
+            >
+              {m.role === "concierge" && (
+                <div
+                  style={{
+                    width: 26,
+                    height: 26,
+                    borderRadius: "50%",
+                    background: "rgba(201,169,110,0.12)",
+                    border: "1px solid rgba(201,169,110,0.2)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <UserIcon
+                    style={{ width: 13, height: 13, color: "#C9A96E" }}
+                  />
+                </div>
+              )}
+              <div
+                style={{
+                  maxWidth: "75%",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 4,
+                  alignItems: m.role === "user" ? "flex-end" : "flex-start",
+                }}
+              >
+                <div
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius:
+                      m.role === "user"
+                        ? "18px 18px 4px 18px"
+                        : "18px 18px 18px 4px",
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                    background:
+                      m.role === "user" ? "#C9A96E" : "rgba(245,240,232,0.07)",
+                    color: m.role === "user" ? "#0e0d0b" : "#f5f0e8",
+                    border:
+                      m.role === "concierge"
+                        ? "1px solid rgba(245,240,232,0.08)"
+                        : "none",
+                  }}
+                >
+                  {m.text}
+                </div>
+                <span style={{ fontSize: 10, color: "rgba(245,240,232,0.25)" }}>
+                  {m.time}
+                </span>
+              </div>
+            </div>
+          ))}
+
+          {/* Typing indicator */}
+          {typing && (
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                alignItems: "flex-end",
+              }}
+            >
+              <div
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: "50%",
+                  background: "rgba(201,169,110,0.12)",
+                  border: "1px solid rgba(201,169,110,0.2)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <UserIcon style={{ width: 13, height: 13, color: "#C9A96E" }} />
+              </div>
+              <div
+                style={{
+                  padding: "12px 16px",
+                  borderRadius: "18px 18px 18px 4px",
+                  background: "rgba(245,240,232,0.07)",
+                  border: "1px solid rgba(245,240,232,0.08)",
+                  display: "flex",
+                  gap: 4,
+                  alignItems: "center",
+                }}
+              >
+                {[0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: "50%",
+                      background: "rgba(245,240,232,0.4)",
+                      display: "inline-block",
+                      animation: `bounce 1.2s ease infinite`,
+                      animationDelay: `${i * 0.2}s`,
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+
+        {/* Quick replies */}
+        <div
+          style={{
+            padding: "8px 16px",
+            display: "flex",
+            gap: 6,
+            overflowX: "auto",
+            flexShrink: 0,
+            borderTop: "1px solid rgba(245,240,232,0.05)",
+          }}
+        >
+          {QUICK_REPLIES.map((q) => (
+            <button
+              key={q}
+              onClick={() => {
+                setInput(q);
+                inputRef.current?.focus();
+              }}
+              style={{
+                fontSize: 11,
+                color: "#C9A96E",
+                border: "1px solid rgba(201,169,110,0.3)",
+                background: "rgba(201,169,110,0.05)",
+                borderRadius: 99,
+                padding: "5px 12px",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
+                transition: "background 0.15s",
+              }}
+              onMouseOver={(e) =>
+                ((e.target as HTMLButtonElement).style.background =
+                  "rgba(201,169,110,0.12)")
+              }
+              onMouseOut={(e) =>
+                ((e.target as HTMLButtonElement).style.background =
+                  "rgba(201,169,110,0.05)")
+              }
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+
+        {/* Input */}
+        <div
+          style={{
+            padding: "12px 16px",
+            borderTop: "1px solid rgba(245,240,232,0.08)",
+            display: "flex",
+            gap: 8,
+            flexShrink: 0,
+            paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+          }}
+        >
+          <input
+            ref={inputRef}
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && send()}
+            placeholder="Ask about your stay…"
+            style={{
+              flex: 1,
+              background: "rgba(245,240,232,0.06)",
+              border: "1px solid rgba(245,240,232,0.1)",
+              borderRadius: 12,
+              padding: "10px 14px",
+              fontSize: 13,
+              color: "#f5f0e8",
+              outline: "none",
+              minWidth: 0,
+            }}
+            onFocus={(e) => (e.target.style.borderColor = "#C9A96E")}
+            onBlur={(e) =>
+              (e.target.style.borderColor = "rgba(245,240,232,0.1)")
+            }
+          />
+          <button
+            onClick={send}
+            disabled={!input.trim()}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 12,
+              background: input.trim() ? "#C9A96E" : "rgba(201,169,110,0.2)",
+              border: "none",
+              cursor: input.trim() ? "pointer" : "not-allowed",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              transition: "background 0.2s",
+            }}
+          >
+            <PaperAirplaneIcon
+              style={{
+                width: 16,
+                height: 16,
+                color: input.trim() ? "#0e0d0b" : "rgba(14,13,11,0.4)",
+              }}
+            />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─────────────── Mini Calendar ─────────────── */
 function MiniCalendar({
   value,
@@ -176,8 +599,6 @@ function MiniCalendar({
       >
         {label}
       </p>
-
-      {/* Month nav */}
       <div
         style={{
           display: "flex",
@@ -196,8 +617,6 @@ function MiniCalendar({
           ›
         </button>
       </div>
-
-      {/* Day labels */}
       <div
         style={{
           display: "grid",
@@ -220,8 +639,6 @@ function MiniCalendar({
           </div>
         ))}
       </div>
-
-      {/* Cells */}
       <div
         style={{
           display: "grid",
@@ -239,7 +656,6 @@ function MiniCalendar({
           const isToday =
             iso ===
             toISO(today.getFullYear(), today.getMonth(), today.getDate());
-
           return (
             <button
               key={day}
@@ -349,7 +765,8 @@ function Gallery({
           alignItems: "center",
           justifyContent: "center",
           position: "relative",
-          padding: "0 16px",
+          padding: "0 56px",
+          minHeight: 0,
         }}
       >
         <button
@@ -357,7 +774,7 @@ function Gallery({
           style={{
             ...circleBtn,
             position: "absolute",
-            left: 24,
+            left: 12,
             background: "rgba(255,255,255,0.08)",
           }}
         >
@@ -367,7 +784,7 @@ function Gallery({
           src={getSafeImage(hotel.images[activeImg])}
           alt=""
           style={{
-            maxHeight: "75vh",
+            maxHeight: "70vh",
             maxWidth: "100%",
             objectFit: "contain",
             borderRadius: 12,
@@ -378,7 +795,7 @@ function Gallery({
           style={{
             ...circleBtn,
             position: "absolute",
-            right: 24,
+            right: 12,
             background: "rgba(255,255,255,0.08)",
           }}
         >
@@ -470,7 +887,6 @@ const makeRoomTypes = (hotel: Hotel) => {
 ═══════════════════════════════════════════════════════════ */
 type Props = {
   hotel: Hotel;
-
   onBack?: () => void;
   onBookingComplete?: () => void;
 };
@@ -489,6 +905,7 @@ export default function BookingPage({
   const [activeImg, setActiveImg] = useState(0);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [wishlisted, setWishlisted] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState(roomTypes[0].id);
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
@@ -522,6 +939,14 @@ export default function BookingPage({
     window.addEventListener("scroll", handler, { passive: true });
     return () => window.removeEventListener("scroll", handler);
   }, []);
+
+  /* Lock body scroll when modal/chat open */
+  useEffect(() => {
+    document.body.style.overflow = step !== "idle" || chatOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [step, chatOpen]);
 
   const nights = (() => {
     if (!checkIn || !checkOut) return 0;
@@ -610,11 +1035,10 @@ export default function BookingPage({
         alignItems: "flex-end",
         justifyContent: "center",
       }}
-      className="md:items-center"
+      className="sm:items-center"
     >
-      {/* Backdrop */}
       <div
-        onClick={() => setStep("idle")}
+        onClick={() => step !== "done" && setStep("idle")}
         style={{
           position: "absolute",
           inset: 0,
@@ -622,7 +1046,6 @@ export default function BookingPage({
           backdropFilter: "blur(8px)",
         }}
       />
-
       <div
         style={{
           position: "relative",
@@ -632,10 +1055,10 @@ export default function BookingPage({
           width: "100%",
           maxWidth: 520,
           borderRadius: "24px 24px 0 0",
-          maxHeight: "92vh",
+          maxHeight: "92dvh",
           overflowY: "auto",
         }}
-        className="md:rounded-3xl md:mb-0"
+        className="sm:rounded-3xl"
       >
         {/* ── STEP: form ── */}
         {step === "form" && (
@@ -786,7 +1209,7 @@ export default function BookingPage({
                 </div>
               </div>
 
-              {/* Dates in modal */}
+              {/* Dates */}
               <div
                 style={{
                   display: "grid",
@@ -1178,7 +1601,6 @@ export default function BookingPage({
                 </div>
               </div>
 
-              {/* Payment placeholder */}
               <div
                 style={{
                   border: "1px dashed rgba(201,169,110,0.25)",
@@ -1408,7 +1830,6 @@ export default function BookingPage({
           </div>
         )}
       </div>
-
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
@@ -1428,13 +1849,39 @@ export default function BookingPage({
       <style>{`
         @keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
         @keyframes spin { to { transform:rotate(360deg); } }
-        .tab-btn { background: none; border: none; cursor: pointer; padding: 12px 20px; font-size: 13px; font-weight: 600; color: rgba(245,240,232,0.4); border-bottom: 2px solid transparent; transition: all 0.2s; margin-bottom: -1px; }
-        .tab-btn.active { color: #C9A96E; border-bottom-color: #C9A96E; }
-        .tab-btn:hover:not(.active) { color: rgba(245,240,232,0.7); }
-        .room-card { cursor: pointer; transition: all 0.2s; }
-        .room-card:hover { border-color: rgba(201,169,110,0.3) !important; }
-        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.4; cursor: pointer; }
-        textarea::placeholder, input::placeholder { color: rgba(245,240,232,0.2); }
+        @keyframes bounce { 0%,80%,100% { transform:translateY(0); } 40% { transform:translateY(-6px); } }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+        .tab-btn { background:none; border:none; cursor:pointer; padding:12px 16px; font-size:13px; font-weight:600; color:rgba(245,240,232,0.4); border-bottom:2px solid transparent; transition:all 0.2s; margin-bottom:-1px; white-space:nowrap; }
+        .tab-btn.active { color:#C9A96E; border-bottom-color:#C9A96E; }
+        .tab-btn:hover:not(.active) { color:rgba(245,240,232,0.7); }
+        .room-card { cursor:pointer; transition:all 0.2s; }
+        .room-card:hover { border-color:rgba(201,169,110,0.3) !important; }
+        input[type="date"]::-webkit-calendar-picker-indicator { filter:invert(1); opacity:0.4; cursor:pointer; }
+        textarea::placeholder, input::placeholder { color:rgba(245,240,232,0.2); }
+
+        /* ── Mobile responsive overrides ── */
+        @media (max-width: 767px) {
+          .hero-grid { display:none !important; }
+          .hero-mobile { display:block !important; }
+          .main-grid { grid-template-columns:1fr !important; }
+          .booking-widget-col { display:none !important; }
+          .quick-stats-grid { grid-template-columns:1fr 1fr !important; }
+          .amenities-grid { grid-template-columns:1fr 1fr !important; }
+          .policies-grid { grid-template-columns:1fr !important; }
+          .reviews-grid { grid-template-columns:1fr !important; }
+          .reviews-summary { flex-direction:column !important; gap:16px !important; }
+          .room-card-inner { flex-direction:column !important; }
+          .room-card-img { width:100% !important; height:180px !important; }
+          .title-h1 { font-size:28px !important; }
+          .tabs-row { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+          .page-padding { padding-left:16px !important; padding-right:16px !important; }
+          .hero-grid-wrap { padding:12px 16px 16px !important; }
+          .content-wrap { padding:0 16px 140px !important; }
+        }
+        @media (min-width: 768px) {
+          .hero-mobile { display:none !important; }
+          .hero-grid { display:grid !important; }
+        }
       `}</style>
 
       {galleryOpen && (
@@ -1448,6 +1895,13 @@ export default function BookingPage({
         />
       )}
       {step !== "idle" && <BookingModal />}
+      {chatOpen && (
+        <ConciergeChat
+          hotel={hotel}
+          guestName={guestInfo.name || user?.firstName}
+          onClose={() => setChatOpen(false)}
+        />
+      )}
 
       {/* ── STICKY NAV ── */}
       <header
@@ -1474,7 +1928,14 @@ export default function BookingPage({
             justifyContent: "space-between",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              minWidth: 0,
+            }}
+          >
             <button
               onClick={onBack}
               style={{
@@ -1488,6 +1949,7 @@ export default function BookingPage({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                flexShrink: 0,
               }}
             >
               <ChevronLeftIcon style={{ width: 16, height: 16 }} />
@@ -1497,6 +1959,7 @@ export default function BookingPage({
                 opacity: scrolled ? 1 : 0,
                 transition: "opacity 0.3s",
                 pointerEvents: scrolled ? "auto" : "none",
+                minWidth: 0,
               }}
             >
               <p
@@ -1505,6 +1968,9 @@ export default function BookingPage({
                   fontSize: 15,
                   fontWeight: 600,
                   color: "#f5f0e8",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
                 }}
               >
                 {hotel.name}
@@ -1514,7 +1980,14 @@ export default function BookingPage({
               </p>
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              flexShrink: 0,
+            }}
+          >
             <button
               onClick={() => setWishlisted((w) => !w)}
               style={{
@@ -1573,11 +2046,175 @@ export default function BookingPage({
         </div>
       </header>
 
-      {/* ── HERO IMAGE GRID ── */}
+      {/* ── HERO: mobile single image ── */}
       <div
+        className="hero-mobile"
+        style={{ display: "none", position: "relative" }}
+      >
+        <div style={{ position: "relative", height: 280, overflow: "hidden" }}>
+          <img
+            src={
+              imgErrors[activeImg]
+                ? DEFAULT_IMAGE
+                : getSafeImage(hotel.images[activeImg])
+            }
+            alt={hotel.name}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            onError={() => setImgErrors((e) => ({ ...e, [activeImg]: true }))}
+          />
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background:
+                "linear-gradient(to top, rgba(14,13,11,0.6) 0%, transparent 50%)",
+            }}
+          />
+          {/* Prev/Next */}
+          <button
+            onClick={prevImg}
+            style={{
+              position: "absolute",
+              left: 12,
+              top: "50%",
+              transform: "translateY(-50%)",
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
+              background: "rgba(14,13,11,0.6)",
+              border: "none",
+              color: "#f5f0e8",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <ChevronLeftIcon style={{ width: 16, height: 16 }} />
+          </button>
+          <button
+            onClick={nextImg}
+            style={{
+              position: "absolute",
+              right: 12,
+              top: "50%",
+              transform: "translateY(-50%)",
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
+              background: "rgba(14,13,11,0.6)",
+              border: "none",
+              color: "#f5f0e8",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <ChevronRightIcon style={{ width: 16, height: 16 }} />
+          </button>
+          {/* Dot indicators */}
+          <div
+            style={{
+              position: "absolute",
+              bottom: 14,
+              left: "50%",
+              transform: "translateX(-50%)",
+              display: "flex",
+              gap: 6,
+            }}
+          >
+            {hotel.images.slice(0, 6).map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setActiveImg(i)}
+                style={{
+                  width: i === activeImg ? 18 : 6,
+                  height: 6,
+                  borderRadius: 99,
+                  background:
+                    i === activeImg ? "#C9A96E" : "rgba(255,255,255,0.4)",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 0,
+                  transition: "all 0.2s",
+                }}
+              />
+            ))}
+          </div>
+          {/* Photo count */}
+          <button
+            onClick={() => setGalleryOpen(true)}
+            style={{
+              position: "absolute",
+              bottom: 14,
+              right: 14,
+              background: "rgba(14,13,11,0.65)",
+              backdropFilter: "blur(8px)",
+              border: "1px solid rgba(245,240,232,0.15)",
+              borderRadius: 99,
+              padding: "4px 10px",
+              fontSize: 11,
+              color: "#f5f0e8",
+              cursor: "pointer",
+              fontWeight: 600,
+            }}
+          >
+            {hotel.images.length} photos
+          </button>
+          {/* Category + featured badges */}
+          <div
+            style={{
+              position: "absolute",
+              top: 14,
+              left: 14,
+              display: "flex",
+              gap: 8,
+            }}
+          >
+            <span
+              style={{
+                background: "rgba(14,13,11,0.75)",
+                backdropFilter: "blur(10px)",
+                border: "1px solid rgba(245,240,232,0.1)",
+                borderRadius: 99,
+                padding: "5px 12px",
+                fontSize: 10,
+                fontWeight: 700,
+                color: "#C9A96E",
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+              }}
+            >
+              {hotel.category}
+            </span>
+            {hotel.featured && (
+              <span
+                style={{
+                  background: "#C9A96E",
+                  borderRadius: 99,
+                  padding: "5px 12px",
+                  fontSize: 10,
+                  fontWeight: 900,
+                  color: "#0e0d0b",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                }}
+              >
+                Featured
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── HERO: desktop 2-col grid ── */}
+      <div
+        className="hero-grid-wrap page-padding"
         style={{ maxWidth: 1200, margin: "0 auto", padding: "16px 24px 24px" }}
       >
         <div
+          className="hero-grid"
           style={{
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
@@ -1588,7 +2225,6 @@ export default function BookingPage({
             height: 460,
           }}
         >
-          {/* Main large image */}
           <button
             onClick={() => setGalleryOpen(true)}
             style={{
@@ -1625,7 +2261,6 @@ export default function BookingPage({
                   "linear-gradient(to top, rgba(14,13,11,0.5) 0%, transparent 40%)",
               }}
             />
-            {/* Badges */}
             <div
               style={{
                 position: "absolute",
@@ -1668,7 +2303,6 @@ export default function BookingPage({
                 </span>
               )}
             </div>
-            {/* Rating overlay */}
             <div
               style={{
                 position: "absolute",
@@ -1692,8 +2326,6 @@ export default function BookingPage({
               </span>
             </div>
           </button>
-
-          {/* 4 smaller images */}
           {hotel.images.slice(1, 5).map((img, i) => (
             <button
               key={i}
@@ -1752,9 +2384,11 @@ export default function BookingPage({
 
       {/* ── MAIN CONTENT ── */}
       <div
+        className="content-wrap page-padding"
         style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px 120px" }}
       >
         <div
+          className="main-grid"
           style={{
             display: "grid",
             gridTemplateColumns: "1fr 380px",
@@ -1763,7 +2397,7 @@ export default function BookingPage({
           }}
         >
           {/* ── LEFT ── */}
-          <div style={{ animation: "fadeUp 0.5s ease both" }}>
+          <div style={{ animation: "fadeUp 0.5s ease both", minWidth: 0 }}>
             {/* Title */}
             <div style={{ marginBottom: 24 }}>
               <div
@@ -1792,6 +2426,7 @@ export default function BookingPage({
                 ))}
               </div>
               <h1
+                className="title-h1"
                 style={{
                   fontFamily: "Cormorant Garamond, serif",
                   fontSize: 38,
@@ -1864,6 +2499,7 @@ export default function BookingPage({
 
             {/* Quick stats */}
             <div
+              className="quick-stats-grid"
               style={{
                 display: "grid",
                 gridTemplateColumns: "repeat(4, 1fr)",
@@ -1912,6 +2548,7 @@ export default function BookingPage({
 
             {/* Tabs */}
             <div
+              className="tabs-row"
               style={{
                 borderBottom: "1px solid rgba(245,240,232,0.08)",
                 marginBottom: 28,
@@ -1972,6 +2609,7 @@ export default function BookingPage({
                     Amenities
                   </h2>
                   <div
+                    className="amenities-grid"
                     style={{
                       display: "grid",
                       gridTemplateColumns: "repeat(3, 1fr)",
@@ -2048,6 +2686,7 @@ export default function BookingPage({
                     Policies
                   </h2>
                   <div
+                    className="policies-grid"
                     style={{
                       display: "grid",
                       gridTemplateColumns: "1fr 1fr",
@@ -2156,8 +2795,12 @@ export default function BookingPage({
                       transition: "border-color 0.2s",
                     }}
                   >
-                    <div style={{ display: "flex" }}>
+                    <div
+                      className="room-card-inner"
+                      style={{ display: "flex" }}
+                    >
                       <div
+                        className="room-card-img"
                         style={{
                           width: 180,
                           flexShrink: 0,
@@ -2175,7 +2818,7 @@ export default function BookingPage({
                           }}
                         />
                       </div>
-                      <div style={{ flex: 1, padding: 20 }}>
+                      <div style={{ flex: 1, padding: 20, minWidth: 0 }}>
                         <div
                           style={{
                             display: "flex",
@@ -2184,13 +2827,14 @@ export default function BookingPage({
                             marginBottom: 6,
                           }}
                         >
-                          <div>
+                          <div style={{ minWidth: 0 }}>
                             <div
                               style={{
                                 display: "flex",
                                 alignItems: "center",
                                 gap: 8,
                                 marginBottom: 4,
+                                flexWrap: "wrap",
                               }}
                             >
                               <h3
@@ -2227,7 +2871,13 @@ export default function BookingPage({
                               {rt.size} · {rt.bed} · Up to {rt.guests} guests
                             </p>
                           </div>
-                          <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          <div
+                            style={{
+                              textAlign: "right",
+                              flexShrink: 0,
+                              marginLeft: 12,
+                            }}
+                          >
                             <p
                               style={{
                                 fontFamily: "Cormorant Garamond, serif",
@@ -2288,6 +2938,7 @@ export default function BookingPage({
                           display: "flex",
                           alignItems: "center",
                           padding: "0 16px",
+                          flexShrink: 0,
                         }}
                       >
                         <div
@@ -2328,8 +2979,8 @@ export default function BookingPage({
               <div
                 style={{ display: "flex", flexDirection: "column", gap: 20 }}
               >
-                {/* Rating summary */}
                 <div
+                  className="reviews-summary"
                   style={{
                     background: "rgba(245,240,232,0.04)",
                     border: "1px solid rgba(245,240,232,0.07)",
@@ -2444,8 +3095,8 @@ export default function BookingPage({
                     ))}
                   </div>
                 </div>
-
                 <div
+                  className="reviews-grid"
                   style={{
                     display: "grid",
                     gridTemplateColumns: "1fr 1fr",
@@ -2557,6 +3208,7 @@ export default function BookingPage({
 
           {/* ── RIGHT — Booking widget ── */}
           <div
+            className="booking-widget-col"
             style={{
               position: "sticky",
               top: 88,
@@ -2573,7 +3225,6 @@ export default function BookingPage({
                 boxShadow: "0 32px 64px rgba(0,0,0,0.5)",
               }}
             >
-              {/* Dark header */}
               <div
                 style={{
                   background: "rgba(201,169,110,0.06)",
@@ -2718,7 +3369,6 @@ export default function BookingPage({
                       </div>
                     )}
                   </div>
-
                   {/* Check-out */}
                   <div style={{ position: "relative" }} ref={calOutRef}>
                     <button
@@ -3046,7 +3696,7 @@ export default function BookingPage({
                   Free cancellation · No charge until confirmed
                 </div>
 
-                {/* Concierge row */}
+                {/* Concierge row — wired to open chat */}
                 <div
                   style={{
                     borderTop: "1px solid rgba(245,240,232,0.07)",
@@ -3083,13 +3733,35 @@ export default function BookingPage({
                     >
                       Speak to a Concierge
                     </p>
-                    <p
-                      style={{ fontSize: 11, color: "rgba(245,240,232,0.35)" }}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        marginTop: 2,
+                      }}
                     >
-                      Available 24/7 · Avg reply 4 min
-                    </p>
+                      <span
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: "50%",
+                          background: "#4ade80",
+                          display: "inline-block",
+                        }}
+                      />
+                      <p
+                        style={{
+                          fontSize: 11,
+                          color: "rgba(245,240,232,0.35)",
+                        }}
+                      >
+                        Available 24/7 · Avg reply 4 min
+                      </p>
+                    </div>
                   </div>
                   <button
+                    onClick={() => setChatOpen(true)}
                     style={{
                       marginLeft: "auto",
                       fontSize: 12,
@@ -3147,7 +3819,7 @@ export default function BookingPage({
         </div>
       </div>
 
-      {/* ── Mobile CTA ── */}
+      {/* ── Mobile CTA bar ── */}
       <div
         style={{
           position: "fixed",
@@ -3158,10 +3830,12 @@ export default function BookingPage({
           backdropFilter: "blur(12px)",
           borderTop: "1px solid rgba(245,240,232,0.08)",
           padding: "12px 20px",
+          paddingBottom: "max(12px, env(safe-area-inset-bottom))",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           zIndex: 30,
+          gap: 12,
         }}
         className="lg:hidden"
       >
@@ -3195,21 +3869,63 @@ export default function BookingPage({
             </span>
           </div>
         </div>
-        <button
-          onClick={() => setStep("form")}
+        <div
           style={{
-            background: "#C9A96E",
-            color: "#0e0d0b",
-            fontWeight: 700,
-            fontSize: 14,
-            padding: "12px 28px",
-            borderRadius: 14,
-            border: "none",
-            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            flexShrink: 0,
           }}
         >
-          Reserve
-        </button>
+          {/* Concierge chat button on mobile */}
+          <button
+            onClick={() => setChatOpen(true)}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              background: "rgba(245,240,232,0.07)",
+              border: "1px solid rgba(245,240,232,0.12)",
+              color: "#f5f0e8",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              position: "relative",
+            }}
+            aria-label="Chat with concierge"
+          >
+            <ChatBubbleLeftRightIcon style={{ width: 20, height: 20 }} />
+            <span
+              style={{
+                position: "absolute",
+                top: 8,
+                right: 8,
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                background: "#4ade80",
+                border: "1.5px solid #0e0d0b",
+              }}
+            />
+          </button>
+          <button
+            onClick={() => setStep("form")}
+            style={{
+              background: "#C9A96E",
+              color: "#0e0d0b",
+              fontWeight: 700,
+              fontSize: 14,
+              padding: "12px 24px",
+              borderRadius: 14,
+              border: "none",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Reserve{nights > 0 ? ` · $${total.toLocaleString()}` : ""}
+          </button>
+        </div>
       </div>
     </div>
   );
