@@ -953,6 +953,11 @@ export const ReviewsDB = {
 
 /* ─────────────── MessagesDB ─────────────── */
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Replace the MessagesDB block in your index.ts with this corrected version.
+// The original sendMessage had a broken increment_unread call pattern.
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const MessagesDB = {
   /** Get or create a conversation between a guest and host about a listing */
   async getOrCreateConversation(data: {
@@ -963,7 +968,6 @@ export const MessagesDB = {
     guestName: string;
     hostName: string;
   }): Promise<Conversation> {
-    // Try to find existing conversation
     let q = supabase
       .from("conversations")
       .select("*")
@@ -973,7 +977,6 @@ export const MessagesDB = {
     const { data: existing } = await q.maybeSingle();
     if (existing) return toConversation(existing);
 
-    // Create new
     const { data: created, error } = await supabase
       .from("conversations")
       .insert({
@@ -1032,6 +1035,7 @@ export const MessagesDB = {
     senderRole: "host" | "guest";
     body: string;
   }): Promise<Message> {
+    // 1. Insert the message row
     const { data: row, error } = await supabase
       .from("messages")
       .insert({
@@ -1047,34 +1051,23 @@ export const MessagesDB = {
       .single();
     if (error) throw new Error(error.message);
 
-    // Update conversation last_message + unread count
+    // 2. Update last_message + last_at on the conversation
     const unreadCol =
       data.senderRole === "host" ? "unread_guest" : "unread_host";
+
     await supabase
       .from("conversations")
       .update({
         last_message: data.body,
         last_at: new Date().toISOString(),
-        [unreadCol]: supabase.rpc as unknown as number, // incremented below
       })
       .eq("id", data.conversationId);
 
-    // Increment unread separately (Supabase doesn't support SQL increment in update easily)
-    await supabase
-      .rpc("increment_unread", {
-        conv_id: data.conversationId,
-        col: unreadCol,
-      })
-      .match(() => {
-        // Fallback: just update last message without incrementing (non-critical)
-        supabase
-          .from("conversations")
-          .update({
-            last_message: data.body,
-            last_at: new Date().toISOString(),
-          })
-          .eq("id", data.conversationId);
-      });
+    // 3. Increment the correct unread counter via RPC
+    await supabase.rpc("increment_unread", {
+      conv_id: data.conversationId,
+      col: unreadCol,
+    });
 
     return toMessage(row);
   },
@@ -1088,7 +1081,6 @@ export const MessagesDB = {
       .from("conversations")
       .update({ [col]: 0 })
       .eq("id", conversationId);
-    // Mark individual messages as read
     await supabase
       .from("messages")
       .update({ read: true })
@@ -1104,5 +1096,47 @@ export const MessagesDB = {
       .select(ucol)
       .eq(col, userId);
     return (data ?? []).reduce((s: number, r: any) => s + (r[ucol] ?? 0), 0);
+  },
+
+  /** Supabase Realtime subscription for new messages in a conversation */
+  subscribeToConversation(
+    conversationId: string,
+    onMessage: (msg: Message) => void,
+  ) {
+    return supabase
+      .channel(`conv:${conversationId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => onMessage(toMessage(payload.new)),
+      )
+      .subscribe();
+  },
+
+  /** Realtime subscription for conversation list updates (new messages badge) */
+  subscribeToInbox(
+    userId: string,
+    role: "host" | "guest",
+    onUpdate: (conv: Conversation) => void,
+  ) {
+    const col = role === "host" ? "host_id" : "guest_id";
+    return supabase
+      .channel(`inbox:${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "conversations",
+          filter: `${col}=eq.${userId}`,
+        },
+        (payload) => onUpdate(toConversation(payload.new)),
+      )
+      .subscribe();
   },
 };

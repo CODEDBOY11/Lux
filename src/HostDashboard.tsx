@@ -8,6 +8,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useCallback } from "react";
+import MessagesInbox from "./Components/MessagesInbox";
 import { useNavigate } from "react-router-dom";
 import {
   HomeIcon,
@@ -1673,22 +1674,6 @@ const SettingsSection = () => {
   );
 };
 
-const Messages = () => (
-  <div
-    className="flex-1 flex flex-col items-center justify-center bg-gray-50 p-10 text-center"
-    style={{ animation: "fadeUp 0.3s ease both" }}
-  >
-    <div className="w-16 h-16 rounded-2xl bg-[#C9A96E]/10 border border-[#C9A96E]/20 flex items-center justify-center mb-4">
-      <ChatBubbleLeftRightIcon className="w-7 h-7 text-[#C9A96E]" />
-    </div>
-    <h2 className="text-xl font-bold text-gray-800 mb-2">Messages</h2>
-    <p className="text-gray-400 text-sm max-w-xs">
-      Connect this section to Supabase Realtime, Firebase, or a messaging
-      service like Sendbird.
-    </p>
-  </div>
-);
-
 /* ═══════════════════════════════════════════════════════════
    HOST DASHBOARD HOME
 ═══════════════════════════════════════════════════════════ */
@@ -2119,7 +2104,7 @@ const HostDashboardShell = ({
       case "earnings":
         return <EarningsSection />;
       case "messages":
-        return <Messages />;
+        return <MessagesInbox />;
       case "settings":
         return <SettingsSection />;
       default:
