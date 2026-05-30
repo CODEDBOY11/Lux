@@ -1942,6 +1942,7 @@ export default function BookingPage({
         <ConciergeChat
           hotel={hotel}
           guestName={guestInfo.name || user?.firstName}
+          guestId={user?.id}
           onClose={() => setChatOpen(false)}
         />
       )}
