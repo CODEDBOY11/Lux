@@ -10,6 +10,7 @@
 import { useState, useEffect, useCallback } from "react";
 import MessagesInbox from "./Components/MessagesInbox";
 import { useNavigate } from "react-router-dom";
+import ReviewsSection from "./ReviewSection";
 import {
   HomeIcon,
   BuildingOffice2Icon,
@@ -1267,123 +1268,6 @@ const HostBookings = () => {
 /* ═══════════════════════════════════════════════════════════
    HOST: REVIEWS
 ═══════════════════════════════════════════════════════════ */
-const ReviewsSection = () => {
-  const { user } = useAuth();
-  const [hotels, setHotels] = useState<Hotel[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!user) return;
-    ListingsDB.byHost(user.id)
-      .then((l) => setHotels(l.map(listingToHotel)))
-      .finally(() => setLoading(false));
-  }, [user]);
-
-  const avg = hotels.length
-    ? (hotels.reduce((s, h) => s + h.rating, 0) / hotels.length).toFixed(1)
-    : "—";
-  const totalReviews = hotels.reduce((s, h) => s + h.reviewCount, 0);
-
-  return (
-    <div
-      className="flex-1 overflow-y-auto bg-gray-50 p-6"
-      style={{ animation: "fadeUp 0.3s ease both" }}
-    >
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Reviews</h2>
-        <p className="text-gray-400 text-sm mt-0.5">
-          Ratings across your properties
-        </p>
-      </div>
-      <div className="flex gap-4 flex-wrap mb-6">
-        <StatCard
-          icon={<StarSolid className="w-5 h-5 text-[#C9A96E]" />}
-          label="Avg Rating"
-          value={avg}
-          delay={0}
-        />
-        <StatCard
-          icon={<ChatBubbleLeftRightIcon className="w-5 h-5 text-[#C9A96E]" />}
-          label="Total Reviews"
-          value={totalReviews}
-          delay={60}
-        />
-        <StatCard
-          icon={<BuildingOffice2Icon className="w-5 h-5 text-[#C9A96E]" />}
-          label="Properties Rated"
-          value={hotels.filter((h) => h.reviewCount > 0).length}
-          delay={120}
-        />
-      </div>
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100">
-          <h3 className="font-bold text-gray-900">Property Ratings</h3>
-        </div>
-        {loading ? (
-          <div className="p-6 space-y-3">
-            {[...Array(3)].map((_, i) => (
-              <Sk key={i} h="h-16" />
-            ))}
-          </div>
-        ) : hotels.length === 0 ? (
-          <div className="p-12 text-center">
-            <StarIcon className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-            <p className="text-gray-400 text-sm">No properties yet</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-50">
-            {hotels.map((h, i) => (
-              <div
-                key={h.id}
-                className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50/50 transition-colors"
-                style={{ animation: `fadeUp 0.35s ease ${i * 50}ms both` }}
-              >
-                <div className="w-14 h-12 rounded-xl overflow-hidden shrink-0">
-                  <img
-                    src={
-                      h.thumbnail ||
-                      "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=200"
-                    }
-                    alt={h.name}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src =
-                        "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=200";
-                    }}
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-800 truncate text-sm">
-                    {h.name}
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    {h.city}, {h.country}
-                  </p>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="flex items-center gap-0.5 justify-end mb-0.5">
-                    {[1, 2, 3, 4, 5].map((s) => (
-                      <StarSolid
-                        key={s}
-                        className={`w-3.5 h-3.5 ${s <= Math.round(h.rating) ? "text-[#C9A96E]" : "text-gray-200"}`}
-                      />
-                    ))}
-                  </div>
-                  <p className="text-sm font-bold text-gray-800">
-                    {h.rating > 0 ? h.rating.toFixed(1) : "No rating"}
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    {h.reviewCount} review{h.reviewCount !== 1 ? "s" : ""}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
 
 /* ═══════════════════════════════════════════════════════════
    HOST: EARNINGS
