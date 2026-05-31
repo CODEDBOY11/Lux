@@ -3,8 +3,11 @@ import {
   MagnifyingGlassIcon,
   MapPinIcon,
   XMarkIcon,
+  CalendarDaysIcon,
+  UserGroupIcon,
+  SparklesIcon,
 } from "@heroicons/react/24/outline";
-import { StarIcon } from "@heroicons/react/24/solid";
+import { StarIcon, FireIcon } from "@heroicons/react/24/solid";
 import heroBg from "../assets/hero-bg.png";
 import {
   searchHotels,
@@ -24,61 +27,67 @@ type SearchState = {
 };
 
 /* ─────────────────────────────────────────────────────────
-   Sub-components
+   Hotel Card
 ───────────────────────────────────────────────────────── */
 const HotelCard = ({
   hotel,
   nights,
   onBook,
+  index = 0,
 }: {
   hotel: Hotel;
   nights: number;
   onBook?: (hotel: Hotel) => void;
+  index?: number;
 }) => (
-  <div className="bg-white rounded-2xl overflow-hidden shadow-lg border border-gray-100 flex flex-col group hover:shadow-xl transition-all duration-300">
-    <div className="relative h-52 overflow-hidden">
+  <div
+    className="bg-white rounded-2xl overflow-hidden shadow-lg border border-gray-100 flex flex-col group hover:shadow-2xl hover:-translate-y-1 transition-all duration-300"
+    style={{ animation: `fadeUp 0.5s ease ${index * 60}ms both` }}
+  >
+    <div className="relative h-48 sm:h-52 overflow-hidden">
       <img
         src={hotel.thumbnail}
         alt={hotel.name}
-        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
         onError={(e) => {
           (e.target as HTMLImageElement).src =
             "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400";
         }}
       />
-      <span className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm text-[#C9A96E] text-xs font-semibold px-3 py-1 rounded-full capitalize">
+      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+      <span className="absolute top-3 left-3 bg-black/50 backdrop-blur-md text-[#C9A96E] text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border border-[#C9A96E]/30">
         {hotel.category}
       </span>
       {hotel.featured && (
-        <span className="absolute top-3 right-3 bg-[#C9A96E] text-white text-xs font-semibold px-3 py-1 rounded-full">
-          Featured
+        <span className="absolute top-3 right-3 bg-[#C9A96E] text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full flex items-center gap-1">
+          <FireIcon className="w-2.5 h-2.5" /> Featured
         </span>
+      )}
+      {hotel.rating > 0 && (
+        <div className="absolute bottom-3 left-3 flex items-center gap-1 bg-black/50 backdrop-blur-md px-2.5 py-1 rounded-full">
+          <StarIcon className="w-3 h-3 text-[#C9A96E]" />
+          <span className="text-white text-xs font-bold">{hotel.rating}</span>
+          {hotel.reviewCount > 0 && (
+            <span className="text-white/50 text-[10px]">
+              ({hotel.reviewCount})
+            </span>
+          )}
+        </div>
       )}
     </div>
 
-    <div className="p-5 flex flex-col flex-1">
-      <div className="flex items-start justify-between gap-2 mb-1">
-        <h3 className="font-semibold text-gray-900 text-base leading-tight font-playfair">
-          {hotel.name}
-        </h3>
-        <div className="flex items-center gap-1 shrink-0">
-          <StarIcon className="w-3.5 h-3.5 text-[#C9A96E]" />
-          <span className="text-sm font-semibold text-gray-800">
-            {hotel.rating}
-          </span>
-        </div>
-      </div>
-
+    <div className="p-4 sm:p-5 flex flex-col flex-1">
+      <h3 className="font-['Cormorant_Garamond'] font-semibold text-gray-900 text-base sm:text-lg leading-tight mb-1 line-clamp-1">
+        {hotel.name}
+      </h3>
       <div className="flex items-center gap-1 text-gray-400 mb-3">
-        <MapPinIcon className="w-3.5 h-3.5" />
-        <span className="text-xs">{hotel.location}</span>
+        <MapPinIcon className="w-3.5 h-3.5 text-[#C9A96E] shrink-0" />
+        <span className="text-xs truncate">{hotel.location}</span>
       </div>
-
-      <p className="text-gray-500 text-xs leading-relaxed mb-4 flex-1 line-clamp-2">
+      <p className="text-gray-500 text-xs leading-relaxed mb-3 flex-1 line-clamp-2">
         {hotel.shortDescription}
       </p>
-
-      <div className="flex flex-wrap gap-1.5 mb-4">
+      <div className="flex flex-wrap gap-1 mb-4">
         {hotel.tags.slice(0, 3).map((tag) => (
           <span
             key={tag}
@@ -88,24 +97,24 @@ const HotelCard = ({
           </span>
         ))}
       </div>
-
       <div className="flex items-end justify-between border-t border-gray-100 pt-3">
         <div>
-          <span className="text-xl font-bold text-gray-900">
-            ${hotel.pricePerNight.toLocaleString()}
-          </span>
-          <span className="text-gray-400 text-xs"> / night</span>
+          <div className="flex items-baseline gap-1">
+            <span className="text-xl font-bold text-gray-900">
+              ${hotel.pricePerNight.toLocaleString()}
+            </span>
+            <span className="text-gray-400 text-xs">/ night</span>
+          </div>
           {nights > 0 && (
             <p className="text-xs text-gray-400 mt-0.5">
-              ${(hotel.pricePerNight * nights).toLocaleString()} total ·{" "}
-              {nights} {nights === 1 ? "night" : "nights"}
+              ${(hotel.pricePerNight * nights).toLocaleString()} · {nights}n
             </p>
           )}
         </div>
         <button
           type="button"
           onClick={() => onBook?.(hotel)}
-          className="bg-[#C9A96E] hover:bg-[#b8935a] text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95"
+          className="bg-[#C9A96E] hover:bg-[#b8935a] text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg shadow-[#C9A96E]/30"
         >
           Book Now
         </button>
@@ -114,76 +123,105 @@ const HotelCard = ({
   </div>
 );
 
+/* ─────────────────────────────────────────────────────────
+   Results Panel
+───────────────────────────────────────────────────────── */
 const ResultsPanel = ({
   results,
   nights,
   query,
+  loading,
   onClose,
   onBook,
 }: {
   results: Hotel[];
   nights: number;
   query: string;
+  loading: boolean;
   onClose: () => void;
   onBook?: (hotel: Hotel) => void;
 }) => (
-  <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-6">
+  <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6">
     <div
-      className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+      className="absolute inset-0 bg-black/60 backdrop-blur-sm"
       onClick={onClose}
     />
-    <div className="relative z-10 bg-gray-50 w-full md:max-w-5xl md:rounded-3xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
+    <div
+      className="relative z-10 bg-[#faf9f7] w-full sm:max-w-2xl md:max-w-4xl lg:max-w-6xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden"
+      style={{ maxHeight: "92dvh" }}
+    >
       {/* Header */}
-      <div className="px-6 py-5 bg-white border-b border-gray-100 flex items-center justify-between shrink-0">
+      <div className="px-5 sm:px-6 py-4 sm:py-5 bg-white border-b border-gray-100 flex items-center justify-between shrink-0">
         <div>
-          <h2 className="text-gray-900 font-semibold text-lg font-playfair">
-            {results.length > 0
-              ? `${results.length} stay${results.length !== 1 ? "s" : ""} found`
-              : "No results found"}
+          <h2 className="font-['Cormorant_Garamond'] text-gray-900 font-semibold text-lg sm:text-xl">
+            {loading
+              ? "Searching…"
+              : results.length > 0
+                ? `${results.length} stay${results.length !== 1 ? "s" : ""} found`
+                : "No results found"}
           </h2>
           {query && (
-            <p className="text-gray-400 text-sm mt-0.5">
-              Searching for &ldquo;{query}&rdquo;
+            <p className="text-gray-400 text-xs sm:text-sm mt-0.5">
+              for &ldquo;{query}&rdquo;
             </p>
           )}
         </div>
         <button
           onClick={onClose}
-          className="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
+          className="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors shrink-0"
         >
           <XMarkIcon className="w-4 h-4 text-gray-600" />
         </button>
       </div>
 
       {/* Body */}
-      <div className="overflow-y-auto flex-1 p-6">
-        {results.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-              <MagnifyingGlassIcon className="w-7 h-7 text-gray-400" />
+      <div className="overflow-y-auto flex-1 p-4 sm:p-5 md:p-6">
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+            {[...Array(6)].map((_, i) => (
+              <div
+                key={i}
+                className="bg-white rounded-2xl overflow-hidden border border-gray-100 animate-pulse"
+                style={{ animationDelay: `${i * 60}ms` }}
+              >
+                <div className="h-48 bg-gray-100" />
+                <div className="p-5 space-y-2.5">
+                  <div className="h-4 bg-gray-100 rounded-full w-3/4" />
+                  <div className="h-3 bg-gray-100 rounded-full w-1/2" />
+                  <div className="h-3 bg-gray-100 rounded-full w-full" />
+                  <div className="h-3 bg-gray-100 rounded-full w-2/3" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : results.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 sm:py-24 text-center">
+            <div className="w-16 h-16 bg-[#C9A96E]/10 border border-[#C9A96E]/20 rounded-2xl flex items-center justify-center mb-5">
+              <MagnifyingGlassIcon className="w-7 h-7 text-[#C9A96E]" />
             </div>
-            <h3 className="text-gray-700 font-semibold text-base mb-2">
+            <h3 className="font-['Cormorant_Garamond'] text-gray-700 font-semibold text-xl mb-2">
               No stays matched your search
             </h3>
-            <p className="text-gray-400 text-sm max-w-xs">
+            <p className="text-gray-400 text-sm max-w-xs mb-6">
               Try adjusting your location, dates, or guest count for more
               results.
             </p>
             <button
               onClick={onClose}
-              className="mt-6 text-sm font-semibold text-[#C9A96E] hover:underline"
+              className="bg-[#C9A96E] text-white font-semibold text-sm px-6 py-3 rounded-xl hover:bg-[#b8935a] transition-all"
             >
-              Clear search
+              Clear Search
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {results.map((hotel) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+            {results.map((hotel, i) => (
               <HotelCard
                 key={hotel.id}
                 hotel={hotel}
                 nights={nights}
                 onBook={onBook}
+                index={i}
               />
             ))}
           </div>
@@ -194,7 +232,7 @@ const ResultsPanel = ({
 );
 
 /* ─────────────────────────────────────────────────────────
-   Hero Component
+   HERO
 ───────────────────────────────────────────────────────── */
 const Hero = ({
   onBook,
@@ -216,78 +254,108 @@ const Hero = ({
   const [searchResults, setSearchResults] = useState<Hotel[] | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [featuredHotels, setFeaturedHotels] = useState<Hotel[]>([]);
+  const [] = useState(false);
   const suggestionRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  /* Calculate nights between check-in and check-out */
   const nights = (() => {
     if (!form.checkIn || !form.checkOut) return 0;
     const diff =
       new Date(form.checkOut).getTime() - new Date(form.checkIn).getTime();
-    return Math.max(0, Math.round(diff / (1000 * 60 * 60 * 24)));
+    return Math.max(0, Math.round(diff / 86400000));
   })();
 
-  /* Auto-suggest on query change */
+  /* Load featured hotels from DB on mount */
   useEffect(() => {
-    const fetchSuggestions = async () => {
-      if (form.query.length >= 1) {
-        const s = await getLocationSuggestions(form.query);
-        setSuggestions(s);
-        setShowSuggestions(s.length > 0);
-      } else {
-        setSuggestions([]);
-        setShowSuggestions(false);
-      }
-    };
+    searchHotels({ query: "" })
+      .then((hotels) =>
+        setFeaturedHotels(hotels.filter((h) => h.featured).slice(0, 3)),
+      )
+      .catch(console.error);
+  }, []);
 
-    fetchSuggestions();
+  /* Auto-suggest */
+  useEffect(() => {
+    if (form.query.length < 1) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    getLocationSuggestions(form.query).then((s) => {
+      setSuggestions(s);
+      setShowSuggestions(s.length > 0);
+    });
   }, [form.query]);
 
   /* Close suggestions on outside click */
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    const h = (e: MouseEvent) => {
       if (
         suggestionRef.current &&
         !suggestionRef.current.contains(e.target as Node)
-      ) {
+      )
         setShowSuggestions(false);
-      }
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  const handleSearch = useCallback(() => {
+  const handleSearch = useCallback(async () => {
     setIsSearching(true);
-    setTimeout(async () => {
+    setHasSearched(true);
+    setSearchResults(null); // show loading skeletons
+    try {
       const params: SearchParams = {
         query: form.query.trim() || undefined,
         checkIn: form.checkIn || undefined,
         checkOut: form.checkOut || undefined,
         guests: form.guests ? parseInt(form.guests) : undefined,
       };
-      const results = searchHotels(params);
-      setSearchResults(await results);
-      setHasSearched(true);
+      const results = await searchHotels(params);
+      setSearchResults(results);
+    } catch (e) {
+      console.error("Search failed:", e);
+      setSearchResults([]);
+    } finally {
       setIsSearching(false);
       setShowSuggestions(false);
-    }, 350);
+    }
   }, [form]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") handleSearch();
+  const quickSearch = async (chip: string) => {
+    setForm((f) => ({ ...f, query: chip }));
+    setHasSearched(true);
+    setSearchResults(null);
+    setIsSearching(true);
+    try {
+      const results = await searchHotels({ query: chip });
+      setSearchResults(results);
+    } catch {
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   const today = new Date().toISOString().split("T")[0];
 
   return (
     <>
-      {/* ── Results overlay ── */}
-      {hasSearched && searchResults !== null && (
+      <style>{`
+        @keyframes fadeUp { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+        @keyframes shimmer { from { background-position:-400px 0; } to { background-position:400px 0; } }
+        .search-field:focus-within { border-color: rgba(201,169,110,0.6) !important; }
+      `}</style>
+
+      {/* Results overlay */}
+      {hasSearched && (
         <ResultsPanel
-          results={searchResults}
+          results={searchResults ?? []}
           nights={nights}
           query={form.query}
+          loading={isSearching}
           onClose={() => {
             setSearchResults(null);
             setHasSearched(false);
@@ -296,83 +364,128 @@ const Hero = ({
         />
       )}
 
-      {/* ── Hero ── */}
-      <section className="relative h-screen w-full font-sans overflow-hidden">
+      <section className="relative min-h-screen w-full font-sans overflow-hidden">
         {/* Background */}
         <img
           src={heroBg}
-          alt="Luxury Stay"
+          alt=""
           className="absolute inset-0 w-full h-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-black/30 to-black/65" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/35 to-black/70" />
+        {/* Subtle gold radial glow */}
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage:
+              "radial-gradient(ellipse 70% 50% at 50% 30%, rgba(201,169,110,0.12) 0%, transparent 70%)",
+          }}
+        />
 
-        <div className="relative z-10 flex flex-col h-full">
-          {/* ── Nav ── */}
-          <nav className="flex items-center justify-between px-8 md:px-16 py-6 text-white">
-            <div className="flex items-center gap-2.5 font-semibold text-lg tracking-wide select-none">
-              <div className="w-5 h-5 bg-[#C9A96E] rounded-sm" />
-              LuxStay
+        <div className="relative z-10 flex flex-col min-h-screen">
+          {/* ── NAV ── */}
+          <nav className="flex items-center justify-between px-5 sm:px-8 md:px-12 lg:px-16 py-5 sm:py-6">
+            {/* Logo */}
+            <div className="flex items-center gap-2 select-none cursor-pointer">
+              <div className="w-4 h-4 sm:w-5 sm:h-5 bg-[#C9A96E] rotate-45 rounded-sm" />
+              <span className="font-['Cormorant_Garamond'] text-white text-lg sm:text-xl tracking-wide font-semibold">
+                LuxStay
+              </span>
             </div>
 
-            <div className="hidden md:flex items-center gap-10 text-sm">
+            {/* Desktop nav */}
+            <div className="hidden md:flex items-center gap-8 text-sm">
               <a
                 href="#"
-                className="text-white/80 hover:text-[#C9A96E] transition-colors duration-200"
+                className="text-white/70 hover:text-[#C9A96E] transition-colors font-medium"
               >
                 Explore
               </a>
               <button
                 type="button"
                 onClick={onLogin}
-                className="text-white/80 hover:text-[#C9A96E] transition-colors duration-200"
+                className="text-white/70 hover:text-[#C9A96E] transition-colors font-medium"
               >
-                Login
+                Sign In
               </button>
               <button
                 type="button"
                 onClick={onSignup}
-                className="bg-[#C9A96E] text-white px-5 py-2.5 rounded-full font-medium hover:bg-[#b8935a] hover:scale-105 transition-all duration-200 shadow-lg shadow-[#C9A96E]/30"
+                className="bg-[#C9A96E] text-white px-5 py-2.5 rounded-full font-semibold hover:bg-[#b8935a] hover:scale-105 transition-all shadow-lg shadow-[#C9A96E]/30 text-sm"
               >
-                Sign up
+                Get Started
               </button>
             </div>
 
-            {/* Mobile CTA */}
-            <button
-              type="button"
-              onClick={onSignup}
-              className="md:hidden bg-[#C9A96E] text-white px-4 py-2 rounded-full text-sm font-medium"
-            >
-              Sign up
-            </button>
+            {/* Mobile nav */}
+            <div className="flex md:hidden items-center gap-2">
+              <button
+                type="button"
+                onClick={onLogin}
+                className="text-white/70 text-sm font-medium px-3 py-1.5"
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={onSignup}
+                className="bg-[#C9A96E] text-white px-4 py-2 rounded-full text-sm font-semibold"
+              >
+                Join
+              </button>
+            </div>
           </nav>
 
-          {/* ── Hero content ── */}
-          <div className="flex flex-col items-center justify-center text-center flex-1 px-4 md:px-6 -mt-8">
-            <p className="text-[#C9A96E] text-sm font-medium tracking-[0.2em] uppercase mb-4 opacity-90">
-              Curated Luxury Escapes
-            </p>
+          {/* ── HERO CONTENT ── */}
+          <div
+            className="flex flex-col items-center justify-center text-center flex-1 px-4 sm:px-6 md:px-8 pb-8 pt-4 sm:pt-0"
+            style={{ animation: "fadeUp 0.6s ease both" }}
+          >
+            {/* Eyebrow */}
+            <div
+              className="flex items-center gap-2 mb-4 sm:mb-5"
+              style={{ animation: "fadeUp 0.5s ease 50ms both" }}
+            >
+              <div className="h-px w-8 bg-[#C9A96E]/60" />
+              <p className="text-[#C9A96E] text-[11px] sm:text-xs font-bold tracking-[0.25em] uppercase">
+                Curated Luxury Escapes
+              </p>
+              <div className="h-px w-8 bg-[#C9A96E]/60" />
+            </div>
 
-            <h1 className="text-white text-4xl md:text-6xl lg:text-7xl font-semibold leading-[1.1] max-w-3xl font-playfair">
-              Find Your <em className="not-italic text-[#C9A96E]">Perfect</em>{" "}
-              Stay
+            {/* Headline */}
+            <h1
+              className="text-white font-['Cormorant_Garamond'] leading-[1.05] mb-4 sm:mb-5"
+              style={{
+                fontSize: "clamp(38px, 7vw, 84px)",
+                animation: "fadeUp 0.6s ease 100ms both",
+              }}
+            >
+              Find Your <em className="not-italic text-[#C9A96E]">Perfect</em>
+              <br className="hidden sm:block" /> Stay
             </h1>
 
-            <p className="mt-5 mb-12 text-white/70 text-sm md:text-base max-w-md leading-relaxed">
+            <p
+              className="text-white/65 text-sm sm:text-base max-w-sm sm:max-w-md leading-relaxed mb-8 sm:mb-10"
+              style={{ animation: "fadeUp 0.6s ease 150ms both" }}
+            >
               Handpicked luxury properties designed for those who demand
               comfort, elegance, and the extraordinary.
             </p>
 
-            {/* ── Search bar ── */}
-            <div className="w-full max-w-4xl">
-              <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl shadow-black/30 border border-white/20 flex flex-col md:flex-row items-stretch md:items-center gap-0">
+            {/* ── SEARCH BAR ── */}
+            <div
+              className="w-full max-w-xs sm:max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl"
+              style={{ animation: "fadeUp 0.6s ease 200ms both" }}
+            >
+              {/* Desktop: single row */}
+              <div className="hidden sm:flex bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl shadow-black/30 border border-white/20 overflow-visible">
                 {/* Location */}
                 <div
                   ref={suggestionRef}
-                  className="relative flex-[2] px-5 py-4 border-b md:border-b-0 md:border-r border-gray-100"
+                  className="relative flex-[2] px-5 py-4 border-r border-gray-100 search-field"
                 >
-                  <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
-                    Location
+                  <label className="block text-[9px] font-bold text-gray-400 uppercase tracking-[0.18em] mb-1.5">
+                    Where to?
                   </label>
                   <div className="flex items-center gap-2">
                     <MapPinIcon className="w-4 h-4 text-[#C9A96E] shrink-0" />
@@ -383,27 +496,25 @@ const Hero = ({
                       onChange={(e) =>
                         setForm((f) => ({ ...f, query: e.target.value }))
                       }
-                      onKeyDown={handleKeyDown}
+                      onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                       onFocus={() =>
                         suggestions.length > 0 && setShowSuggestions(true)
                       }
-                      placeholder="Where to?"
+                      placeholder="City, country, or style…"
                       className="w-full text-sm font-medium text-gray-800 placeholder:text-gray-400 outline-none bg-transparent"
                       autoComplete="off"
                     />
                     {form.query && (
                       <button
                         onClick={() => setForm((f) => ({ ...f, query: "" }))}
-                        className="text-gray-300 hover:text-gray-500"
                       >
-                        <XMarkIcon className="w-3.5 h-3.5" />
+                        <XMarkIcon className="w-3.5 h-3.5 text-gray-300 hover:text-gray-500" />
                       </button>
                     )}
                   </div>
-
-                  {/* Suggestions dropdown */}
+                  {/* Suggestions */}
                   {showSuggestions && suggestions.length > 0 && (
-                    <div className="absolute top-full left-0 mt-2 w-full bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-20">
+                    <div className="absolute top-full left-0 mt-2 w-full bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-30">
                       {suggestions.map((s) => (
                         <button
                           key={s}
@@ -411,7 +522,7 @@ const Hero = ({
                             setForm((f) => ({ ...f, query: s }));
                             setShowSuggestions(false);
                           }}
-                          className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-[#C9A96E]/8 flex items-center gap-3 transition-colors border-b border-gray-50 last:border-0"
+                          className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-[#C9A96E]/08 flex items-center gap-3 transition-colors border-b border-gray-50 last:border-0"
                         >
                           <MapPinIcon className="w-3.5 h-3.5 text-[#C9A96E] shrink-0" />
                           {s}
@@ -422,35 +533,35 @@ const Hero = ({
                 </div>
 
                 {/* Check-in */}
-                <div className="flex-1 px-5 py-4 border-b md:border-b-0 md:border-r border-gray-100">
-                  <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
-                    Check-in
+                <div className="flex-1 px-4 py-4 border-r border-gray-100 search-field">
+                  <label className="block text-[9px] font-bold text-gray-400 uppercase tracking-[0.18em] mb-1.5 items-center gap-1">
+                    <CalendarDaysIcon className="w-3 h-3" /> Check-in
                   </label>
                   <input
                     type="date"
                     min={today}
                     value={form.checkIn}
-                    onChange={(e) => {
+                    onChange={(e) =>
                       setForm((f) => ({
                         ...f,
                         checkIn: e.target.value,
-                        // Clear check-out if it's before new check-in
                         checkOut:
                           f.checkOut && f.checkOut <= e.target.value
                             ? ""
                             : f.checkOut,
-                      }));
-                    }}
+                      }))
+                    }
                     className="w-full text-sm font-medium text-gray-800 outline-none bg-transparent cursor-pointer"
                   />
                 </div>
 
                 {/* Check-out */}
-                <div className="flex-1 px-5 py-4 border-b md:border-b-0 md:border-r border-gray-100">
-                  <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
+                <div className="flex-1 px-4 py-4 border-r border-gray-100 search-field">
+                  <label className="block text-[9px] font-bold text-gray-400 uppercase tracking-[0.18em] mb-1.5 items-center gap-1">
+                    <CalendarDaysIcon className="w-3 h-3" />
                     Check-out
                     {nights > 0 && (
-                      <span className="ml-2 text-[#C9A96E] normal-case font-medium">
+                      <span className="text-[#C9A96E] ml-1 normal-case font-semibold">
                         {nights}n
                       </span>
                     )}
@@ -467,33 +578,33 @@ const Hero = ({
                 </div>
 
                 {/* Guests */}
-                <div className="flex-1 px-5 py-4 border-b md:border-b-0 border-gray-100">
-                  <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
-                    Guests
+                <div className="w-28 px-4 py-4 border-r border-gray-100 search-field">
+                  <label className="block text-[9px] font-bold text-gray-400 uppercase tracking-[0.18em] mb-1.5 items-center gap-1">
+                    <UserGroupIcon className="w-3 h-3" /> Guests
                   </label>
                   <input
                     type="number"
                     min="1"
-                    max="12"
+                    max="20"
                     value={form.guests}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, guests: e.target.value }))
                     }
-                    onKeyDown={handleKeyDown}
-                    placeholder="Add guests"
+                    onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                    placeholder="Any"
                     className="w-full text-sm font-medium text-gray-800 placeholder:text-gray-400 outline-none bg-transparent"
                   />
                 </div>
 
                 {/* Search button */}
-                <div className="px-3 py-3 md:pr-3">
+                <div className="px-3 py-3 flex items-center">
                   <button
                     onClick={handleSearch}
                     disabled={isSearching}
-                    className="w-full md:w-auto bg-[#C9A96E] disabled:opacity-70 text-white px-6 py-3.5 rounded-xl font-medium text-sm flex items-center justify-center gap-2.5 hover:bg-[#b8935a] hover:scale-105 active:scale-95 transition-all duration-200 shadow-lg shadow-[#C9A96E]/40 whitespace-nowrap"
+                    className="bg-[#C9A96E] disabled:opacity-70 text-white px-5 py-3.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-[#b8935a] hover:scale-105 active:scale-95 transition-all shadow-lg shadow-[#C9A96E]/40 whitespace-nowrap"
                   >
                     {isSearching ? (
-                      <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                     ) : (
                       <MagnifyingGlassIcon className="w-4 h-4" />
                     )}
@@ -502,21 +613,145 @@ const Hero = ({
                 </div>
               </div>
 
-              {/* Quick-filter chips */}
-              <div className="flex items-center gap-2.5 mt-4 justify-center flex-wrap">
+              {/* Mobile: stacked card */}
+              <div className="sm:hidden bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl shadow-black/30 border border-white/20 overflow-hidden">
+                {/* Location row */}
+                <div
+                  ref={suggestionRef}
+                  className="relative px-4 pt-4 pb-3 border-b border-gray-100"
+                >
+                  <label className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">
+                    Where to?
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <MapPinIcon className="w-4 h-4 text-[#C9A96E] shrink-0" />
+                    <input
+                      type="text"
+                      value={form.query}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, query: e.target.value }))
+                      }
+                      onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                      onFocus={() =>
+                        suggestions.length > 0 && setShowSuggestions(true)
+                      }
+                      placeholder="City, country, or style…"
+                      className="flex-1 text-sm font-medium text-gray-800 placeholder:text-gray-400 outline-none bg-transparent"
+                      autoComplete="off"
+                    />
+                    {form.query && (
+                      <button
+                        onClick={() => setForm((f) => ({ ...f, query: "" }))}
+                      >
+                        <XMarkIcon className="w-4 h-4 text-gray-300" />
+                      </button>
+                    )}
+                  </div>
+                  {showSuggestions && suggestions.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-30">
+                      {suggestions.map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => {
+                            setForm((f) => ({ ...f, query: s }));
+                            setShowSuggestions(false);
+                          }}
+                          className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-[#C9A96E]/08 flex items-center gap-3 border-b border-gray-50 last:border-0"
+                        >
+                          <MapPinIcon className="w-3.5 h-3.5 text-[#C9A96E] shrink-0" />
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Date + Guests row */}
+                <div className="grid grid-cols-3 divide-x divide-gray-100">
+                  <div className="px-3 py-3">
+                    <label className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">
+                      Check-in
+                    </label>
+                    <input
+                      type="date"
+                      min={today}
+                      value={form.checkIn}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          checkIn: e.target.value,
+                          checkOut:
+                            f.checkOut && f.checkOut <= e.target.value
+                              ? ""
+                              : f.checkOut,
+                        }))
+                      }
+                      className="w-full text-xs font-medium text-gray-800 outline-none bg-transparent cursor-pointer"
+                    />
+                  </div>
+                  <div className="px-3 py-3">
+                    <label className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">
+                      Check-out
+                      {nights > 0 && (
+                        <span className="text-[#C9A96E] ml-1">·{nights}n</span>
+                      )}
+                    </label>
+                    <input
+                      type="date"
+                      min={form.checkIn || today}
+                      value={form.checkOut}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, checkOut: e.target.value }))
+                      }
+                      className="w-full text-xs font-medium text-gray-800 outline-none bg-transparent cursor-pointer"
+                    />
+                  </div>
+                  <div className="px-3 py-3">
+                    <label className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">
+                      Guests
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="20"
+                      value={form.guests}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, guests: e.target.value }))
+                      }
+                      placeholder="Any"
+                      className="w-full text-xs font-medium text-gray-800 placeholder:text-gray-400 outline-none bg-transparent"
+                    />
+                  </div>
+                </div>
+
+                {/* Search button */}
+                <div className="px-4 pb-4 pt-3 border-t border-gray-100">
+                  <button
+                    onClick={handleSearch}
+                    disabled={isSearching}
+                    className="w-full bg-[#C9A96E] disabled:opacity-70 text-white py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-[#b8935a] active:scale-95 transition-all shadow-lg shadow-[#C9A96E]/30"
+                  >
+                    {isSearching ? (
+                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <MagnifyingGlassIcon className="w-4 h-4" />
+                    )}
+                    {isSearching ? "Searching…" : "Search Luxury Stays"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick chips */}
+              <div
+                className="flex items-center gap-2 mt-4 justify-center flex-wrap"
+                style={{ animation: "fadeUp 0.6s ease 300ms both" }}
+              >
                 {["Paris", "Bali", "Maldives", "Safari", "Overwater"].map(
                   (chip) => (
                     <button
                       key={chip}
-                      onClick={() => {
-                        setForm((f) => ({ ...f, query: chip }));
-                        setTimeout(async () => {
-                          const params: SearchParams = { query: chip };
-                          setSearchResults(await searchHotels(params));
-                          setHasSearched(true);
-                        }, 100);
-                      }}
-                      className="bg-white/10 hover:bg-white/20 text-white/80 hover:text-white text-xs px-4 py-1.5 rounded-full border border-white/20 transition-all duration-200 backdrop-blur-sm hover:border-white/40"
+                      onClick={() => quickSearch(chip)}
+                      className="bg-white/10 hover:bg-white/20 text-white/80 hover:text-white text-xs px-3.5 py-1.5 rounded-full border border-white/20 transition-all backdrop-blur-sm hover:border-[#C9A96E]/50"
                     >
                       {chip}
                     </button>
@@ -524,24 +759,93 @@ const Hero = ({
                 )}
               </div>
             </div>
+
+            {/* ── FEATURED PROPERTIES (loaded from DB) ── */}
+            {featuredHotels.length > 0 && (
+              <div
+                className="w-full max-w-xs sm:max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl mt-10 sm:mt-12"
+                style={{ animation: "fadeUp 0.6s ease 400ms both" }}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <SparklesIcon className="w-4 h-4 text-[#C9A96E]" />
+                    <p className="text-white/80 text-xs sm:text-sm font-semibold tracking-wide">
+                      Featured Properties
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => quickSearch("")}
+                    className="text-[#C9A96E] text-xs font-semibold hover:underline"
+                  >
+                    View all →
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                  {featuredHotels.map((hotel, i) => (
+                    <button
+                      key={hotel.id}
+                      onClick={() => onBook?.(hotel)}
+                      className="group relative rounded-xl overflow-hidden text-left bg-black/30 backdrop-blur-sm border border-white/10 hover:border-[#C9A96E]/40 transition-all"
+                      style={{
+                        animation: `fadeUp 0.5s ease ${500 + i * 80}ms both`,
+                      }}
+                    >
+                      <div className="relative h-32 sm:h-36 overflow-hidden">
+                        <img
+                          src={hotel.thumbnail}
+                          alt={hotel.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-80 group-hover:opacity-100"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src =
+                              "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400";
+                          }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                        <div className="absolute bottom-0 left-0 right-0 p-3">
+                          <p className="font-['Cormorant_Garamond'] text-white font-semibold text-sm sm:text-base leading-tight line-clamp-1">
+                            {hotel.name}
+                          </p>
+                          <div className="flex items-center justify-between mt-1">
+                            <div className="flex items-center gap-1">
+                              <MapPinIcon className="w-3 h-3 text-[#C9A96E]" />
+                              <span className="text-white/60 text-[10px] truncate max-w-[100px]">
+                                {hotel.city}
+                              </span>
+                            </div>
+                            <span className="text-[#C9A96E] text-xs font-bold">
+                              ${hotel.pricePerNight.toLocaleString()}
+                              <span className="text-white/40 font-normal">
+                                /n
+                              </span>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* ── Bottom stats strip ── */}
-          <div className="flex items-center justify-center gap-8 md:gap-16 pb-8 text-white/60 text-xs">
-            <div className="flex flex-col items-center gap-0.5">
-              <span className="text-white font-semibold text-sm">12+</span>
-              <span>Curated Properties</span>
-            </div>
-            <div className="w-px h-6 bg-white/20" />
-            <div className="flex flex-col items-center gap-0.5">
-              <span className="text-white font-semibold text-sm">4.9★</span>
-              <span>Average Rating</span>
-            </div>
-            <div className="w-px h-6 bg-white/20" />
-            <div className="flex flex-col items-center gap-0.5">
-              <span className="text-white font-semibold text-sm">24/7</span>
-              <span>Concierge Support</span>
-            </div>
+          {/* ── BOTTOM STATS ── */}
+          <div
+            className="flex items-center justify-center gap-6 sm:gap-10 md:gap-16 pb-6 sm:pb-8 pt-4 text-white/50 text-xs px-4"
+            style={{ animation: "fadeUp 0.6s ease 500ms both" }}
+          >
+            {[
+              { value: "500+", label: "Properties" },
+              { value: "4.9★", label: "Avg Rating" },
+              { value: "24/7", label: "Concierge" },
+              { value: "50+", label: "Countries" },
+            ].map(({ value, label }) => (
+              <div key={label} className="flex flex-col items-center gap-0.5">
+                <span className="text-white font-semibold text-sm sm:text-base">
+                  {value}
+                </span>
+                <span className="text-[10px] sm:text-xs">{label}</span>
+              </div>
+            ))}
           </div>
         </div>
       </section>

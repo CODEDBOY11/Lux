@@ -1,11 +1,3 @@
-/**
- * pages/GuestDashboard.tsx
- *
- * Upgraded Guest Dashboard — luxury editorial aesthetic.
- * Dark parchment + gold palette, Cormorant Garamond headlines,
- * card-based layout, animated counters, full Supabase DB connection.
- */
-
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -22,6 +14,7 @@ import {
   BanknotesIcon,
   SparklesIcon,
   ChevronRightIcon,
+  ChatBubbleLeftRightIcon,
 } from "@heroicons/react/24/outline";
 import {
   HeartIcon as HeartSolid,
@@ -31,11 +24,13 @@ import { useAuth } from "./AuthContext";
 import {
   BookingsDB,
   ListingsDB,
+  MessagesDB,
   listingToHotel,
   type Booking,
   type Hotel,
   type Listing,
 } from "./index";
+import MessagesInbox from "./Components/MessagesInbox";
 
 /* ─────────────────────────────────────────────────────────
    HELPERS
@@ -145,19 +140,16 @@ const StatCard = ({
     className="relative bg-[#1a1610] border border-[rgba(245,240,232,0.07)] rounded-2xl p-5 overflow-hidden group hover:border-[rgba(201,169,110,0.2)] transition-all duration-300"
     style={{ animation: `fadeUp 0.5s ease ${delay ?? 0}ms both` }}
   >
-    {/* Glow orb */}
     <div
       className="absolute -top-6 -right-6 w-24 h-24 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-2xl pointer-events-none"
       style={{ background: accent }}
     />
-
     <div
       className="w-9 h-9 rounded-xl flex items-center justify-center mb-4"
       style={{ background: `${accent}18`, border: `1px solid ${accent}28` }}
     >
       {icon}
     </div>
-
     <p className="font-['Cormorant_Garamond'] text-3xl font-bold text-[#f5f0e8] leading-none">
       {typeof value === "number" ? <Counter target={value} /> : value}
     </p>
@@ -173,7 +165,7 @@ const StatCard = ({
 );
 
 /* ─────────────────────────────────────────────────────────
-   UPCOMING CARD (big visual card for next trip)
+   UPCOMING CARD
 ───────────────────────────────────────────────────────── */
 const UpcomingCard = ({
   booking,
@@ -201,12 +193,9 @@ const UpcomingCard = ({
         }}
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-
-      {/* Days pill */}
       <div className="absolute top-4 right-4 bg-[#C9A96E] text-[#0e0d0b] text-[11px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full shadow-lg">
         {days === 0 ? "Today!" : days === 1 ? "Tomorrow" : `${days} days away`}
       </div>
-
       <div className="absolute bottom-0 left-0 right-0 p-5">
         <div className="flex items-end justify-between">
           <div>
@@ -247,14 +236,15 @@ const UpcomingCard = ({
 };
 
 /* ─────────────────────────────────────────────────────────
-   SIDEBAR
+   SIDEBAR  — "messages" added to NAV
 ───────────────────────────────────────────────────────── */
-type Tab = "overview" | "bookings" | "wishlist" | "profile";
+type Tab = "overview" | "bookings" | "wishlist" | "messages" | "profile";
 
 const NAV: { key: Tab; label: string; icon: React.ElementType }[] = [
   { key: "overview", label: "Overview", icon: SparklesIcon },
   { key: "bookings", label: "My Bookings", icon: CalendarDaysIcon },
   { key: "wishlist", label: "Wishlist", icon: HeartIcon },
+  { key: "messages", label: "Messages", icon: ChatBubbleLeftRightIcon },
   { key: "profile", label: "Profile", icon: UserIcon },
 ];
 
@@ -264,12 +254,14 @@ const Sidebar = ({
   onLogout,
   onClose,
   mobile,
+  unreadCount,
 }: {
   tab: Tab;
   onTab: (t: Tab) => void;
   onLogout: () => void;
   onClose?: () => void;
   mobile?: boolean;
+  unreadCount: number;
 }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -281,10 +273,7 @@ const Sidebar = ({
           "linear-gradient(180deg,#120d08 0%,#1e1408 55%,#120d08 100%)",
       }}
     >
-      {/* Top gold accent */}
       <div className="h-px bg-gradient-to-r from-transparent via-[#C9A96E] to-transparent" />
-
-      {/* Subtle texture */}
       <div
         className="absolute inset-0 opacity-[0.03] pointer-events-none"
         style={{
@@ -335,6 +324,7 @@ const Sidebar = ({
         </p>
         {NAV.map(({ key, label, icon: Icon }) => {
           const isActive = tab === key;
+          const showBadge = key === "messages" && unreadCount > 0;
           return (
             <button
               key={key}
@@ -350,7 +340,12 @@ const Sidebar = ({
               }
             >
               <Icon style={{ width: 16, height: 16 }} className="shrink-0" />
-              {label}
+              <span className="flex-1 text-left">{label}</span>
+              {showBadge && (
+                <span className="bg-[#C9A96E] text-[#0e0d0b] text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center shrink-0">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
             </button>
           );
         })}
@@ -412,7 +407,7 @@ const Sk = ({
 );
 
 /* ═══════════════════════════════════════════════════════════
-   OVERVIEW TAB
+   OVERVIEW TAB  — unchanged
 ═══════════════════════════════════════════════════════════ */
 const Overview = ({
   bookings,
@@ -682,7 +677,7 @@ const Overview = ({
 };
 
 /* ═══════════════════════════════════════════════════════════
-   BOOKINGS TAB
+   BOOKINGS TAB  — unchanged
 ═══════════════════════════════════════════════════════════ */
 const BookingsTab = ({
   bookings,
@@ -710,8 +705,6 @@ const BookingsTab = ({
           {bookings.length} total reservation{bookings.length !== 1 ? "s" : ""}
         </p>
       </div>
-
-      {/* Filter pills */}
       <div className="flex gap-2 mb-5">
         {(["all", "upcoming", "past"] as const).map((f) => (
           <button
@@ -729,7 +722,6 @@ const BookingsTab = ({
           </button>
         ))}
       </div>
-
       {loading ? (
         <div className="space-y-3">
           {[...Array(4)].map((_, i) => (
@@ -807,7 +799,7 @@ const BookingsTab = ({
 };
 
 /* ═══════════════════════════════════════════════════════════
-   WISHLIST TAB
+   WISHLIST TAB  — unchanged
 ═══════════════════════════════════════════════════════════ */
 const WishlistTab = ({
   wishlist,
@@ -829,7 +821,6 @@ const WishlistTab = ({
         {wishlist.length} saved propert{wishlist.length !== 1 ? "ies" : "y"}
       </p>
     </div>
-
     {loading ? (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         {[...Array(3)].map((_, i) => (
@@ -922,7 +913,7 @@ const WishlistTab = ({
 );
 
 /* ═══════════════════════════════════════════════════════════
-   PROFILE TAB
+   PROFILE TAB  — unchanged
 ═══════════════════════════════════════════════════════════ */
 const ProfileTab = ({
   bookings,
@@ -953,7 +944,6 @@ const ProfileTab = ({
     "w-full bg-[#252220] border border-[rgba(245,240,232,0.1)] rounded-xl px-4 py-2.5 text-sm text-[#f5f0e8] placeholder:text-[rgba(245,240,232,0.2)] outline-none focus:border-[#C9A96E] focus:ring-2 focus:ring-[#C9A96E]/10 transition-all";
   const lbl =
     "block text-[10px] font-bold uppercase tracking-[0.12em] text-[rgba(245,240,232,0.4)] mb-1.5";
-
   const nights = bookings
     .filter((b) => b.status === "confirmed")
     .reduce((s, b) => s + b.nights, 0);
@@ -971,11 +961,8 @@ const ProfileTab = ({
           Your guest account details and travel stats
         </p>
       </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
-        {/* Edit form */}
         <div className="bg-[#1a1610] border border-[rgba(245,240,232,0.07)] rounded-2xl p-6">
-          {/* Avatar block */}
           <div className="flex items-center gap-4 mb-7 pb-6 border-b border-[rgba(245,240,232,0.06)]">
             <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#C9A96E] to-[#8a6030] flex items-center justify-center text-white font-bold text-2xl shadow-lg shrink-0">
               {user?.avatar ?? user?.firstName?.[0] ?? "?"}
@@ -997,7 +984,6 @@ const ProfileTab = ({
               </p>
             </div>
           </div>
-
           <h3 className="text-sm font-bold text-[rgba(245,240,232,0.6)] uppercase tracking-wider mb-5">
             Edit Profile
           </h3>
@@ -1055,7 +1041,6 @@ const ProfileTab = ({
               />
             </div>
           </div>
-
           <button
             onClick={save}
             disabled={saving}
@@ -1073,10 +1058,7 @@ const ProfileTab = ({
             )}
           </button>
         </div>
-
-        {/* Stats panel */}
         <div className="space-y-4">
-          {/* Travel stats */}
           <div className="bg-[#1a1610] border border-[rgba(245,240,232,0.07)] rounded-2xl p-5">
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[rgba(245,240,232,0.3)] mb-4">
               Travel Stats
@@ -1106,8 +1088,6 @@ const ProfileTab = ({
               </div>
             ))}
           </div>
-
-          {/* Account details */}
           <div className="bg-[#1a1610] border border-[rgba(245,240,232,0.07)] rounded-2xl p-5">
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[rgba(245,240,232,0.3)] mb-4">
               Account Details
@@ -1159,10 +1139,10 @@ export default function GuestDashboard({
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("overview");
   const [mobileOpen, setMobileOpen] = useState(false);
-
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [wishlist, setWishlist] = useState<Hotel[]>([]);
   const [loading, setLoading] = useState(true);
+  const [unreadMessages, setUnreadMessages] = useState(0);
 
   useEffect(() => {
     if (!user) return;
@@ -1184,6 +1164,18 @@ export default function GuestDashboard({
       .finally(() => setLoading(false));
   }, [user]);
 
+  /* Poll unread message count for the badge */
+  useEffect(() => {
+    if (!user) return;
+    const check = () =>
+      MessagesDB.totalUnread(user.id, "guest")
+        .then(setUnreadMessages)
+        .catch(() => {});
+    check();
+    const interval = setInterval(check, 30000); // refresh every 30s
+    return () => clearInterval(interval);
+  }, [user]);
+
   const handleLogout = useCallback(async () => {
     await logout();
     if (onLogout) onLogout();
@@ -1191,13 +1183,15 @@ export default function GuestDashboard({
   }, [logout, navigate, onLogout]);
 
   const removeFromWishlist = useCallback(async (id: string) => {
-    // Optimistic update
     setWishlist((prev) => prev.filter((h) => h.id !== id));
   }, []);
 
   if (!user) return null;
 
   const greeting_ = greeting();
+
+  /* Messages tab fills the entire main area — no padding wrapper */
+  const isMessages = tab === "messages";
 
   return (
     <div
@@ -1227,12 +1221,18 @@ export default function GuestDashboard({
           onLogout={handleLogout}
           onClose={() => setMobileOpen(false)}
           mobile
+          unreadCount={unreadMessages}
         />
       </div>
 
       {/* Desktop sidebar */}
       <div className="hidden md:flex shrink-0">
-        <Sidebar tab={tab} onTab={setTab} onLogout={handleLogout} />
+        <Sidebar
+          tab={tab}
+          onTab={setTab}
+          onLogout={handleLogout}
+          unreadCount={unreadMessages}
+        />
       </div>
 
       {/* Main content */}
@@ -1255,9 +1255,7 @@ export default function GuestDashboard({
               </p>
             </div>
           </div>
-
           <div className="flex items-center gap-2.5">
-            {/* Search bar — desktop */}
             <div className="hidden lg:flex items-center gap-2 bg-[rgba(245,240,232,0.05)] border border-[rgba(245,240,232,0.08)] rounded-xl px-3 py-2 w-48">
               <MagnifyingGlassIcon className="w-3.5 h-3.5 text-[rgba(245,240,232,0.3)] shrink-0" />
               <input
@@ -1266,15 +1264,25 @@ export default function GuestDashboard({
                 style={{ fontFamily: "system-ui" }}
               />
             </div>
-
-            {/* Avatar */}
+            {/* Messages icon with badge in top bar */}
+            <button
+              onClick={() => setTab("messages")}
+              className="relative w-9 h-9 rounded-xl border border-[rgba(245,240,232,0.1)] flex items-center justify-center text-[rgba(245,240,232,0.5)] hover:text-[#C9A96E] hover:border-[rgba(201,169,110,0.3)] transition-all"
+            >
+              <ChatBubbleLeftRightIcon className="w-4 h-4" />
+              {unreadMessages > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#C9A96E] rounded-full text-[#0e0d0b] text-[9px] font-black flex items-center justify-center">
+                  {unreadMessages > 9 ? "9+" : unreadMessages}
+                </span>
+              )}
+            </button>
             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#C9A96E] to-[#8a6030] flex items-center justify-center text-white font-bold text-sm shadow-md cursor-pointer">
               {user.avatar ?? user.firstName?.[0] ?? "?"}
             </div>
           </div>
         </header>
 
-        {/* Hero banner (overview only) */}
+        {/* Hero banner — overview only, not shown on messages */}
         {tab === "overview" && (
           <div
             className="relative overflow-hidden px-6 py-8 shrink-0"
@@ -1283,7 +1291,6 @@ export default function GuestDashboard({
                 "linear-gradient(135deg,#16100a 0%,#1f1508 50%,#16100a 100%)",
             }}
           >
-            {/* Decorative background orbs */}
             <div
               className="absolute top-0 right-0 w-72 h-72 rounded-full opacity-10 pointer-events-none blur-3xl"
               style={{
@@ -1296,7 +1303,6 @@ export default function GuestDashboard({
               className="absolute bottom-0 left-20 w-48 h-48 rounded-full opacity-5 pointer-events-none blur-3xl"
               style={{ background: "#C9A96E" }}
             />
-
             <div className="relative z-10 max-w-4xl">
               <p
                 className="text-[#C9A96E] text-xs font-bold uppercase tracking-[0.25em] mb-1"
@@ -1309,8 +1315,6 @@ export default function GuestDashboard({
                 <span className="italic text-[#C9A96E]">{user.firstName}</span>{" "}
                 ✈️
               </h1>
-
-              {/* Quick stats strip */}
               <div className="flex gap-8 flex-wrap">
                 {[
                   {
@@ -1348,36 +1352,41 @@ export default function GuestDashboard({
         )}
 
         {/* Page content */}
-        <main
-          className="flex-1 overflow-y-auto p-6 md:p-8"
-          style={{ fontFamily: "system-ui" }}
-        >
-          <div className="max-w-5xl mx-auto">
-            {tab === "overview" && (
-              <Overview
-                bookings={bookings}
-                wishlist={wishlist}
-                loading={loading}
-                onTabSwitch={setTab}
-                onBook={onBook}
-              />
-            )}
-            {tab === "bookings" && (
-              <BookingsTab bookings={bookings} loading={loading} />
-            )}
-            {tab === "wishlist" && (
-              <WishlistTab
-                wishlist={wishlist}
-                loading={loading}
-                onBook={onBook}
-                onRemove={removeFromWishlist}
-              />
-            )}
-            {tab === "profile" && (
-              <ProfileTab bookings={bookings} wishlist={wishlist} />
-            )}
-          </div>
-        </main>
+        {/* Messages gets full height with no padding — everything else gets the normal padded wrapper */}
+        {isMessages ? (
+          <MessagesInbox />
+        ) : (
+          <main
+            className="flex-1 overflow-y-auto p-6 md:p-8"
+            style={{ fontFamily: "system-ui" }}
+          >
+            <div className="max-w-5xl mx-auto">
+              {tab === "overview" && (
+                <Overview
+                  bookings={bookings}
+                  wishlist={wishlist}
+                  loading={loading}
+                  onTabSwitch={setTab}
+                  onBook={onBook}
+                />
+              )}
+              {tab === "bookings" && (
+                <BookingsTab bookings={bookings} loading={loading} />
+              )}
+              {tab === "wishlist" && (
+                <WishlistTab
+                  wishlist={wishlist}
+                  loading={loading}
+                  onBook={onBook}
+                  onRemove={removeFromWishlist}
+                />
+              )}
+              {tab === "profile" && (
+                <ProfileTab bookings={bookings} wishlist={wishlist} />
+              )}
+            </div>
+          </main>
+        )}
       </div>
     </div>
   );
