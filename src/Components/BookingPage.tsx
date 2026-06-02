@@ -55,53 +55,6 @@ const AMENITY_ICONS: Record<string, string> = {
   "Hot Tub": "♨️",
 };
 
-const MOCK_REVIEWS = [
-  {
-    id: 1,
-    name: "Isabelle Fontaine",
-    avatar: "IF",
-    location: "Paris, France",
-    rating: 5,
-    date: "March 2025",
-    title: "Absolute perfection above the ocean",
-    body: "Waking up to the Indian Ocean from your private deck never gets old. The butler remembered every preference from day one — cold brew at sunrise, champagne at sunset.",
-    helpful: 47,
-  },
-  {
-    id: 2,
-    name: "James Okafor",
-    avatar: "JO",
-    location: "Lagos, Nigeria",
-    rating: 5,
-    date: "February 2025",
-    title: "Honeymoon beyond imagination",
-    body: "We celebrated our honeymoon here and the team went above and beyond to make every moment magical. Private sunset cruise, floating breakfast — all arranged without asking.",
-    helpful: 38,
-  },
-  {
-    id: 3,
-    name: "Mei Lin",
-    avatar: "ML",
-    location: "Shanghai, China",
-    rating: 4,
-    date: "January 2025",
-    title: "Stunning but transfer timing matters",
-    body: "The villa itself is extraordinary — glass floors, private infinity pool, direct ocean access. Book the seaplane transfer early — the speedboat alternative is weather-dependent.",
-    helpful: 29,
-  },
-  {
-    id: 4,
-    name: "Alejandro Reyes",
-    avatar: "AR",
-    location: "Mexico City",
-    rating: 5,
-    date: "December 2024",
-    title: "The finest resort stay of my life",
-    body: "Having stayed at over 30 luxury resorts globally, this set a new benchmark. The Spa Island alone is worth the visit. Exceptional in every dimension.",
-    helpful: 61,
-  },
-];
-
 /* ─────────────── Star Picker (for review modal) ─────────────── */
 function StarPicker({
   value,
@@ -1644,6 +1597,21 @@ export default function BookingPage({
   const [completedBooking, setCompletedBooking] = useState<Booking | null>(
     null,
   );
+
+  // Live listing reviews from DB
+  const [listingReviews, setListingReviews] = useState<
+    import("../index").Review[]
+  >([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+
+  useEffect(() => {
+    if (activeTab !== "reviews") return;
+    setReviewsLoading(true);
+    ReviewsDB.byListing(hotel.id)
+      .then(setListingReviews)
+      .catch(console.error)
+      .finally(() => setReviewsLoading(false));
+  }, [activeTab, hotel.id]);
 
   const [guestInfo, setGuestInfo] = useState({
     name: user ? `${user.firstName} ${user.lastName}`.trim() : "",
@@ -3738,235 +3706,559 @@ export default function BookingPage({
             )}
 
             {/* ── REVIEWS TAB ── */}
-            {activeTab === "reviews" && (
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: 20 }}
-              >
-                <div
-                  className="reviews-summary"
-                  style={{
-                    background: "rgba(245,240,232,0.04)",
-                    border: "1px solid rgba(245,240,232,0.07)",
-                    borderRadius: 18,
-                    padding: 24,
-                    display: "flex",
-                    gap: 32,
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <div style={{ textAlign: "center", flexShrink: 0 }}>
-                    <p
-                      style={{
-                        fontFamily: "Cormorant Garamond, serif",
-                        fontSize: 52,
-                        fontWeight: 700,
-                        color: "#f5f0e8",
-                        lineHeight: 1,
-                      }}
-                    >
-                      {hotel.rating}
-                    </p>
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: 3,
-                        justifyContent: "center",
-                        margin: "8px 0",
-                      }}
-                    >
-                      {Array.from({ length: 5 }).map((_, i) => (
-                        <StarIcon
-                          key={i}
-                          style={{
-                            width: 14,
-                            height: 14,
-                            color:
-                              i < Math.floor(hotel.rating)
-                                ? "#C9A96E"
-                                : "rgba(245,240,232,0.15)",
-                          }}
-                        />
-                      ))}
-                    </div>
-                    <p style={{ fontSize: 12, color: "rgba(245,240,232,0.4)" }}>
-                      {hotel.reviewCount.toLocaleString()} reviews
-                    </p>
-                  </div>
+            {activeTab === "reviews" &&
+              (() => {
+                // Derived stats from real reviews
+                const avgRating = listingReviews.length
+                  ? listingReviews.reduce((s, r) => s + r.rating, 0) /
+                    listingReviews.length
+                  : hotel.rating;
+
+                const subAvg = (
+                  key: "cleanliness" | "service" | "location" | "value",
+                ) => {
+                  const vals = listingReviews
+                    .map((r) => r[key] as number | undefined)
+                    .filter((v): v is number => typeof v === "number");
+                  return vals.length
+                    ? vals.reduce((s, v) => s + v, 0) / vals.length
+                    : null;
+                };
+
+                const fmtDate = (iso: string) =>
+                  new Date(iso).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  });
+
+                return (
                   <div
                     style={{
-                      flex: 1,
-                      minWidth: 200,
                       display: "flex",
                       flexDirection: "column",
-                      gap: 8,
+                      gap: 20,
                     }}
                   >
-                    {[
-                      ["Cleanliness", 98],
-                      ["Service", 97],
-                      ["Location", 95],
-                      ["Value", 90],
-                      ["Amenities", 96],
-                    ].map(([k, v]) => (
-                      <div
-                        key={String(k)}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 12,
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: 12,
-                            color: "rgba(245,240,232,0.45)",
-                            width: 80,
-                            flexShrink: 0,
-                          }}
-                        >
-                          {k}
-                        </span>
-                        <div
-                          style={{
-                            flex: 1,
-                            height: 4,
-                            background: "rgba(245,240,232,0.08)",
-                            borderRadius: 99,
-                          }}
-                        >
-                          <div
-                            style={{
-                              height: "100%",
-                              borderRadius: 99,
-                              background: "#C9A96E",
-                              width: `${v}%`,
-                            }}
-                          />
-                        </div>
-                        <span
-                          style={{
-                            fontSize: 12,
-                            fontWeight: 700,
-                            color: "rgba(245,240,232,0.6)",
-                            width: 24,
-                          }}
-                        >
-                          {Number(v) / 20}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div
-                  className="reviews-grid"
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: 14,
-                  }}
-                >
-                  {MOCK_REVIEWS.map((r) => (
+                    {/* ── Summary bar ── */}
                     <div
-                      key={r.id}
+                      className="reviews-summary"
                       style={{
                         background: "rgba(245,240,232,0.04)",
                         border: "1px solid rgba(245,240,232,0.07)",
-                        borderRadius: 16,
-                        padding: 20,
+                        borderRadius: 18,
+                        padding: 24,
+                        display: "flex",
+                        gap: 32,
+                        alignItems: "center",
+                        flexWrap: "wrap",
                       }}
                     >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 12,
-                          marginBottom: 12,
-                        }}
-                      >
-                        <div
+                      {/* Big rating number */}
+                      <div style={{ textAlign: "center", flexShrink: 0 }}>
+                        <p
                           style={{
-                            width: 38,
-                            height: 38,
-                            borderRadius: "50%",
-                            background: "rgba(201,169,110,0.12)",
-                            border: "1px solid rgba(201,169,110,0.2)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: 12,
+                            fontFamily: "Cormorant Garamond, serif",
+                            fontSize: 52,
                             fontWeight: 700,
-                            color: "#C9A96E",
-                            flexShrink: 0,
+                            color: "#f5f0e8",
+                            lineHeight: 1,
                           }}
                         >
-                          {r.avatar}
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p
-                            style={{
-                              fontSize: 13,
-                              fontWeight: 600,
-                              color: "#f5f0e8",
-                            }}
-                          >
-                            {r.name}
-                          </p>
-                          <p
-                            style={{
-                              fontSize: 11,
-                              color: "rgba(245,240,232,0.35)",
-                            }}
-                          >
-                            {r.location} · {r.date}
-                          </p>
-                        </div>
-                        <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
-                          {Array.from({ length: r.rating }).map((_, i) => (
+                          {avgRating.toFixed(1)}
+                        </p>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 3,
+                            justifyContent: "center",
+                            margin: "8px 0",
+                          }}
+                        >
+                          {Array.from({ length: 5 }).map((_, i) => (
                             <StarIcon
                               key={i}
                               style={{
-                                width: 11,
-                                height: 11,
-                                color: "#C9A96E",
+                                width: 14,
+                                height: 14,
+                                color:
+                                  i < Math.floor(avgRating)
+                                    ? "#C9A96E"
+                                    : "rgba(245,240,232,0.15)",
                               }}
                             />
                           ))}
                         </div>
+                        <p
+                          style={{
+                            fontSize: 12,
+                            color: "rgba(245,240,232,0.4)",
+                          }}
+                        >
+                          {listingReviews.length} review
+                          {listingReviews.length !== 1 ? "s" : ""}
+                        </p>
                       </div>
-                      <p
+
+                      {/* Sub-rating bars — from real data */}
+                      <div
                         style={{
-                          fontSize: 13,
-                          fontWeight: 600,
-                          color: "rgba(245,240,232,0.85)",
-                          marginBottom: 6,
+                          flex: 1,
+                          minWidth: 200,
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 8,
                         }}
                       >
-                        {r.title}
-                      </p>
-                      <p
-                        style={{
-                          fontSize: 12,
-                          color: "rgba(245,240,232,0.45)",
-                          lineHeight: 1.65,
-                        }}
-                      >
-                        {r.body}
-                      </p>
-                      <p
-                        style={{
-                          fontSize: 11,
-                          color: "rgba(245,240,232,0.2)",
-                          marginTop: 10,
-                        }}
-                      >
-                        {r.helpful} people found this helpful
-                      </p>
+                        {(
+                          [
+                            ["Cleanliness", "cleanliness"],
+                            ["Service", "service"],
+                            ["Location", "location"],
+                            ["Value", "value"],
+                          ] as [
+                            string,
+                            "cleanliness" | "service" | "location" | "value",
+                          ][]
+                        ).map(([label, key]) => {
+                          const val = subAvg(key);
+                          const pct = val !== null ? (val / 5) * 100 : 0;
+                          return (
+                            <div
+                              key={label}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 12,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontSize: 12,
+                                  color: "rgba(245,240,232,0.45)",
+                                  width: 80,
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {label}
+                              </span>
+                              <div
+                                style={{
+                                  flex: 1,
+                                  height: 4,
+                                  background: "rgba(245,240,232,0.08)",
+                                  borderRadius: 99,
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    height: "100%",
+                                    borderRadius: 99,
+                                    background: "#C9A96E",
+                                    width: `${pct}%`,
+                                    transition: "width 0.6s ease",
+                                  }}
+                                />
+                              </div>
+                              <span
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  color: "rgba(245,240,232,0.6)",
+                                  width: 28,
+                                  textAlign: "right",
+                                }}
+                              >
+                                {val !== null ? val.toFixed(1) : "—"}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+
+                    {/* ── Review cards ── */}
+                    {reviewsLoading ? (
+                      /* Skeleton */
+                      <div
+                        className="reviews-grid"
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: 14,
+                        }}
+                      >
+                        {[1, 2, 3, 4].map((i) => (
+                          <div
+                            key={i}
+                            style={{
+                              background: "rgba(245,240,232,0.04)",
+                              border: "1px solid rgba(245,240,232,0.07)",
+                              borderRadius: 16,
+                              padding: 20,
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 10,
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: 10,
+                                alignItems: "center",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: 38,
+                                  height: 38,
+                                  borderRadius: "50%",
+                                  background: "rgba(245,240,232,0.07)",
+                                  animation: "pulse 1.4s ease infinite",
+                                  flexShrink: 0,
+                                }}
+                              />
+                              <div
+                                style={{
+                                  flex: 1,
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: 6,
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    height: 12,
+                                    borderRadius: 6,
+                                    background: "rgba(245,240,232,0.07)",
+                                    width: "60%",
+                                    animation: "pulse 1.4s ease infinite",
+                                  }}
+                                />
+                                <div
+                                  style={{
+                                    height: 10,
+                                    borderRadius: 6,
+                                    background: "rgba(245,240,232,0.05)",
+                                    width: "40%",
+                                    animation: "pulse 1.4s ease infinite",
+                                  }}
+                                />
+                              </div>
+                            </div>
+                            <div
+                              style={{
+                                height: 12,
+                                borderRadius: 6,
+                                background: "rgba(245,240,232,0.07)",
+                                animation: "pulse 1.4s ease infinite",
+                              }}
+                            />
+                            <div
+                              style={{
+                                height: 10,
+                                borderRadius: 6,
+                                background: "rgba(245,240,232,0.05)",
+                                animation: "pulse 1.4s ease infinite",
+                              }}
+                            />
+                            <div
+                              style={{
+                                height: 10,
+                                borderRadius: 6,
+                                background: "rgba(245,240,232,0.05)",
+                                width: "80%",
+                                animation: "pulse 1.4s ease infinite",
+                              }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    ) : listingReviews.length === 0 ? (
+                      /* Empty state */
+                      <div
+                        style={{
+                          textAlign: "center",
+                          padding: "48px 24px",
+                          background: "rgba(245,240,232,0.03)",
+                          border: "1px solid rgba(245,240,232,0.07)",
+                          borderRadius: 18,
+                        }}
+                      >
+                        <div style={{ fontSize: 36, marginBottom: 12 }}>✦</div>
+                        <p
+                          style={{
+                            fontFamily: "Cormorant Garamond, serif",
+                            fontSize: 20,
+                            fontWeight: 600,
+                            color: "#f5f0e8",
+                            marginBottom: 8,
+                          }}
+                        >
+                          No reviews yet
+                        </p>
+                        <p
+                          style={{
+                            fontSize: 13,
+                            color: "rgba(245,240,232,0.35)",
+                          }}
+                        >
+                          Be the first to share your experience at {hotel.name}.
+                        </p>
+                      </div>
+                    ) : (
+                      <div
+                        className="reviews-grid"
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: 14,
+                        }}
+                      >
+                        {listingReviews.map((r) => (
+                          <div
+                            key={r.id}
+                            style={{
+                              background: "rgba(245,240,232,0.04)",
+                              border: "1px solid rgba(245,240,232,0.07)",
+                              borderRadius: 16,
+                              padding: 20,
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 0,
+                            }}
+                          >
+                            {/* Guest header */}
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 12,
+                                marginBottom: 12,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: 38,
+                                  height: 38,
+                                  borderRadius: "50%",
+                                  background: "rgba(201,169,110,0.12)",
+                                  border: "1px solid rgba(201,169,110,0.2)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  color: "#C9A96E",
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {r.guestAvatar ||
+                                  r.guestName?.[0]?.toUpperCase() ||
+                                  "G"}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <p
+                                  style={{
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    color: "#f5f0e8",
+                                  }}
+                                >
+                                  {r.guestName || "Guest"}
+                                </p>
+                                <p
+                                  style={{
+                                    fontSize: 11,
+                                    color: "rgba(245,240,232,0.35)",
+                                  }}
+                                >
+                                  {fmtDate(r.createdAt)}
+                                </p>
+                              </div>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: 2,
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {Array.from({ length: 5 }).map((_, i) => (
+                                  <StarIcon
+                                    key={i}
+                                    style={{
+                                      width: 11,
+                                      height: 11,
+                                      color:
+                                        i < Math.round(r.rating)
+                                          ? "#C9A96E"
+                                          : "rgba(245,240,232,0.15)",
+                                    }}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Title */}
+                            {r.title && (
+                              <p
+                                style={{
+                                  fontSize: 13,
+                                  fontWeight: 600,
+                                  color: "rgba(245,240,232,0.85)",
+                                  marginBottom: 6,
+                                }}
+                              >
+                                {r.title}
+                              </p>
+                            )}
+
+                            {/* Body */}
+                            <p
+                              style={{
+                                fontSize: 12,
+                                color: "rgba(245,240,232,0.45)",
+                                lineHeight: 1.65,
+                              }}
+                            >
+                              {r.body}
+                            </p>
+
+                            {/* Sub-ratings inline */}
+                            {(r.cleanliness ||
+                              r.service ||
+                              r.location ||
+                              r.value) && (
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: 10,
+                                  flexWrap: "wrap",
+                                  marginTop: 10,
+                                }}
+                              >
+                                {(
+                                  [
+                                    ["Clean", r.cleanliness],
+                                    ["Service", r.service],
+                                    ["Location", r.location],
+                                    ["Value", r.value],
+                                  ] as [string, number | undefined][]
+                                )
+                                  .filter(([, v]) => v !== undefined)
+                                  .map(([label, val]) => (
+                                    <span
+                                      key={label}
+                                      style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 4,
+                                        fontSize: 10,
+                                        color: "rgba(245,240,232,0.4)",
+                                        background: "rgba(245,240,232,0.04)",
+                                        border:
+                                          "1px solid rgba(245,240,232,0.07)",
+                                        borderRadius: 99,
+                                        padding: "3px 8px",
+                                      }}
+                                    >
+                                      <StarIcon
+                                        style={{
+                                          width: 9,
+                                          height: 9,
+                                          color: "#C9A96E",
+                                        }}
+                                      />
+                                      {label} {(val as number).toFixed(1)}
+                                    </span>
+                                  ))}
+                              </div>
+                            )}
+
+                            {/* Helpful count */}
+                            {r.helpful > 0 && (
+                              <p
+                                style={{
+                                  fontSize: 11,
+                                  color: "rgba(245,240,232,0.2)",
+                                  marginTop: 10,
+                                }}
+                              >
+                                {r.helpful}{" "}
+                                {r.helpful === 1 ? "person" : "people"} found
+                                this helpful
+                              </p>
+                            )}
+
+                            {/* Host reply */}
+                            {r.hostReply && (
+                              <div
+                                style={{
+                                  marginTop: 14,
+                                  background: "rgba(201,169,110,0.06)",
+                                  border: "1px solid rgba(201,169,110,0.15)",
+                                  borderRadius: 12,
+                                  padding: "12px 14px",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 6,
+                                    marginBottom: 6,
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      width: 20,
+                                      height: 20,
+                                      borderRadius: "50%",
+                                      background: "rgba(201,169,110,0.15)",
+                                      border: "1px solid rgba(201,169,110,0.3)",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      flexShrink: 0,
+                                    }}
+                                  >
+                                    <UserIcon
+                                      style={{
+                                        width: 10,
+                                        height: 10,
+                                        color: "#C9A96E",
+                                      }}
+                                    />
+                                  </div>
+                                  <p
+                                    style={{
+                                      fontSize: 11,
+                                      fontWeight: 700,
+                                      color: "#C9A96E",
+                                      letterSpacing: "0.05em",
+                                    }}
+                                  >
+                                    {hotel.hostName ?? "Host"} replied
+                                  </p>
+                                </div>
+                                <p
+                                  style={{
+                                    fontSize: 12,
+                                    color: "rgba(245,240,232,0.5)",
+                                    lineHeight: 1.6,
+                                  }}
+                                >
+                                  {r.hostReply}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
           </div>
 
           {/* ── RIGHT — Booking widget ── */}
