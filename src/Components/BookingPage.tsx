@@ -19,8 +19,9 @@ import {
   HeartIcon as HeartSolid,
   CheckCircleIcon,
 } from "@heroicons/react/24/solid";
+import { StarIcon as StarOutline } from "@heroicons/react/24/outline";
 import { useAuth } from "../AuthContext";
-import { BookingsDB, type Hotel } from "../index";
+import { BookingsDB, ReviewsDB, type Hotel, type Booking } from "../index";
 
 /* ─────────────── Helpers ─────────────── */
 const DEFAULT_IMAGE =
@@ -101,16 +102,697 @@ const MOCK_REVIEWS = [
   },
 ];
 
+/* ─────────────── Star Picker (for review modal) ─────────────── */
+function StarPicker({
+  value,
+  onChange,
+  size = 28,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  size?: number;
+}) {
+  const [hovered, setHovered] = useState(0);
+  return (
+    <div style={{ display: "flex", gap: 4 }}>
+      {[1, 2, 3, 4, 5].map((star) => {
+        const filled = star <= (hovered || value);
+        return (
+          <button
+            key={star}
+            type="button"
+            onMouseEnter={() => setHovered(star)}
+            onMouseLeave={() => setHovered(0)}
+            onClick={() => onChange(star)}
+            style={{
+              background: "none",
+              border: "none",
+              padding: 2,
+              cursor: "pointer",
+              transform: hovered === star ? "scale(1.2)" : "scale(1)",
+              transition: "transform 0.15s",
+            }}
+            aria-label={`${star} star${star > 1 ? "s" : ""}`}
+          >
+            {filled ? (
+              <StarIcon
+                style={{ width: size, height: size, color: "#C9A96E" }}
+              />
+            ) : (
+              <StarOutline
+                style={{
+                  width: size,
+                  height: size,
+                  color: "rgba(201,169,110,0.3)",
+                }}
+              />
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ─────────────── Sub-rating row (for review modal) ─────────────── */
+function SubRating({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "10px 0",
+        borderBottom: "1px solid rgba(245,240,232,0.06)",
+      }}
+    >
+      <span style={{ fontSize: 13, color: "rgba(245,240,232,0.55)" }}>
+        {label}
+      </span>
+      <StarPicker value={value} onChange={onChange} size={18} />
+    </div>
+  );
+}
+
+/* ─────────────── Guest Review Modal ─────────────── */
+function GuestReviewModal({
+  booking,
+  hotel,
+  onClose,
+  onReviewSaved,
+}: {
+  booking: Booking;
+  hotel: Hotel;
+  onClose: () => void;
+  onReviewSaved?: () => void;
+}) {
+  const { user } = useAuth();
+  const [alreadyReviewed, setAlreadyReviewed] = useState<boolean | null>(null);
+  const [reviewStep, setReviewStep] = useState<"write" | "done">("write");
+  const [rating, setRating] = useState(0);
+  const [cleanliness, setCleanliness] = useState(0);
+  const [service, setService] = useState(0);
+  const [locationRating, setLocationRating] = useState(0);
+  const [valueRating, setValueRating] = useState(0);
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [reviewError, setReviewError] = useState("");
+
+  useEffect(() => {
+    ReviewsDB.existsForBooking(booking.id).then((exists) => {
+      setAlreadyReviewed(exists);
+    });
+  }, [booking.id]);
+
+  const handleReviewSubmit = async () => {
+    if (rating === 0) {
+      setReviewError("Please select an overall rating.");
+      return;
+    }
+    if (!body.trim()) {
+      setReviewError("Please write a short review.");
+      return;
+    }
+    if (!user) {
+      setReviewError("You must be signed in to leave a review.");
+      return;
+    }
+    setReviewError("");
+    setSaving(true);
+    try {
+      await ReviewsDB.add({
+        bookingId: booking.id,
+        listingId: hotel.id,
+        guestId: user.id,
+        hostId: hotel.hostId,
+        guestName: `${user.firstName} ${user.lastName}`.trim() || "Guest",
+        guestAvatar:
+          (
+            (user.firstName?.[0] ?? "") + (user.lastName?.[0] ?? "")
+          ).toUpperCase() || "G",
+        rating,
+        title: title.trim(),
+        body: body.trim(),
+        cleanliness: cleanliness || undefined,
+        service: service || undefined,
+        location: locationRating || undefined,
+        value: valueRating || undefined,
+        guestPhone: user.phone ?? "",
+      });
+      setReviewStep("done");
+      onReviewSaved?.();
+    } catch (err: any) {
+      setReviewError(
+        err.message ?? "Failed to submit review. Please try again.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (alreadyReviewed === null) return null;
+  if (alreadyReviewed) return null;
+
+  const ratingLabels = ["", "Poor", "Fair", "Good", "Great", "Exceptional"];
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 70,
+        display: "flex",
+        alignItems: "flex-end",
+        justifyContent: "center",
+      }}
+    >
+      {/* Backdrop */}
+      <div
+        onClick={reviewStep === "done" ? onClose : undefined}
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: "rgba(0,0,0,0.82)",
+          backdropFilter: "blur(10px)",
+        }}
+      />
+
+      {/* Panel */}
+      <div
+        style={{
+          position: "relative",
+          zIndex: 10,
+          width: "100%",
+          maxWidth: 540,
+          maxHeight: "94dvh",
+          overflowY: "auto",
+          background: "#141210",
+          border: "1px solid rgba(245,240,232,0.1)",
+          borderRadius: "24px 24px 0 0",
+          scrollbarWidth: "none",
+        }}
+        className="sm:rounded-3xl sm:mb-6"
+      >
+        {reviewStep === "write" && (
+          <>
+            {/* Sticky header */}
+            <div
+              style={{
+                position: "sticky",
+                top: 0,
+                background: "#141210",
+                borderBottom: "1px solid rgba(245,240,232,0.08)",
+                padding: "20px 24px 16px",
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                zIndex: 2,
+              }}
+            >
+              <div>
+                <p
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.22em",
+                    color: "#C9A96E",
+                    textTransform: "uppercase",
+                    marginBottom: 5,
+                  }}
+                >
+                  Share Your Experience
+                </p>
+                <h2
+                  style={{
+                    fontFamily: "Cormorant Garamond, serif",
+                    fontSize: 22,
+                    fontWeight: 600,
+                    color: "#f5f0e8",
+                    lineHeight: 1.1,
+                  }}
+                >
+                  Leave a Review
+                </h2>
+              </div>
+              <button
+                onClick={onClose}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: "50%",
+                  background: "rgba(245,240,232,0.07)",
+                  border: "none",
+                  color: "#f5f0e8",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  marginTop: 4,
+                }}
+              >
+                <XMarkIcon style={{ width: 16, height: 16 }} />
+              </button>
+            </div>
+
+            <div style={{ padding: "20px 24px 32px" }}>
+              {/* Property card */}
+              <div
+                style={{
+                  display: "flex",
+                  gap: 14,
+                  alignItems: "center",
+                  background: "rgba(245,240,232,0.04)",
+                  border: "1px solid rgba(245,240,232,0.08)",
+                  borderRadius: 16,
+                  padding: 14,
+                  marginBottom: 28,
+                }}
+              >
+                <img
+                  src={getSafeImage(hotel.images?.[0])}
+                  alt={hotel.name}
+                  style={{
+                    width: 60,
+                    height: 60,
+                    borderRadius: 10,
+                    objectFit: "cover",
+                    flexShrink: 0,
+                  }}
+                  onError={(e) =>
+                    ((e.target as HTMLImageElement).src = DEFAULT_IMAGE)
+                  }
+                />
+                <div style={{ minWidth: 0 }}>
+                  <p
+                    style={{
+                      fontFamily: "Cormorant Garamond, serif",
+                      fontSize: 16,
+                      fontWeight: 600,
+                      color: "#f5f0e8",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {hotel.name}
+                  </p>
+                  <p
+                    style={{
+                      fontSize: 12,
+                      color: "rgba(245,240,232,0.38)",
+                      marginTop: 2,
+                    }}
+                  >
+                    {hotel.location}
+                  </p>
+                  <p
+                    style={{
+                      fontSize: 11,
+                      color: "rgba(245,240,232,0.25)",
+                      marginTop: 3,
+                    }}
+                  >
+                    Booking ref:{" "}
+                    <span style={{ fontFamily: "monospace", color: "#C9A96E" }}>
+                      {booking.ref}
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Overall rating */}
+              <div style={{ marginBottom: 28, textAlign: "center" }}>
+                <p
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: "0.16em",
+                    color: "rgba(245,240,232,0.35)",
+                    textTransform: "uppercase",
+                    marginBottom: 14,
+                  }}
+                >
+                  Overall Rating
+                </p>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <StarPicker value={rating} onChange={setRating} size={36} />
+                  <p
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: rating > 0 ? "#C9A96E" : "rgba(245,240,232,0.2)",
+                      minHeight: 20,
+                      transition: "color 0.2s",
+                    }}
+                  >
+                    {ratingLabels[rating]}
+                  </p>
+                </div>
+              </div>
+
+              {/* Sub-ratings */}
+              <div
+                style={{
+                  background: "rgba(245,240,232,0.03)",
+                  border: "1px solid rgba(245,240,232,0.07)",
+                  borderRadius: 14,
+                  padding: "4px 16px 0",
+                  marginBottom: 22,
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.15em",
+                    color: "rgba(245,240,232,0.28)",
+                    textTransform: "uppercase",
+                    paddingTop: 14,
+                    marginBottom: 2,
+                  }}
+                >
+                  Category Ratings (optional)
+                </p>
+                <SubRating
+                  label="Cleanliness"
+                  value={cleanliness}
+                  onChange={setCleanliness}
+                />
+                <SubRating
+                  label="Service"
+                  value={service}
+                  onChange={setService}
+                />
+                <SubRating
+                  label="Location"
+                  value={locationRating}
+                  onChange={setLocationRating}
+                />
+                <SubRating
+                  label="Value for Money"
+                  value={valueRating}
+                  onChange={setValueRating}
+                />
+              </div>
+
+              {/* Title */}
+              <div style={{ marginBottom: 14 }}>
+                <label
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.15em",
+                    color: "rgba(245,240,232,0.35)",
+                    textTransform: "uppercase",
+                    display: "block",
+                    marginBottom: 7,
+                  }}
+                >
+                  Review Title (optional)
+                </label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Summarise your stay in a few words…"
+                  maxLength={100}
+                  style={{
+                    width: "100%",
+                    background: "rgba(245,240,232,0.05)",
+                    border: "1px solid rgba(245,240,232,0.1)",
+                    borderRadius: 12,
+                    padding: "11px 14px",
+                    fontSize: 13,
+                    color: "#f5f0e8",
+                    outline: "none",
+                    boxSizing: "border-box",
+                    fontFamily: "inherit",
+                    transition: "border-color 0.2s",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#C9A96E")}
+                  onBlur={(e) =>
+                    (e.target.style.borderColor = "rgba(245,240,232,0.1)")
+                  }
+                />
+              </div>
+
+              {/* Body */}
+              <div style={{ marginBottom: 22 }}>
+                <label
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.15em",
+                    color: "rgba(245,240,232,0.35)",
+                    textTransform: "uppercase",
+                    display: "block",
+                    marginBottom: 7,
+                  }}
+                >
+                  Your Review <span style={{ color: "#C9A96E" }}>*</span>
+                </label>
+                <textarea
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  rows={5}
+                  maxLength={1500}
+                  placeholder="Tell future guests about the property, the host, and what made your stay memorable…"
+                  style={{
+                    width: "100%",
+                    background: "rgba(245,240,232,0.05)",
+                    border: "1px solid rgba(245,240,232,0.1)",
+                    borderRadius: 12,
+                    padding: "11px 14px",
+                    fontSize: 13,
+                    color: "#f5f0e8",
+                    outline: "none",
+                    resize: "none",
+                    boxSizing: "border-box",
+                    fontFamily: "inherit",
+                    transition: "border-color 0.2s",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#C9A96E")}
+                  onBlur={(e) =>
+                    (e.target.style.borderColor = "rgba(245,240,232,0.1)")
+                  }
+                />
+                <p
+                  style={{
+                    fontSize: 11,
+                    color: "rgba(245,240,232,0.2)",
+                    textAlign: "right",
+                    marginTop: 4,
+                  }}
+                >
+                  {body.length}/1500
+                </p>
+              </div>
+
+              {/* Error */}
+              {reviewError && (
+                <div
+                  style={{
+                    background: "rgba(220,60,60,0.1)",
+                    border: "1px solid rgba(220,60,60,0.28)",
+                    borderRadius: 10,
+                    padding: "11px 14px",
+                    fontSize: 13,
+                    color: "#e07070",
+                    marginBottom: 16,
+                  }}
+                >
+                  {reviewError}
+                </div>
+              )}
+
+              {/* CTA */}
+              <button
+                onClick={handleReviewSubmit}
+                disabled={saving}
+                style={{
+                  width: "100%",
+                  background: "#C9A96E",
+                  color: "#0e0d0b",
+                  fontWeight: 700,
+                  fontSize: 14,
+                  padding: "16px 0",
+                  borderRadius: 14,
+                  border: "none",
+                  cursor: saving ? "not-allowed" : "pointer",
+                  opacity: saving ? 0.75 : 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  letterSpacing: "0.04em",
+                  transition: "opacity 0.2s",
+                }}
+              >
+                {saving ? (
+                  <>
+                    <span
+                      style={{
+                        width: 16,
+                        height: 16,
+                        border: "2px solid rgba(0,0,0,0.2)",
+                        borderTopColor: "#0e0d0b",
+                        borderRadius: "50%",
+                        animation: "spin 0.7s linear infinite",
+                        display: "inline-block",
+                      }}
+                    />
+                    Submitting…
+                  </>
+                ) : (
+                  "Submit Review"
+                )}
+              </button>
+
+              <p
+                style={{
+                  textAlign: "center",
+                  fontSize: 11,
+                  color: "rgba(245,240,232,0.2)",
+                  marginTop: 14,
+                  lineHeight: 1.6,
+                }}
+              >
+                Reviews are shared with the host and visible to other guests.
+                <br />
+                You can only leave one review per stay.
+              </p>
+            </div>
+          </>
+        )}
+
+        {/* Done step */}
+        {reviewStep === "done" && (
+          <div
+            style={{
+              padding: "48px 32px 40px",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              textAlign: "center",
+            }}
+          >
+            <div
+              style={{
+                width: 68,
+                height: 68,
+                borderRadius: "50%",
+                background: "rgba(201,169,110,0.1)",
+                border: "2px solid rgba(201,169,110,0.3)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: 22,
+              }}
+            >
+              <CheckCircleIcon
+                style={{ width: 34, height: 34, color: "#C9A96E" }}
+              />
+            </div>
+            <p
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: "0.22em",
+                color: "#C9A96E",
+                textTransform: "uppercase",
+                marginBottom: 10,
+              }}
+            >
+              Thank You
+            </p>
+            <h2
+              style={{
+                fontFamily: "Cormorant Garamond, serif",
+                fontSize: 28,
+                fontWeight: 600,
+                color: "#f5f0e8",
+                marginBottom: 12,
+              }}
+            >
+              Review Submitted
+            </h2>
+            <p
+              style={{
+                fontSize: 13,
+                color: "rgba(245,240,232,0.45)",
+                lineHeight: 1.8,
+                maxWidth: 320,
+                marginBottom: 32,
+              }}
+            >
+              Your feedback helps future guests and gives{" "}
+              <strong style={{ color: "#f5f0e8" }}>{hotel.hostName}</strong> the
+              chance to keep improving. It means a lot.
+            </p>
+            <div
+              style={{
+                display: "flex",
+                gap: 4,
+                marginBottom: 32,
+                justifyContent: "center",
+              }}
+            >
+              {[1, 2, 3, 4, 5].map((s) => (
+                <StarIcon
+                  key={s}
+                  style={{
+                    width: 22,
+                    height: 22,
+                    color: s <= rating ? "#C9A96E" : "rgba(245,240,232,0.1)",
+                  }}
+                />
+              ))}
+            </div>
+            <button
+              onClick={onClose}
+              style={{
+                background: "#C9A96E",
+                color: "#0e0d0b",
+                fontWeight: 700,
+                fontSize: 13,
+                padding: "13px 36px",
+                borderRadius: 14,
+                border: "none",
+                cursor: "pointer",
+                letterSpacing: "0.04em",
+              }}
+            >
+              Done
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ─────────────── Concierge Chat ─────────────── */
 type ChatMsg = { role: "user" | "concierge"; text: string; time: string };
 
 const nowTime = () =>
   new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
-// Add these imports at the top of BookingPage.tsx alongside the existing ones:
-// import { MessagesDB, type Conversation } from "../index";
-// import { PaperAirplaneIcon, ChatBubbleLeftRightIcon } from "@heroicons/react/24/outline";
-// (ChatBubbleLeftRightIcon is already imported in the updated BookingPage)
 
 const CONCIERGE_RESPONSES = [
   "Thank you for reaching out! I'd be delighted to assist you. What would you like to know about your stay?",
@@ -128,9 +810,9 @@ function ConciergeChat({
   guestId,
   onClose,
 }: {
-  hotel: Hotel; // Hotel type is already in scope inside BookingPage.tsx
+  hotel: Hotel;
   guestName?: string;
-  guestId?: string; // pass user?.id from the parent
+  guestId?: string;
   onClose: () => void;
 }) {
   const [messages, setMessages] = useState<ChatMsg[]>([
@@ -147,7 +829,6 @@ function ConciergeChat({
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Initialise the Supabase conversation as soon as we have a real guest
   useEffect(() => {
     if (!guestId || !hotel.hostId || convLoading || conversation) return;
     setConvLoading(true);
@@ -173,10 +854,8 @@ function ConciergeChat({
     if (!text) return;
     setInput("");
 
-    // 1. Show in local UI immediately
     setMessages((m) => [...m, { role: "user", text, time: nowTime() }]);
 
-    // 2. Persist to Supabase (non-blocking — fire and forget for UX)
     if (guestId && conversation) {
       MessagesDB.sendMessage({
         conversationId: conversation.id,
@@ -188,7 +867,6 @@ function ConciergeChat({
       }).catch(console.error);
     }
 
-    // 3. Auto-reply after short delay
     setTyping(true);
     setTimeout(
       () => {
@@ -213,12 +891,6 @@ function ConciergeChat({
     "Dietary needs",
   ];
 
-  /* ── JSX is identical to the existing ConciergeChat in BookingPage.tsx ──
-     Only the send() function changed above. Copy the full JSX from the
-     existing component and it will work as-is.
-     Key change in the JSX: pass guestId into <ConciergeChat guestId={user?.id} … />
-  ── */
-
   return (
     <div
       style={{
@@ -231,7 +903,6 @@ function ConciergeChat({
         pointerEvents: "none",
       }}
     >
-      {/* Mobile backdrop */}
       <div
         onClick={onClose}
         style={{
@@ -968,6 +1639,12 @@ export default function BookingPage({
   const [showCheckOutCal, setShowCheckOutCal] = useState(false);
   const [imgErrors, setImgErrors] = useState<Record<number, boolean>>({});
 
+  // Review modal state
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [completedBooking, setCompletedBooking] = useState<Booking | null>(
+    null,
+  );
+
   const [guestInfo, setGuestInfo] = useState({
     name: user ? `${user.firstName} ${user.lastName}`.trim() : "",
     email: user?.email ?? "",
@@ -985,11 +1662,12 @@ export default function BookingPage({
 
   /* Lock body scroll when modal/chat open */
   useEffect(() => {
-    document.body.style.overflow = step !== "idle" || chatOpen ? "hidden" : "";
+    document.body.style.overflow =
+      step !== "idle" || chatOpen || showReviewModal ? "hidden" : "";
     return () => {
       document.body.style.overflow = "";
     };
-  }, [step, chatOpen]);
+  }, [step, chatOpen, showReviewModal]);
 
   const nights = (() => {
     if (!checkIn || !checkOut) return 0;
@@ -1043,6 +1721,7 @@ export default function BookingPage({
         specialRequests: guestInfo.requests,
       });
       setBookingRef(booking.ref);
+      setCompletedBooking(booking);
       setStep("done");
     } catch (err: any) {
       setSaveError(err.message ?? "Failed to save booking. Please try again.");
@@ -1844,6 +2523,42 @@ export default function BookingPage({
                 You'll be notified when the host confirms your booking
               </p>
             </div>
+
+            {/* ── Leave a review prompt ── */}
+            {completedBooking && user && (
+              <button
+                onClick={() => {
+                  setStep("idle");
+                  setShowReviewModal(true);
+                }}
+                style={{
+                  marginTop: 20,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  background: "rgba(201,169,110,0.08)",
+                  border: "1px solid rgba(201,169,110,0.25)",
+                  borderRadius: 14,
+                  padding: "13px 24px",
+                  cursor: "pointer",
+                  width: "100%",
+                  justifyContent: "center",
+                }}
+              >
+                <StarIcon style={{ width: 16, height: 16, color: "#C9A96E" }} />
+                <span
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: "#C9A96E",
+                    letterSpacing: "0.02em",
+                  }}
+                >
+                  Leave a Review
+                </span>
+              </button>
+            )}
+
             <button
               onClick={() => {
                 setStep("idle");
@@ -1857,7 +2572,7 @@ export default function BookingPage({
                 else if (onBack) onBack();
               }}
               style={{
-                marginTop: 28,
+                marginTop: 16,
                 fontSize: 13,
                 fontWeight: 700,
                 color: "#C9A96E",
@@ -1902,7 +2617,6 @@ export default function BookingPage({
         input[type="date"]::-webkit-calendar-picker-indicator { filter:invert(1); opacity:0.4; cursor:pointer; }
         textarea::placeholder, input::placeholder { color:rgba(245,240,232,0.2); }
 
-        /* ── Mobile responsive overrides ── */
         @media (max-width: 767px) {
           .hero-grid { display:none !important; }
           .hero-mobile { display:block !important; }
@@ -1944,6 +2658,15 @@ export default function BookingPage({
           guestName={guestInfo.name || user?.firstName}
           guestId={user?.id}
           onClose={() => setChatOpen(false)}
+        />
+      )}
+
+      {/* ── Guest Review Modal ── */}
+      {showReviewModal && completedBooking && user && (
+        <GuestReviewModal
+          booking={completedBooking}
+          hotel={hotel}
+          onClose={() => setShowReviewModal(false)}
         />
       )}
 
@@ -2114,7 +2837,6 @@ export default function BookingPage({
                 "linear-gradient(to top, rgba(14,13,11,0.6) 0%, transparent 50%)",
             }}
           />
-          {/* Prev/Next */}
           <button
             onClick={prevImg}
             style={{
@@ -2157,7 +2879,6 @@ export default function BookingPage({
           >
             <ChevronRightIcon style={{ width: 16, height: 16 }} />
           </button>
-          {/* Dot indicators */}
           <div
             style={{
               position: "absolute",
@@ -2186,7 +2907,6 @@ export default function BookingPage({
               />
             ))}
           </div>
-          {/* Photo count */}
           <button
             onClick={() => setGalleryOpen(true)}
             style={{
@@ -2206,7 +2926,6 @@ export default function BookingPage({
           >
             {hotel.images.length} photos
           </button>
-          {/* Category + featured badges */}
           <div
             style={{
               position: "absolute",
@@ -3740,7 +4459,7 @@ export default function BookingPage({
                   Free cancellation · No charge until confirmed
                 </div>
 
-                {/* Concierge row — wired to open chat */}
+                {/* Concierge row */}
                 <div
                   style={{
                     borderTop: "1px solid rgba(245,240,232,0.07)",
