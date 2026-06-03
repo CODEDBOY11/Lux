@@ -31,7 +31,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
 
 /* ─────────────── TYPES  (identical to old version) ─────────────── */
 
-export type UserRole = "host" | "guest";
+export type UserRole = "host" | "guest" | "admin";
 export type OAuthProvider = "google" | "apple";
 
 export interface User {
@@ -77,6 +77,8 @@ export interface Listing {
   featured: boolean;
   available: boolean;
   createdAt: string;
+  verificationStatus?: VerificationStatus;
+  verificationNote?: string;
 }
 
 export type Hotel = Listing & {
@@ -163,6 +165,8 @@ function toListing(r: any): Listing {
     featured: r.featured,
     available: r.available,
     createdAt: r.created_at,
+    verificationStatus: r.verification_status ?? "unverified",
+    verificationNote: r.verification_note ?? undefined,
   };
 }
 
@@ -531,7 +535,8 @@ export const ListingsDB = {
       .from("listings")
       .select("*")
       .eq("host_id", hostId)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .eq("verification_status", "verified");
     if (error) {
       console.error("ListingsDB.byHost:", error.message);
       return [];
@@ -567,7 +572,11 @@ export const ListingsDB = {
     guests?: number,
     category?: string,
   ): Promise<Listing[]> {
-    let q = supabase.from("listings").select("*").eq("available", true);
+    let q = supabase
+      .from("listings")
+      .select("*")
+      .eq("available", true)
+      .eq("verification_status", "verified");
     if (query.trim()) {
       q = q.or(
         `name.ilike.%${query}%,city.ilike.%${query}%,country.ilike.%${query}%,` +
@@ -1138,5 +1147,296 @@ export const MessagesDB = {
         (payload) => onUpdate(toConversation(payload.new)),
       )
       .subscribe();
+  },
+};
+// ─────────────────────────────────────────────────────────────
+// PASTE THIS BLOCK AT THE BOTTOM OF YOUR db/index.ts
+// ─────────────────────────────────────────────────────────────
+// It follows the exact same patterns as the existing DB modules
+// (snake_case → camelCase mappers, same supabase client, same
+//  error handling style).
+// ─────────────────────────────────────────────────────────────
+
+/* ─────────────── TYPES ─────────────── */
+
+export type VerificationStatus =
+  | "unverified"
+  | "pending"
+  | "verified"
+  | "rejected";
+
+export type SubmissionStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "needs_more_info";
+
+export interface VerificationSubmission {
+  id: string;
+  listingId: string;
+  hostId: string;
+
+  // Gate 1 – Host identity
+  hostIdDocUrl?: string;
+  hostSelfieUrl?: string;
+
+  // Gate 2 – Property ownership
+  ownershipDocUrl?: string;
+  utilityBillUrl?: string;
+
+  // Gate 3 – Physical evidence
+  photoUrls: string[];
+  videoUrl?: string;
+
+  hostNotes?: string;
+
+  // Admin review
+  status: SubmissionStatus;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  adminNote?: string;
+
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Shape returned by the admin_verification_queue view
+export interface AdminVerificationItem extends VerificationSubmission {
+  listingName: string;
+  listingLocation: string;
+  listingCategory: string;
+  listingImages: string[];
+  hostEmail: string;
+  hostFirstName: string;
+  hostLastName: string;
+}
+
+/* ─────────────── Row mapper ─────────────── */
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toSubmission(r: any): VerificationSubmission {
+  return {
+    id: r.id,
+    listingId: r.listing_id,
+    hostId: r.host_id,
+    hostIdDocUrl: r.host_id_doc_url ?? undefined,
+    hostSelfieUrl: r.host_selfie_url ?? undefined,
+    ownershipDocUrl: r.ownership_doc_url ?? undefined,
+    utilityBillUrl: r.utility_bill_url ?? undefined,
+    photoUrls: r.photo_urls ?? [],
+    videoUrl: r.video_url ?? undefined,
+    hostNotes: r.host_notes ?? undefined,
+    status: r.status,
+    reviewedBy: r.reviewed_by ?? undefined,
+    reviewedAt: r.reviewed_at ?? undefined,
+    adminNote: r.admin_note ?? undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toAdminItem(r: any): AdminVerificationItem {
+  return {
+    ...toSubmission(r),
+    listingName: r.listing_name ?? "",
+    listingLocation: r.listing_location ?? "",
+    listingCategory: r.listing_category ?? "",
+    listingImages: r.listing_images ?? [],
+    hostEmail: r.host_email ?? "",
+    hostFirstName: r.host_first_name ?? "",
+    hostLastName: r.host_last_name ?? "",
+  };
+}
+
+/* ─────────────── VerificationDB ─────────────── */
+
+export const VerificationDB = {
+  // ── Host: submit verification documents ──────────────────
+  async submit(data: {
+    listingId: string;
+    hostId: string;
+    hostIdDocUrl?: string;
+    hostSelfieUrl?: string;
+    ownershipDocUrl?: string;
+    utilityBillUrl?: string;
+    photoUrls?: string[];
+    videoUrl?: string;
+    hostNotes?: string;
+  }): Promise<VerificationSubmission> {
+    const { data: row, error } = await supabase
+      .from("verification_submissions")
+      .insert({
+        listing_id: data.listingId,
+        host_id: data.hostId,
+        host_id_doc_url: data.hostIdDocUrl ?? null,
+        host_selfie_url: data.hostSelfieUrl ?? null,
+        ownership_doc_url: data.ownershipDocUrl ?? null,
+        utility_bill_url: data.utilityBillUrl ?? null,
+        photo_urls: data.photoUrls ?? [],
+        video_url: data.videoUrl ?? null,
+        host_notes: data.hostNotes ?? null,
+        status: "pending",
+      })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+
+    // Mark listing as pending verification
+    await supabase
+      .from("listings")
+      .update({ verification_status: "pending", available: false })
+      .eq("id", data.listingId);
+
+    return toSubmission(row);
+  },
+
+  // ── Host: update an existing pending submission ───────────
+  // (e.g. host re-uploads a clearer document after needs_more_info)
+  async update(
+    submissionId: string,
+    data: Partial<
+      Omit<
+        VerificationSubmission,
+        | "id"
+        | "createdAt"
+        | "updatedAt"
+        | "status"
+        | "reviewedBy"
+        | "reviewedAt"
+        | "adminNote"
+      >
+    >,
+  ): Promise<VerificationSubmission> {
+    const p: Record<string, unknown> = {};
+    if (data.hostIdDocUrl !== undefined) p.host_id_doc_url = data.hostIdDocUrl;
+    if (data.hostSelfieUrl !== undefined)
+      p.host_selfie_url = data.hostSelfieUrl;
+    if (data.ownershipDocUrl !== undefined)
+      p.ownership_doc_url = data.ownershipDocUrl;
+    if (data.utilityBillUrl !== undefined)
+      p.utility_bill_url = data.utilityBillUrl;
+    if (data.photoUrls !== undefined) p.photo_urls = data.photoUrls;
+    if (data.videoUrl !== undefined) p.video_url = data.videoUrl;
+    if (data.hostNotes !== undefined) p.host_notes = data.hostNotes;
+    // Reset to pending so admin re-reviews
+    p.status = "pending";
+
+    const { data: row, error } = await supabase
+      .from("verification_submissions")
+      .update(p)
+      .eq("id", submissionId)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return toSubmission(row);
+  },
+
+  // ── Host: get submission for a listing ───────────────────
+  async byListing(listingId: string): Promise<VerificationSubmission | null> {
+    const { data } = await supabase
+      .from("verification_submissions")
+      .select("*")
+      .eq("listing_id", listingId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return data ? toSubmission(data) : null;
+  },
+
+  // ── Host: get all submissions they've made ────────────────
+  async byHost(hostId: string): Promise<VerificationSubmission[]> {
+    const { data, error } = await supabase
+      .from("verification_submissions")
+      .select("*")
+      .eq("host_id", hostId)
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("VerificationDB.byHost:", error.message);
+      return [];
+    }
+    return (data ?? []).map(toSubmission);
+  },
+
+  // ── File upload helper ────────────────────────────────────
+  // Uploads a file to the "verification-docs" Supabase Storage bucket.
+  // Returns the public URL of the uploaded file.
+  async uploadFile(
+    hostId: string,
+    listingId: string,
+    file: File,
+    category:
+      | "host_id"
+      | "selfie"
+      | "ownership"
+      | "utility"
+      | "photo"
+      | "video",
+  ): Promise<string> {
+    const ext = file.name.split(".").pop();
+    const path = `${hostId}/${listingId}/${category}_${Date.now()}.${ext}`;
+
+    const { error } = await supabase.storage
+      .from("verification-docs")
+      .upload(path, file, { upsert: true });
+
+    if (error) throw new Error(error.message);
+
+    const { data } = supabase.storage
+      .from("verification-docs")
+      .getPublicUrl(path);
+
+    return data.publicUrl;
+  },
+
+  // ── Admin: get full verification queue ───────────────────
+  async adminQueue(
+    statusFilter?: SubmissionStatus,
+  ): Promise<AdminVerificationItem[]> {
+    let q = supabase.from("admin_verification_queue").select("*");
+    if (statusFilter) q = q.eq("status", statusFilter);
+    const { data, error } = await q;
+    if (error) {
+      console.error("VerificationDB.adminQueue:", error.message);
+      return [];
+    }
+    return (data ?? []).map(toAdminItem);
+  },
+
+  // ── Admin: approve ────────────────────────────────────────
+  async approve(submissionId: string, adminId: string): Promise<void> {
+    const { error } = await supabase.rpc("approve_verification", {
+      submission_id: submissionId,
+      admin_id: adminId,
+    });
+    if (error) throw new Error(error.message);
+  },
+
+  // ── Admin: reject ─────────────────────────────────────────
+  async reject(
+    submissionId: string,
+    adminId: string,
+    note: string,
+  ): Promise<void> {
+    const { error } = await supabase.rpc("reject_verification", {
+      submission_id: submissionId,
+      admin_id: adminId,
+      note,
+    });
+    if (error) throw new Error(error.message);
+  },
+
+  // ── Admin: request more information ──────────────────────
+  async requestMoreInfo(
+    submissionId: string,
+    adminId: string,
+    note: string,
+  ): Promise<void> {
+    const { error } = await supabase.rpc("request_more_info", {
+      submission_id: submissionId,
+      admin_id: adminId,
+      note,
+    });
+    if (error) throw new Error(error.message);
   },
 };

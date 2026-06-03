@@ -9,6 +9,7 @@
 import { useState, useEffect, type KeyboardEvent } from "react";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { ListingsDB, type Listing } from "./index";
+import PropertyVerificationForm from "./Verification/Property";
 
 type Props = {
   listing: Listing | null; // null = create mode
@@ -52,6 +53,9 @@ export default function ListingModal({
   const [tagInput, setTagInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // When this is set, we hide the form and show PropertyVerificationForm
+  const [createdListingId, setCreatedListingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (listing) {
@@ -100,40 +104,59 @@ export default function ListingModal({
     return Object.keys(e).length === 0;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validate()) return;
     setSaving(true);
-    setTimeout(() => {
-      const images = form.imageUrls
-        .split("\n")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      const data = {
-        hostId,
-        hostName,
-        name: form.name.trim(),
-        description: form.description.trim(),
-        city: form.city.trim(),
-        country: form.country.trim(),
-        location: form.location.trim() || `${form.city}, ${form.country}`,
-        category: form.category,
-        pricePerNight: Number(form.pricePerNight),
-        bedrooms: Number(form.bedrooms) || 1,
-        bathrooms: Number(form.bathrooms) || 1,
-        maxGuests: Number(form.maxGuests) || 2,
-        amenities,
-        tags,
-        images,
-      };
-      if (listing) {
-        ListingsDB.update(listing.id, data);
-      } else {
-        ListingsDB.add(data);
-      }
+
+    const images = form.imageUrls
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const data = {
+      hostId,
+      hostName,
+      name: form.name.trim(),
+      description: form.description.trim(),
+      city: form.city.trim(),
+      country: form.country.trim(),
+      location: form.location.trim() || `${form.city}, ${form.country}`,
+      category: form.category,
+      pricePerNight: Number(form.pricePerNight),
+      bedrooms: Number(form.bedrooms) || 1,
+      bathrooms: Number(form.bathrooms) || 1,
+      maxGuests: Number(form.maxGuests) || 2,
+      amenities,
+      tags,
+      images,
+    };
+
+    if (listing) {
+      // Edit mode — update and close as before
+      await ListingsDB.update(listing.id, data);
       setSaving(false);
       onSaved();
-    }, 700);
+    } else {
+      // Create mode — save then hand off to verification form
+      const created = await ListingsDB.add(data);
+      setSaving(false);
+      setCreatedListingId(created.id);
+    }
   };
+
+  // ── After a new listing is created, show the verification form ──
+  if (createdListingId) {
+    return (
+      <PropertyVerificationForm
+        listingId={createdListingId}
+        onComplete={() => {
+          setCreatedListingId(null);
+          onSaved(); // refreshes the host's listing list
+          onClose(); // closes the modal
+        }}
+      />
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">

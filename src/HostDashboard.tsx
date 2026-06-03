@@ -4,13 +4,16 @@
 //
 // HOST sections:    Dashboard · My Properties (Add/Edit/Delete) · Bookings · Reviews · Earnings · Settings
 // GUEST sections:   Dashboard · My Bookings · Wishlist · Travel History · Settings
-// Shared:           Messages (placeholder) · Hamburger mobile drawer · Dark wood sidebar
+// ADMIN sections:   Verification Queue (visible only when role === "admin")
+// Shared:           Messages · Hamburger mobile drawer · Dark wood sidebar
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useCallback } from "react";
 import MessagesInbox from "./Components/MessagesInbox";
 import { useNavigate } from "react-router-dom";
 import ReviewsSection from "./ReviewSection";
+import AdminVerificationPanel from "./Verification/admin";
+import PropertyVerificationForm from "./Verification/Property";
 import {
   HomeIcon,
   BuildingOffice2Icon,
@@ -37,6 +40,7 @@ import {
   PhotoIcon,
   UserIcon,
   ArrowTrendingUpIcon,
+  ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
 import { StarIcon as StarSolid } from "@heroicons/react/24/solid";
 import { useAuth } from "./AuthContext";
@@ -47,6 +51,7 @@ import {
   type Hotel,
   type Booking,
   type Listing,
+  type VerificationStatus,
 } from "./index";
 import GuestDashboard from "./GuestDashboard";
 
@@ -62,7 +67,8 @@ type NavKey =
   | "messages"
   | "settings"
   | "wishlist"
-  | "history";
+  | "history"
+  | "verification";
 
 /* ─────────────────────────────────────────────────────────
    HELPERS
@@ -75,6 +81,52 @@ const fmtDate = (d: string) =>
     day: "numeric",
     year: "numeric",
   });
+
+/* ─────────────────────────────────────────────────────────
+   VERIFICATION BADGE
+   Used on every property card to show current status.
+───────────────────────────────────────────────────────── */
+const VERIF_CONFIG: Record<
+  VerificationStatus,
+  { label: string; color: string; bg: string; border: string }
+> = {
+  unverified: {
+    label: "Unverified",
+    color: "rgba(245,240,232,0.4)",
+    bg: "rgba(245,240,232,0.05)",
+    border: "rgba(245,240,232,0.1)",
+  },
+  pending: {
+    label: "In Review",
+    color: "#f59e0b",
+    bg: "rgba(245,158,11,0.1)",
+    border: "rgba(245,158,11,0.25)",
+  },
+  verified: {
+    label: "✓ Verified",
+    color: "#4ade80",
+    bg: "rgba(74,222,128,0.1)",
+    border: "rgba(74,222,128,0.25)",
+  },
+  rejected: {
+    label: "Rejected",
+    color: "#e07070",
+    bg: "rgba(220,60,60,0.1)",
+    border: "rgba(220,60,60,0.25)",
+  },
+};
+
+const VerifBadge = ({ status }: { status: VerificationStatus }) => {
+  const cfg = VERIF_CONFIG[status];
+  return (
+    <span
+      className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap"
+      style={{ color: cfg.color, background: cfg.bg, borderColor: cfg.border }}
+    >
+      {cfg.label}
+    </span>
+  );
+};
 
 /* ─────────────────────────────────────────────────────────
    SKELETON
@@ -179,6 +231,7 @@ const HOST_NAV = [
   },
   { key: "settings" as NavKey, label: "Settings", icon: Cog6ToothIcon },
 ];
+
 const GUEST_NAV = [
   { key: "dashboard" as NavKey, label: "Overview", icon: HomeIcon },
   { key: "bookings" as NavKey, label: "My Bookings", icon: CalendarDaysIcon },
@@ -192,6 +245,13 @@ const GUEST_NAV = [
   { key: "settings" as NavKey, label: "Settings", icon: Cog6ToothIcon },
 ];
 
+// Admin nav appended to host nav when role === "admin"
+const ADMIN_NAV_ITEM = {
+  key: "verification" as NavKey,
+  label: "Verification Queue",
+  icon: ShieldCheckIcon,
+};
+
 const Sidebar = ({
   role,
   active,
@@ -200,17 +260,20 @@ const Sidebar = ({
   onClose,
   onLogout,
   isMobile,
+  isAdmin,
 }: {
-  role: "host" | "guest";
+  role: "host" | "guest" | "admin";
   active: NavKey;
   onNav: (k: NavKey) => void;
   pending: number;
   onClose?: () => void;
   onLogout: () => void;
   isMobile?: boolean;
+  isAdmin?: boolean;
 }) => {
   const { user } = useAuth();
-  const nav = role === "host" ? HOST_NAV : GUEST_NAV;
+  const baseNav = role === "guest" ? GUEST_NAV : HOST_NAV;
+  const nav = isAdmin ? [...baseNav, ADMIN_NAV_ITEM] : baseNav;
   const isGuest = role === "guest";
 
   return (
@@ -255,7 +318,7 @@ const Sidebar = ({
               color: isGuest ? "#6EADC9" : "#C9A96E",
             }}
           >
-            {role}
+            {isAdmin ? "admin" : role}
           </span>
         </div>
         {isMobile && (
@@ -273,6 +336,7 @@ const Sidebar = ({
         {nav.map(({ key, label, icon: Icon }) => {
           const isActive = active === key;
           const hasBadge = key === "bookings" && pending > 0;
+          const isVerifItem = key === "verification";
           return (
             <button
               key={key}
@@ -284,9 +348,11 @@ const Sidebar = ({
               style={
                 isActive
                   ? {
-                      background: isGuest
-                        ? "linear-gradient(135deg,#6EADC9,#4a8aad)"
-                        : "linear-gradient(135deg,#C9A96E,#9a7030)",
+                      background: isVerifItem
+                        ? "linear-gradient(135deg,#4ade80,#22c55e)"
+                        : isGuest
+                          ? "linear-gradient(135deg,#6EADC9,#4a8aad)"
+                          : "linear-gradient(135deg,#C9A96E,#9a7030)",
                     }
                   : {}
               }
@@ -480,6 +546,9 @@ const ListingForm = ({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  // After a new listing is created, show the verification form
+  const [createdListingId, setCreatedListingId] = useState<string | null>(null);
+
   const set = (k: keyof LForm) => (v: string | boolean | string[]) =>
     setForm((f) => ({ ...f, [k]: v }));
 
@@ -535,22 +604,36 @@ const ListingForm = ({
         featured: form.featured,
         available: form.available,
       };
-      let result: Listing;
       if (editing) {
         const u = await ListingsDB.update(editing.id, payload);
         if (!u)
           throw new Error("Update failed — check your Supabase connection.");
-        result = u;
+        onSave(listingToHotel(u));
       } else {
-        result = await ListingsDB.add({ hostId, hostName, ...payload });
+        // Create mode — save then open verification form
+        const result = await ListingsDB.add({ hostId, hostName, ...payload });
+        setCreatedListingId(result.id);
       }
-      onSave(listingToHotel(result));
     } catch (e: any) {
       setError(e.message ?? "Something went wrong.");
     } finally {
       setSaving(false);
     }
   };
+
+  // Hand off to verification form after creation
+  if (createdListingId) {
+    return (
+      <PropertyVerificationForm
+        listingId={createdListingId}
+        onComplete={() => {
+          // Go back to properties list — onSave triggers the parent reload
+          onSave(listingToHotel({ id: createdListingId } as Listing));
+          onCancel();
+        }}
+      />
+    );
+  }
 
   const inp =
     "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#C9A96E] focus:ring-2 focus:ring-[#C9A96E]/10 transition-all bg-white";
@@ -901,6 +984,9 @@ const PropertiesSection = ({ onBook }: { onBook?: (h: Hotel) => void }) => {
   const [editing, setEditing] = useState<Hotel | null | "new">(null);
   const [deleting, setDeleting] = useState<string | null>(null);
 
+  // When set, show PropertyVerificationForm for that listing
+  const [verifyId, setVerifyId] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
@@ -911,6 +997,19 @@ const PropertiesSection = ({ onBook }: { onBook?: (h: Hotel) => void }) => {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Show verification form
+  if (verifyId) {
+    return (
+      <PropertyVerificationForm
+        listingId={verifyId}
+        onComplete={() => {
+          setVerifyId(null);
+          load(); // refresh to show updated status
+        }}
+      />
+    );
+  }
 
   if (editing !== null) {
     return (
@@ -979,113 +1078,146 @@ const PropertiesSection = ({ onBook }: { onBook?: (h: Hotel) => void }) => {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {hotels.map((hotel, i) => (
-            <div
-              key={hotel.id}
-              className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 group"
-              style={{ animation: `fadeUp 0.4s ease ${i * 55}ms both` }}
-            >
+          {hotels.map((hotel, i) => {
+            const verifStatus: VerificationStatus =
+              hotel.verificationStatus ?? "unverified";
+            const needsVerif =
+              verifStatus === "unverified" || verifStatus === "rejected";
+            return (
               <div
-                className="relative h-44 overflow-hidden cursor-pointer"
-                onClick={() => onBook?.(hotel)}
+                key={hotel.id}
+                className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 group"
+                style={{ animation: `fadeUp 0.4s ease ${i * 55}ms both` }}
               >
-                <img
-                  src={
-                    hotel.thumbnail ||
-                    "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400"
-                  }
-                  alt={hotel.name}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src =
-                      "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400";
-                  }}
-                />
-                <div className="absolute top-2 left-2 flex gap-1.5">
-                  {hotel.featured && (
-                    <span className="bg-[#C9A96E] text-white text-[10px] font-bold px-2.5 py-1 rounded-full">
-                      Featured
-                    </span>
-                  )}
-                  <span
-                    className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${hotel.available ? "bg-emerald-500 text-white" : "bg-gray-400 text-white"}`}
-                  >
-                    {hotel.available ? "Live" : "Hidden"}
-                  </span>
-                </div>
-              </div>
-              <div className="p-4">
-                <p className="font-bold text-gray-800 text-sm truncate mb-0.5">
-                  {hotel.name}
-                </p>
-                <div className="flex items-center gap-1 mb-3">
-                  <MapPinIcon className="w-3 h-3 text-[#C9A96E] shrink-0" />
-                  <p className="text-xs text-gray-400 truncate">
-                    {hotel.city}, {hotel.country}
-                  </p>
-                </div>
-                <div className="flex items-center justify-between mb-3">
-                  <p className="font-bold text-gray-900">
-                    {fmt$(hotel.pricePerNight)}
-                    <span className="text-xs text-gray-400 font-normal">
-                      /night
-                    </span>
-                  </p>
-                  {hotel.rating > 0 && (
-                    <div className="flex items-center gap-1">
-                      <StarSolid className="w-3 h-3 text-[#C9A96E]" />
-                      <span className="text-xs font-semibold text-gray-600">
-                        {hotel.rating.toFixed(1)}
+                <div
+                  className="relative h-44 overflow-hidden cursor-pointer"
+                  onClick={() => onBook?.(hotel)}
+                >
+                  <img
+                    src={
+                      hotel.thumbnail ||
+                      "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400"
+                    }
+                    alt={hotel.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src =
+                        "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400";
+                    }}
+                  />
+                  <div className="absolute top-2 left-2 flex gap-1.5 flex-wrap">
+                    {hotel.featured && (
+                      <span className="bg-[#C9A96E] text-white text-[10px] font-bold px-2.5 py-1 rounded-full">
+                        Featured
                       </span>
-                    </div>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setEditing(hotel)}
-                    className="flex-1 flex items-center justify-center gap-1 text-xs font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-200 py-2 rounded-xl transition-colors"
-                  >
-                    <PencilSquareIcon className="w-3.5 h-3.5" /> Edit
-                  </button>
-                  <button
-                    onClick={async () => {
-                      const u = await ListingsDB.update(hotel.id, {
-                        available: !hotel.available,
-                      });
-                      if (u)
-                        setHotels((prev) =>
-                          prev.map((h) =>
-                            h.id === hotel.id ? listingToHotel(u) : h,
-                          ),
-                        );
-                    }}
-                    className={`flex-1 text-xs font-semibold py-2 rounded-xl border transition-colors ${hotel.available ? "text-amber-600 bg-amber-50 border-amber-200 hover:bg-amber-100" : "text-emerald-600 bg-emerald-50 border-emerald-200 hover:bg-emerald-100"}`}
-                  >
-                    {hotel.available ? "Hide" : "Publish"}
-                  </button>
-                  <button
-                    disabled={deleting === hotel.id}
-                    onClick={async () => {
-                      if (!confirm("Delete this listing permanently?")) return;
-                      setDeleting(hotel.id);
-                      await ListingsDB.delete(hotel.id);
-                      setHotels((prev) =>
-                        prev.filter((h) => h.id !== hotel.id),
-                      );
-                      setDeleting(null);
-                    }}
-                    className="w-9 flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 border border-gray-200 hover:border-red-200 rounded-xl transition-colors disabled:opacity-40"
-                  >
-                    {deleting === hotel.id ? (
-                      <span className="w-3.5 h-3.5 border border-red-400 border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <TrashIcon className="w-3.5 h-3.5" />
                     )}
-                  </button>
+                    <span
+                      className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${hotel.available ? "bg-emerald-500 text-white" : "bg-gray-400 text-white"}`}
+                    >
+                      {hotel.available ? "Live" : "Hidden"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-4">
+                  <p className="font-bold text-gray-800 text-sm truncate mb-0.5">
+                    {hotel.name}
+                  </p>
+                  <div className="flex items-center gap-1 mb-2">
+                    <MapPinIcon className="w-3 h-3 text-[#C9A96E] shrink-0" />
+                    <p className="text-xs text-gray-400 truncate">
+                      {hotel.city}, {hotel.country}
+                    </p>
+                  </div>
+
+                  {/* ── Verification badge ── */}
+                  <div className="mb-3">
+                    <VerifBadge status={verifStatus} />
+                    {/* Show rejection reason */}
+                    {verifStatus === "rejected" && hotel.verificationNote && (
+                      <p className="text-[11px] text-red-500 mt-1.5 leading-snug">
+                        Reason: {hotel.verificationNote}
+                      </p>
+                    )}
+                    {/* Resubmit / submit button */}
+                    {needsVerif && (
+                      <button
+                        onClick={() => setVerifyId(hotel.id)}
+                        className="mt-2 flex items-center gap-1 text-[11px] font-bold text-[#C9A96E] hover:underline"
+                      >
+                        <ShieldCheckIcon className="w-3 h-3" />
+                        {verifStatus === "rejected"
+                          ? "Resubmit Verification →"
+                          : "Submit for Verification →"}
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="font-bold text-gray-900">
+                      {fmt$(hotel.pricePerNight)}
+                      <span className="text-xs text-gray-400 font-normal">
+                        /night
+                      </span>
+                    </p>
+                    {hotel.rating > 0 && (
+                      <div className="flex items-center gap-1">
+                        <StarSolid className="w-3 h-3 text-[#C9A96E]" />
+                        <span className="text-xs font-semibold text-gray-600">
+                          {hotel.rating.toFixed(1)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setEditing(hotel)}
+                      className="flex-1 flex items-center justify-center gap-1 text-xs font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-200 py-2 rounded-xl transition-colors"
+                    >
+                      <PencilSquareIcon className="w-3.5 h-3.5" /> Edit
+                    </button>
+                    <button
+                      onClick={async () => {
+                        const u = await ListingsDB.update(hotel.id, {
+                          available: !hotel.available,
+                        });
+                        if (u)
+                          setHotels((prev) =>
+                            prev.map((h) =>
+                              h.id === hotel.id ? listingToHotel(u) : h,
+                            ),
+                          );
+                      }}
+                      className={`flex-1 text-xs font-semibold py-2 rounded-xl border transition-colors ${hotel.available ? "text-amber-600 bg-amber-50 border-amber-200 hover:bg-amber-100" : "text-emerald-600 bg-emerald-50 border-emerald-200 hover:bg-emerald-100"}`}
+                    >
+                      {hotel.available ? "Hide" : "Publish"}
+                    </button>
+                    <button
+                      disabled={deleting === hotel.id}
+                      onClick={async () => {
+                        if (!confirm("Delete this listing permanently?"))
+                          return;
+                        setDeleting(hotel.id);
+                        await ListingsDB.delete(hotel.id);
+                        setHotels((prev) =>
+                          prev.filter((h) => h.id !== hotel.id),
+                        );
+                        setDeleting(null);
+                      }}
+                      className="w-9 flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 border border-gray-200 hover:border-red-200 rounded-xl transition-colors disabled:opacity-40"
+                    >
+                      {deleting === hotel.id ? (
+                        <span className="w-3.5 h-3.5 border border-red-400 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <TrashIcon className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -1266,10 +1398,6 @@ const HostBookings = () => {
 };
 
 /* ═══════════════════════════════════════════════════════════
-   HOST: REVIEWS
-═══════════════════════════════════════════════════════════ */
-
-/* ═══════════════════════════════════════════════════════════
    HOST: EARNINGS
 ═══════════════════════════════════════════════════════════ */
 const EarningsSection = () => {
@@ -1437,7 +1565,6 @@ const SettingsSection = () => {
       </div>
       <div className="max-w-lg space-y-5">
         <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
-          {/* Avatar */}
           <div className="flex items-center gap-4 mb-6 pb-5 border-b border-gray-100">
             <div
               className="w-16 h-16 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg"
@@ -1463,7 +1590,6 @@ const SettingsSection = () => {
               </p>
             </div>
           </div>
-
           <h3 className="font-bold text-gray-800 text-sm mb-4">
             Profile Information
           </h3>
@@ -1535,7 +1661,6 @@ const SettingsSection = () => {
             </div>
           </div>
         </div>
-
         <button
           onClick={save}
           disabled={saving}
@@ -1794,8 +1919,7 @@ const HostHome = ({
                   onClick={() => onNavigate("properties")}
                   className="mt-2 text-xs font-semibold text-[#C9A96E] hover:underline flex items-center gap-1 mx-auto"
                 >
-                  <PlusIcon className="w-3 h-3" />
-                  Add listing
+                  <PlusIcon className="w-3 h-3" /> Add listing
                 </button>
               </div>
             ) : (
@@ -1823,10 +1947,15 @@ const HostHome = ({
                     <p className="text-xs font-semibold text-gray-800 truncate">
                       {h.name}
                     </p>
-                    <p className="text-xs text-[#C9A96E] font-bold">
-                      {fmt$(h.pricePerNight)}
-                      <span className="text-gray-400 font-normal">/n</span>
-                    </p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <p className="text-xs text-[#C9A96E] font-bold">
+                        {fmt$(h.pricePerNight)}
+                        <span className="text-gray-400 font-normal">/n</span>
+                      </p>
+                      <VerifBadge
+                        status={h.verificationStatus ?? "unverified"}
+                      />
+                    </div>
                   </div>
                 </div>
               ))
@@ -1873,6 +2002,9 @@ const HostHome = ({
                       Featured
                     </span>
                   )}
+                  <div className="absolute top-2 right-2">
+                    <VerifBadge status={h.verificationStatus ?? "unverified"} />
+                  </div>
                 </div>
                 <div className="p-3.5">
                   <p className="font-bold text-gray-800 text-sm truncate">
@@ -1899,13 +2031,7 @@ const HostHome = ({
 };
 
 /* ═══════════════════════════════════════════════════════════
-   GUEST DASHBOARD HOME  (upgraded UI)
-═══════════════════════════════════════════════════════════ */
-
-/* ═══════════════════════════════════════════════════════════
    MAIN EXPORT
-   - Guests → GuestDashboard (full standalone, new UI)
-   - Hosts  → existing host shell with sidebar + sections
 ═══════════════════════════════════════════════════════════ */
 interface DashboardProps {
   onBook?: (hotel: Hotel) => void;
@@ -1915,7 +2041,7 @@ interface DashboardProps {
 const Dashboard = ({ onBook, onLogout }: DashboardProps) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const role = (user?.role ?? "guest") as "host" | "guest";
+  const role = (user?.role ?? "guest") as "host" | "guest" | "admin";
 
   const handleLogout = useCallback(async () => {
     await logout();
@@ -1923,7 +2049,6 @@ const Dashboard = ({ onBook, onLogout }: DashboardProps) => {
     else navigate("/login");
   }, [logout, navigate, onLogout]);
 
-  // ── Guests go straight to the new GuestDashboard — no host shell ──
   if (!user)
     return (
       <div className="min-h-screen bg-[#0e0d0b] flex items-center justify-center">
@@ -1935,21 +2060,28 @@ const Dashboard = ({ onBook, onLogout }: DashboardProps) => {
     return <GuestDashboard onBook={onBook} onLogout={onLogout} />;
   }
 
-  // ── Host shell ──
-  return <HostDashboardShell onBook={onBook} onLogout={handleLogout} />;
+  return (
+    <HostDashboardShell
+      onBook={onBook}
+      onLogout={handleLogout}
+      isAdmin={role === "admin"}
+    />
+  );
 };
 
 export default Dashboard;
 
 /* ═══════════════════════════════════════════════════════════
-   HOST DASHBOARD SHELL  (extracted so Dashboard stays clean)
+   HOST DASHBOARD SHELL
 ═══════════════════════════════════════════════════════════ */
 const HostDashboardShell = ({
   onBook,
   onLogout,
+  isAdmin = false,
 }: {
   onBook?: (hotel: Hotel) => void;
   onLogout: () => void;
+  isAdmin?: boolean;
 }) => {
   const [active, setActive] = useState<NavKey>("dashboard");
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -1973,6 +2105,7 @@ const HostDashboardShell = ({
     settings: "Settings",
     wishlist: "Wishlist",
     history: "Travel History",
+    verification: "Verification Queue",
   };
 
   const content = () => {
@@ -1991,6 +2124,12 @@ const HostDashboardShell = ({
         return <MessagesInbox />;
       case "settings":
         return <SettingsSection />;
+      case "verification":
+        return isAdmin ? (
+          <AdminVerificationPanel adminId={user!.id} />
+        ) : (
+          <HostHome onNavigate={setActive} onBook={onBook} />
+        );
       default:
         return <HostHome onNavigate={setActive} onBook={onBook} />;
     }
@@ -2002,7 +2141,6 @@ const HostDashboardShell = ({
         @keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
       `}</style>
 
-      {/* Mobile overlay */}
       {mobileOpen && (
         <div
           className="fixed inset-0 bg-black/60 z-40 lg:hidden"
@@ -2010,7 +2148,6 @@ const HostDashboardShell = ({
         />
       )}
 
-      {/* Mobile drawer */}
       <div
         className={`fixed inset-y-0 left-0 z-50 lg:hidden transition-transform duration-300 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
       >
@@ -2022,10 +2159,10 @@ const HostDashboardShell = ({
           onClose={() => setMobileOpen(false)}
           onLogout={onLogout}
           isMobile
+          isAdmin={isAdmin}
         />
       </div>
 
-      {/* Desktop sidebar */}
       <div className="hidden lg:flex shrink-0">
         <Sidebar
           role="host"
@@ -2033,10 +2170,10 @@ const HostDashboardShell = ({
           onNav={setActive}
           pending={pending}
           onLogout={onLogout}
+          isAdmin={isAdmin}
         />
       </div>
 
-      {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <TopBar
           title={PAGE_TITLES[active]}
