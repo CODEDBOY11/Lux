@@ -13,7 +13,6 @@
 
 import { useState, useRef } from "react";
 import {
-  CloudArrowUpIcon,
   CheckCircleIcon,
   XMarkIcon,
   DocumentTextIcon,
