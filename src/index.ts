@@ -1008,7 +1008,7 @@ export const MessagesDB = {
 
   async conversationsByUser(
     userId: string,
-    role: "host" | "guest",
+    role: "host" | "guest" | "admin",
   ): Promise<Conversation[]> {
     const col = role === "host" ? "host_id" : "guest_id";
     const { data, error } = await supabase
