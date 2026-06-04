@@ -46,8 +46,16 @@ const STATUS_CONFIG: Record<
     color: "#f59e0b",
     bg: "rgba(245,158,11,0.1)",
   },
-  approved: { label: "Approved", color: "#4ade80", bg: "rgba(74,222,128,0.1)" },
-  rejected: { label: "Rejected", color: "#e07070", bg: "rgba(220,60,60,0.1)" },
+  approved: {
+    label: "Approved",
+    color: "#4ade80",
+    bg: "rgba(74,222,128,0.1)",
+  },
+  rejected: {
+    label: "Rejected",
+    color: "#e07070",
+    bg: "rgba(220,60,60,0.1)",
+  },
   needs_more_info: {
     label: "More Info Needed",
     color: "#C9A96E",
@@ -153,9 +161,6 @@ function SubmissionCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [actionNote, setActionNote] = useState("");
-  const [acting, setActing] = useState<"approve" | "reject" | "info" | null>(
-    null,
-  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -181,12 +186,9 @@ function SubmissionCard({
       setError(err.message ?? "Action failed.");
     } finally {
       setLoading(false);
-      setActing(null);
     }
   };
-  {
-    acting === "approve" && <p>Approving...</p>;
-  }
+
   const isPending =
     item.status === "pending" || item.status === "needs_more_info";
 
@@ -505,7 +507,6 @@ function SubmissionCard({
                 paddingTop: 18,
               }}
             >
-              {/* Action note input */}
               <div style={{ marginBottom: 14 }}>
                 <label
                   style={{
@@ -552,7 +553,6 @@ function SubmissionCard({
               )}
 
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {/* Approve */}
                 <button
                   onClick={() => act("approve")}
                   disabled={loading}
@@ -588,7 +588,6 @@ function SubmissionCard({
                   Approve
                 </button>
 
-                {/* Request more info */}
                 <button
                   onClick={() => act("info")}
                   disabled={loading}
@@ -626,7 +625,6 @@ function SubmissionCard({
                   Need More Info
                 </button>
 
-                {/* Reject */}
                 <button
                   onClick={() => act("reject")}
                   disabled={loading}
@@ -679,27 +677,45 @@ export default function AdminVerificationPanel({
 }: {
   adminId: string;
 }) {
+  // allItems always holds the complete unfiltered list so stat counts are correct
+  const [allItems, setAllItems] = useState<AdminVerificationItem[]>([]);
   const [items, setItems] = useState<AdminVerificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<SubmissionStatus | "all">("pending");
 
-  const load = () => {
+  const load = async () => {
     setLoading(true);
-    VerificationDB.adminQueue(filter === "all" ? undefined : filter)
-      .then(setItems)
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    try {
+      // Fetch everything once — filter locally so counts stay accurate
+      const all = await VerificationDB.adminQueue();
+      setAllItems(all);
+      setItems(filter === "all" ? all : all.filter((i) => i.status === filter));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  // Initial load
   useEffect(() => {
     load();
-  }, [filter]);
+  }, []);
 
+  // Re-filter locally when tab changes — no extra network call needed
+  useEffect(() => {
+    setItems(
+      filter === "all" ? allItems : allItems.filter((i) => i.status === filter),
+    );
+  }, [filter, allItems]);
+
+  // Counts always come from the full unfiltered list
   const counts = {
-    pending: items.filter((i) => i.status === "pending").length,
-    needs_more_info: items.filter((i) => i.status === "needs_more_info").length,
-    approved: items.filter((i) => i.status === "approved").length,
-    rejected: items.filter((i) => i.status === "rejected").length,
+    pending: allItems.filter((i) => i.status === "pending").length,
+    needs_more_info: allItems.filter((i) => i.status === "needs_more_info")
+      .length,
+    approved: allItems.filter((i) => i.status === "approved").length,
+    rejected: allItems.filter((i) => i.status === "rejected").length,
   };
 
   return (
@@ -771,7 +787,7 @@ export default function AdminVerificationPanel({
       <div
         style={{ maxWidth: 860, margin: "0 auto", padding: "28px 24px 80px" }}
       >
-        {/* Stat row */}
+        {/* Stat row — always from full list */}
         <div
           style={{
             display: "flex",
@@ -823,24 +839,26 @@ export default function AdminVerificationPanel({
           ))}
         </div>
 
-        {/* Filter tabs */}
+        {/* Filter tabs — counts shown inline */}
         <div
           style={{
             display: "flex",
             gap: 6,
             marginBottom: 20,
             borderBottom: "1px solid rgba(245,240,232,0.07)",
-            paddingBottom: 0,
             flexWrap: "wrap",
           }}
         >
           {(
             [
-              { key: "all", label: "All" },
-              { key: "pending", label: "Pending" },
-              { key: "needs_more_info", label: "More Info" },
-              { key: "approved", label: "Approved" },
-              { key: "rejected", label: "Rejected" },
+              { key: "all", label: `All (${allItems.length})` },
+              { key: "pending", label: `Pending (${counts.pending})` },
+              {
+                key: "needs_more_info",
+                label: `More Info (${counts.needs_more_info})`,
+              },
+              { key: "approved", label: `Approved (${counts.approved})` },
+              { key: "rejected", label: `Rejected (${counts.rejected})` },
             ] as const
           ).map(({ key, label }) => (
             <button
