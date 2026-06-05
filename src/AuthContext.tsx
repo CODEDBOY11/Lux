@@ -216,9 +216,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         Session.set(localUser);
         setUser(localUser);
 
-        navigate(localUser.role === "host" ? "/dashboard" : "/account", {
-          replace: true,
-        });
+        if (localUser.role === "admin") navigate("/admin", { replace: true });
+        else if (localUser.role === "host")
+          navigate("/dashboard", { replace: true });
+        else navigate("/account", { replace: true });
       })
       .catch((err) => {
         console.error("getRedirectResult error:", err);
@@ -279,15 +280,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
       }
 
-      // Guarantee Supabase record (handles Firebase-Console-created users)
       const localUser = await ensureSupabaseUser(fbUser);
       Session.set(localUser, rememberMe);
       setUser(localUser);
+
+      // ✅ Navigate based on role
+      if (localUser.role === "admin") navigate("/admin", { replace: true });
+      else if (localUser.role === "host")
+        navigate("/dashboard", { replace: true });
+      else navigate("/account", { replace: true });
+
       return { ok: true, user: localUser };
     },
-    [],
+    [navigate],
   );
-
   /* ── Register ── */
   const register = useCallback(
     async (data: RegisterData): Promise<AuthResult> => {
