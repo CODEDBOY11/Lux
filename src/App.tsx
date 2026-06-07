@@ -13,6 +13,7 @@ import AuthRouter from "./AuthRouter";
 import ExplorePage from "./ExplorePage";
 import HostDashboard from "./HostDashboard";
 import GuestDashboard from "./GuestDashboard";
+import AdminDashboard from "./Verification/admin";
 import BookingPage from "./Components/BookingPage";
 import Property from "./Components/property/property";
 import Category from "./Components/Categories/category";
@@ -21,16 +22,16 @@ import TestimonialsCTA from "./Components/action/action";
 import Footer from "./Components/footer/footer";
 import Hero from "./Components/Hero";
 
-import { ListingsDB, type Hotel, type Listing } from "./index"; // Recommended location
+import { ListingsDB, type Hotel, type Listing } from "./index";
 
 // 🔐 Prevent logged-in users from accessing auth pages
 function AuthGuard({ children }: { children: ReactNode }) {
   const { user } = useAuth();
 
   if (user) {
-    return (
-      <Navigate to={user.role === "host" ? "/dashboard" : "/explore"} replace />
-    );
+    if (user.role === "admin") return <Navigate to="/admin" replace />;
+    if (user.role === "host") return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/account" replace />;
   }
 
   return <>{children}</>;
@@ -45,7 +46,6 @@ function ListingRoute() {
 
   useEffect(() => {
     if (!id) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     ListingsDB.getById(id)
       .then(setListing)
@@ -53,14 +53,40 @@ function ListingRoute() {
   }, [id]);
 
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100vh",
+          background: "#0e0d0b",
+          color: "#C9A96E",
+          fontFamily: "Cormorant Garamond, serif",
+          fontSize: 22,
+          gap: 12,
+        }}
+      >
+        <span
+          style={{
+            width: 18,
+            height: 18,
+            border: "2px solid rgba(201,169,110,0.3)",
+            borderTopColor: "#C9A96E",
+            borderRadius: "50%",
+            display: "inline-block",
+            animation: "spin 0.8s linear infinite",
+          }}
+        />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        Loading…
+      </div>
+    );
   }
 
   if (!listing) {
     return <Navigate to="/explore" replace />;
   }
-
-  const hotelCategory = listing.category;
 
   const hotel: Hotel = {
     id: listing.id,
@@ -78,10 +104,10 @@ function ListingRoute() {
         ? `${listing.description.slice(0, 117)}...`
         : listing.description,
     pricePerNight: listing.pricePerNight,
-    currency: "NGN", // Change to "USD" if needed
+    currency: "NGN",
     rating: listing.rating,
     reviewCount: listing.reviewCount,
-    category: hotelCategory,
+    category: listing.category,
     amenities: listing.amenities ?? [],
     images: listing.images ?? [],
     thumbnail: listing.images?.[0] ?? "",
@@ -130,6 +156,7 @@ function HomePage() {
 function AppRoutes() {
   return (
     <Routes>
+      {/* Auth pages — redirect away if already logged in */}
       <Route
         path="/signup"
         element={
@@ -138,7 +165,6 @@ function AppRoutes() {
           </AuthGuard>
         }
       />
-
       <Route
         path="/login"
         element={
@@ -148,9 +174,11 @@ function AppRoutes() {
         }
       />
 
+      {/* Public routes */}
       <Route path="/explore" element={<ExplorePage />} />
       <Route path="/listing/:id" element={<ListingRoute />} />
 
+      {/* Host dashboard */}
       <Route
         path="/dashboard"
         element={
@@ -163,6 +191,7 @@ function AppRoutes() {
         }
       />
 
+      {/* Guest dashboard */}
       <Route
         path="/account"
         element={
@@ -175,7 +204,23 @@ function AppRoutes() {
         }
       />
 
+      {/* Admin dashboard */}
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute
+            role="admin"
+            fallback={<Navigate to="/login" replace />}
+          >
+            <AdminDashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Home */}
       <Route path="/" element={<HomePage />} />
+
+      {/* Catch-all */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
