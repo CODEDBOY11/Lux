@@ -199,6 +199,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // ── Auth state observer ──
     const unsub = onAuthStateChanged(auth, async (fbUser) => {
+      const unsub = onAuthStateChanged(auth, async (fbUser) => {
+        if (fbUser) {
+          if (loginHandled.current) {
+            loginHandled.current = false;
+            setLoading(false);
+            return;
+          }
+
+          const existing =
+            (await AuthDB.getByFirebaseUid(fbUser.uid)) ??
+            (await AuthDB.getByEmail(
+              (fbUser.email ?? "").toLowerCase().trim(),
+            ));
+
+          if (existing) {
+            if (fbUser.emailVerified && !existing.emailVerified) {
+              await AuthDB.verifyEmail(existing.id);
+            }
+            // ✅ Use existing directly — skip getById which is returning null
+            const remembered = Session.isRemembered();
+            Session.set(existing, remembered);
+            setUser(existing);
+
+            console.log(
+              "👤 onAuthStateChanged user:",
+              existing.email,
+              "| role:",
+              existing.role,
+            );
+          }
+        } else {
+          Session.clear();
+          setUser(null);
+        }
+        setLoading(false);
+      });
       if (fbUser) {
         // If login() or getRedirectResult() already set the user this cycle,
         // skip the lookup — the session is already correct.
