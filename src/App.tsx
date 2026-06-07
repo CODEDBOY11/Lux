@@ -152,6 +152,13 @@ function HomePage() {
   );
 }
 
+// 🔑 Admin wrapper — passes logged-in user's id to AdminDashboard
+function AdminDashboardWrapper() {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  return <AdminDashboard adminId={user.id} />;
+}
+
 // 🛣️ Application Routes
 function AppRoutes() {
   return (
@@ -212,7 +219,7 @@ function AppRoutes() {
             role="admin"
             fallback={<Navigate to="/login" replace />}
           >
-            <AdminDashboard />
+            <AdminDashboardWrapper />
           </ProtectedRoute>
         }
       />
