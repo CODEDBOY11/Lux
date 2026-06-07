@@ -1440,3 +1440,27 @@ export const VerificationDB = {
     if (error) throw new Error(error.message);
   },
 };
+/* ─────────────── ListingImagesDB ─────────────── */
+
+export const ListingImagesDB = {
+  async upload(hostId: string, file: File): Promise<string> {
+    const ext = file.name.split(".").pop();
+    const path = `${hostId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+
+    const { error } = await supabase.storage
+      .from("listing-images")
+      .upload(path, file, { upsert: false, cacheControl: "3600" });
+
+    if (error) throw new Error(error.message);
+
+    const { data } = supabase.storage.from("listing-images").getPublicUrl(path);
+
+    return data.publicUrl;
+  },
+
+  async delete(url: string): Promise<void> {
+    const path = url.split("/listing-images/")[1];
+    if (!path) return;
+    await supabase.storage.from("listing-images").remove([path]);
+  },
+};

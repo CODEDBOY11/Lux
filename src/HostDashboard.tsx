@@ -1,14 +1,4 @@
-// src/pages/Dashboard.tsx
-// ─────────────────────────────────────────────────────────────────────────────
-// Complete dashboard — every nav section live-connected to Supabase.
-//
-// HOST sections:    Dashboard · My Properties (Add/Edit/Delete) · Bookings · Reviews · Earnings · Settings
-// GUEST sections:   Dashboard · My Bookings · Wishlist · Travel History · Settings
-// ADMIN sections:   Verification Queue (visible only when role === "admin")
-// Shared:           Messages · Hamburger mobile drawer · Dark wood sidebar
-// ─────────────────────────────────────────────────────────────────────────────
-
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import MessagesInbox from "./Components/MessagesInbox";
 import { useNavigate } from "react-router-dom";
 import ReviewsSection from "./ReviewSection";
@@ -47,6 +37,7 @@ import { useAuth } from "./AuthContext";
 import {
   ListingsDB,
   BookingsDB,
+  ListingImagesDB,
   listingToHotel,
   type Hotel,
   type Booking,
@@ -82,10 +73,6 @@ const fmtDate = (d: string) =>
     year: "numeric",
   });
 
-/* ─────────────────────────────────────────────────────────
-   VERIFICATION BADGE
-   Used on every property card to show current status.
-───────────────────────────────────────────────────────── */
 const VERIF_CONFIG: Record<
   VerificationStatus,
   { label: string; color: string; bg: string; border: string }
@@ -128,9 +115,6 @@ const VerifBadge = ({ status }: { status: VerificationStatus }) => {
   );
 };
 
-/* ─────────────────────────────────────────────────────────
-   SKELETON
-───────────────────────────────────────────────────────── */
 const Sk = ({
   h = "h-8",
   rounded = "rounded-xl",
@@ -139,9 +123,6 @@ const Sk = ({
   rounded?: string;
 }) => <div className={`w-full ${h} ${rounded} bg-gray-100 animate-pulse`} />;
 
-/* ─────────────────────────────────────────────────────────
-   STATUS PILL
-───────────────────────────────────────────────────────── */
 const StatusPill = ({ status }: { status: string }) => {
   const cfg: Record<string, { label: string; cls: string }> = {
     confirmed: {
@@ -171,9 +152,6 @@ const StatusPill = ({ status }: { status: string }) => {
   );
 };
 
-/* ─────────────────────────────────────────────────────────
-   STAT CARD
-───────────────────────────────────────────────────────── */
 const StatCard = ({
   icon,
   label,
@@ -245,7 +223,6 @@ const GUEST_NAV = [
   { key: "settings" as NavKey, label: "Settings", icon: Cog6ToothIcon },
 ];
 
-// Admin nav appended to host nav when role === "admin"
 const ADMIN_NAV_ITEM = {
   key: "verification" as NavKey,
   label: "Verification Queue",
@@ -292,8 +269,6 @@ const Sidebar = ({
         }}
       />
       <div className="h-0.5 bg-gradient-to-r from-transparent via-[#C9A96E] to-transparent relative z-10" />
-
-      {/* User block */}
       <div className="relative z-10 px-5 pt-6 pb-5 border-b border-white/8 flex items-center gap-3">
         <div
           className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-base shadow-lg"
@@ -330,8 +305,6 @@ const Sidebar = ({
           </button>
         )}
       </div>
-
-      {/* Nav items */}
       <nav className="flex-1 relative z-10 px-3 pt-3 space-y-0.5 overflow-y-auto">
         {nav.map(({ key, label, icon: Icon }) => {
           const isActive = active === key;
@@ -368,8 +341,6 @@ const Sidebar = ({
           );
         })}
       </nav>
-
-      {/* Logout */}
       <div className="relative z-10 px-3 pb-5 pt-3 border-t border-white/8">
         <button
           onClick={onLogout}
@@ -486,7 +457,7 @@ type LForm = {
   maxGuests: string;
   amenities: string[];
   tags: string;
-  images: string;
+  images: string[]; // ← array of URLs (uploaded or pasted)
   featured: boolean;
   available: boolean;
 };
@@ -504,7 +475,7 @@ const BLANK: LForm = {
   maxGuests: "2",
   amenities: [],
   tags: "",
-  images: "",
+  images: [], // ← empty array
   featured: false,
   available: true,
 };
@@ -537,7 +508,7 @@ const ListingForm = ({
           maxGuests: String(editing.maxGuests),
           amenities: editing.amenities,
           tags: editing.tags.join(", "),
-          images: editing.images.join("\n"),
+          images: editing.images, // ← already an array
           featured: editing.featured,
           available: editing.available,
         }
@@ -545,9 +516,13 @@ const ListingForm = ({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-
-  // After a new listing is created, show the verification form
   const [createdListingId, setCreatedListingId] = useState<string | null>(null);
+
+  // Image upload state
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [urlInput, setUrlInput] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const set = (k: keyof LForm) => (v: string | boolean | string[]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -567,6 +542,32 @@ const ListingForm = ({
         : [...form.amenities, a],
     );
 
+  const handleFileUpload = async (files: FileList) => {
+    if (!files.length) return;
+    setUploadingImages(true);
+    setUploadError("");
+    try {
+      const urls = await Promise.all(
+        Array.from(files).map((f) => ListingImagesDB.upload(hostId, f)),
+      );
+      set("images")([...form.images, ...urls]);
+    } catch (err: any) {
+      setUploadError(err.message ?? "Upload failed. Please try again.");
+    } finally {
+      setUploadingImages(false);
+    }
+  };
+
+  const addUrlManually = () => {
+    const trimmed = urlInput.trim();
+    if (!trimmed) return;
+    set("images")([...form.images, trimmed]);
+    setUrlInput("");
+  };
+
+  const removeImage = (i: number) =>
+    set("images")(form.images.filter((_, j) => j !== i));
+
   const save = async () => {
     if (!form.name.trim() || !form.city.trim() || !form.pricePerNight) {
       setError("Name, city and price per night are required.");
@@ -578,10 +579,6 @@ const ListingForm = ({
     }
     setSaving(true);
     setError("");
-    const images = form.images
-      .split("\n")
-      .map((s) => s.trim())
-      .filter(Boolean);
     const tags = form.tags
       .split(",")
       .map((s) => s.trim())
@@ -600,7 +597,7 @@ const ListingForm = ({
         maxGuests: Number(form.maxGuests),
         amenities: form.amenities,
         tags,
-        images,
+        images: form.images, // ← already an array
         featured: form.featured,
         available: form.available,
       };
@@ -610,7 +607,6 @@ const ListingForm = ({
           throw new Error("Update failed — check your Supabase connection.");
         onSave(listingToHotel(u));
       } else {
-        // Create mode — save then open verification form
         const result = await ListingsDB.add({ hostId, hostName, ...payload });
         setCreatedListingId(result.id);
       }
@@ -621,13 +617,11 @@ const ListingForm = ({
     }
   };
 
-  // Hand off to verification form after creation
   if (createdListingId) {
     return (
       <PropertyVerificationForm
         listingId={createdListingId}
         onComplete={() => {
-          // Go back to properties list — onSave triggers the parent reload
           onSave(listingToHotel({ id: createdListingId } as Listing));
           onCancel();
         }}
@@ -639,10 +633,6 @@ const ListingForm = ({
     "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#C9A96E] focus:ring-2 focus:ring-[#C9A96E]/10 transition-all bg-white";
   const lbl =
     "block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5";
-  const previewUrls = form.images
-    .split("\n")
-    .map((s) => s.trim())
-    .filter(Boolean);
 
   return (
     <div
@@ -650,7 +640,6 @@ const ListingForm = ({
       style={{ animation: "fadeUp 0.3s ease both" }}
     >
       <div className="max-w-2xl mx-auto p-6 pb-16">
-        {/* Header */}
         <div className="flex items-center gap-4 mb-7">
           <button
             onClick={onCancel}
@@ -677,7 +666,7 @@ const ListingForm = ({
         )}
 
         <div className="space-y-5">
-          {/* ── Basic info ── */}
+          {/* Basic info */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
             <h3 className="font-bold text-gray-800 text-sm mb-4 flex items-center gap-2">
               <BuildingOffice2Icon className="w-4 h-4 text-[#C9A96E]" /> Basic
@@ -770,12 +759,12 @@ const ListingForm = ({
             </div>
           </div>
 
-          {/* ── Location ── */}
+          {/* Location */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
             <h3 className="font-bold text-gray-800 text-sm mb-4 flex items-center gap-2">
               <MapPinIcon className="w-4 h-4 text-[#C9A96E]" /> Location
             </h3>
-            <div className="grid grid-cols-1 gap-4">
+            <div className="space-y-4">
               <div>
                 <label className={lbl}>Full Address / Area</label>
                 <input
@@ -808,7 +797,7 @@ const ListingForm = ({
             </div>
           </div>
 
-          {/* ── Capacity ── */}
+          {/* Capacity */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
             <h3 className="font-bold text-gray-800 text-sm mb-4 flex items-center gap-2">
               <UserIcon className="w-4 h-4 text-[#C9A96E]" /> Capacity
@@ -847,7 +836,7 @@ const ListingForm = ({
             </div>
           </div>
 
-          {/* ── Amenities ── */}
+          {/* Amenities */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
             <h3 className="font-bold text-gray-800 text-sm mb-1 flex items-center gap-2">
               <CheckCircleIcon className="w-4 h-4 text-[#C9A96E]" /> Amenities
@@ -884,12 +873,13 @@ const ListingForm = ({
             </div>
           </div>
 
-          {/* ── Tags & Images ── */}
+          {/* Tags & Photos — with device upload */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
             <h3 className="font-bold text-gray-800 text-sm mb-4 flex items-center gap-2">
               <PhotoIcon className="w-4 h-4 text-[#C9A96E]" /> Tags & Photos
             </h3>
-            <div className="space-y-4">
+            <div className="space-y-5">
+              {/* Tags */}
               <div>
                 <label className={lbl}>Tags (comma-separated)</label>
                 <input
@@ -899,51 +889,132 @@ const ListingForm = ({
                   placeholder="Romantic, Sea View, Private, Luxury"
                 />
               </div>
+
+              {/* Upload from device */}
               <div>
-                <label className={lbl}>Image URLs (one per line)</label>
-                <textarea
-                  className={inp + " resize-none font-mono text-xs"}
-                  rows={4}
-                  value={form.images}
-                  onChange={(e) => set("images")(e.target.value)}
-                  placeholder={
-                    "https://images.unsplash.com/photo-…?w=800\nhttps://…"
+                <label className={lbl}>Upload Photos from Device</label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) =>
+                    e.target.files && handleFileUpload(e.target.files)
                   }
                 />
-                <p className="text-xs text-gray-400 mt-1">
-                  First URL becomes the main thumbnail. Use direct image links.
-                </p>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl p-8 transition-all ${
+                    uploadingImages
+                      ? "border-[#C9A96E]/40 bg-[#C9A96E]/5 cursor-wait"
+                      : "border-gray-200 hover:border-[#C9A96E]/50 hover:bg-amber-50/30 cursor-pointer"
+                  }`}
+                >
+                  {uploadingImages ? (
+                    <>
+                      <span className="w-7 h-7 border-2 border-[#C9A96E]/30 border-t-[#C9A96E] rounded-full animate-spin" />
+                      <span className="text-sm text-[#C9A96E] font-semibold">
+                        Uploading to Supabase…
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-12 h-12 rounded-2xl bg-[#C9A96E]/10 border border-[#C9A96E]/20 flex items-center justify-center">
+                        <PhotoIcon className="w-6 h-6 text-[#C9A96E]" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm font-semibold text-gray-700">
+                          Click to upload photos
+                        </p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          JPG, PNG, WEBP — multiple files allowed
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </button>
+                {uploadError && (
+                  <p className="text-xs text-red-500 mt-2 flex items-center gap-1">
+                    <XMarkIcon className="w-3 h-3 shrink-0" /> {uploadError}
+                  </p>
+                )}
               </div>
-              {previewUrls.length > 0 && (
-                <div className="flex gap-2 flex-wrap">
-                  {previewUrls.slice(0, 6).map((url, i) => (
-                    <div
-                      key={i}
-                      className="relative w-20 h-16 rounded-lg overflow-hidden border border-gray-200 bg-gray-100"
-                    >
-                      <img
-                        src={url}
-                        alt=""
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          (
-                            e.target as HTMLImageElement
-                          ).parentElement!.style.opacity = "0.3";
-                        }}
-                      />
-                      {i === 0 && (
-                        <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[9px] text-center py-0.5 font-bold">
-                          MAIN
-                        </span>
-                      )}
-                    </div>
-                  ))}
+
+              {/* Paste URL */}
+              <div>
+                <label className={lbl}>Or Paste an Image URL</label>
+                <div className="flex gap-2">
+                  <input
+                    className={inp}
+                    value={urlInput}
+                    onChange={(e) => setUrlInput(e.target.value)}
+                    placeholder="https://images.unsplash.com/…"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addUrlManually();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={addUrlManually}
+                    className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 transition-colors whitespace-nowrap"
+                  >
+                    Add URL
+                  </button>
+                </div>
+              </div>
+
+              {/* Image previews */}
+              {form.images.length > 0 && (
+                <div>
+                  <label className={lbl}>
+                    Photos ({form.images.length}) — hover to remove
+                  </label>
+                  <div className="flex gap-2 flex-wrap">
+                    {form.images.map((url, i) => (
+                      <div
+                        key={i}
+                        className="relative w-24 h-20 rounded-xl overflow-hidden border border-gray-200 bg-gray-100 group shadow-sm"
+                      >
+                        <img
+                          src={url}
+                          alt=""
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (
+                              e.target as HTMLImageElement
+                            ).parentElement!.style.opacity = "0.35";
+                          }}
+                        />
+                        {i === 0 && (
+                          <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[9px] text-center py-0.5 font-bold">
+                            MAIN
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeImage(i)}
+                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
+                        >
+                          <XMarkIcon className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1.5">
+                    First image is the main thumbnail. Hover a photo to remove
+                    it.
+                  </p>
                 </div>
               )}
             </div>
           </div>
 
-          {/* ── Save ── */}
+          {/* Save */}
           <div className="flex gap-3">
             <button
               onClick={save}
@@ -983,8 +1054,6 @@ const PropertiesSection = ({ onBook }: { onBook?: (h: Hotel) => void }) => {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Hotel | null | "new">(null);
   const [deleting, setDeleting] = useState<string | null>(null);
-
-  // When set, show PropertyVerificationForm for that listing
   const [verifyId, setVerifyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -998,14 +1067,13 @@ const PropertiesSection = ({ onBook }: { onBook?: (h: Hotel) => void }) => {
     load();
   }, [load]);
 
-  // Show verification form
   if (verifyId) {
     return (
       <PropertyVerificationForm
         listingId={verifyId}
         onComplete={() => {
           setVerifyId(null);
-          load(); // refresh to show updated status
+          load();
         }}
       />
     );
@@ -1118,7 +1186,6 @@ const PropertiesSection = ({ onBook }: { onBook?: (h: Hotel) => void }) => {
                     </span>
                   </div>
                 </div>
-
                 <div className="p-4">
                   <p className="font-bold text-gray-800 text-sm truncate mb-0.5">
                     {hotel.name}
@@ -1129,17 +1196,13 @@ const PropertiesSection = ({ onBook }: { onBook?: (h: Hotel) => void }) => {
                       {hotel.city}, {hotel.country}
                     </p>
                   </div>
-
-                  {/* ── Verification badge ── */}
                   <div className="mb-3">
                     <VerifBadge status={verifStatus} />
-                    {/* Show rejection reason */}
                     {verifStatus === "rejected" && hotel.verificationNote && (
                       <p className="text-[11px] text-red-500 mt-1.5 leading-snug">
                         Reason: {hotel.verificationNote}
                       </p>
                     )}
-                    {/* Resubmit / submit button */}
                     {needsVerif && (
                       <button
                         onClick={() => setVerifyId(hotel.id)}
@@ -1152,7 +1215,6 @@ const PropertiesSection = ({ onBook }: { onBook?: (h: Hotel) => void }) => {
                       </button>
                     )}
                   </div>
-
                   <div className="flex items-center justify-between mb-3">
                     <p className="font-bold text-gray-900">
                       {fmt$(hotel.pricePerNight)}
@@ -1169,7 +1231,6 @@ const PropertiesSection = ({ onBook }: { onBook?: (h: Hotel) => void }) => {
                       </div>
                     )}
                   </div>
-
                   <div className="flex gap-2">
                     <button
                       onClick={() => setEditing(hotel)}
@@ -1523,7 +1584,7 @@ const EarningsSection = () => {
 };
 
 /* ═══════════════════════════════════════════════════════════
-   SETTINGS (shared)
+   SETTINGS
 ═══════════════════════════════════════════════════════════ */
 const SettingsSection = () => {
   const { user, updateUser } = useAuth();
@@ -1743,7 +1804,6 @@ const HostHome = ({
           Here is an overview of your property performance
         </p>
       </div>
-
       <div className="flex gap-4 flex-wrap">
         {loading ? (
           [...Array(4)].map((_, i) => (
@@ -1781,9 +1841,7 @@ const HostHome = ({
           </>
         )}
       </div>
-
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_260px] gap-6">
-        {/* Bookings table */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
             <h3 className="font-bold text-gray-900">Recent Bookings</h3>
@@ -1892,8 +1950,6 @@ const HostHome = ({
             </div>
           )}
         </div>
-
-        {/* Properties panel */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
             <h3 className="font-bold text-gray-900">Your Properties</h3>
@@ -1963,8 +2019,6 @@ const HostHome = ({
           </div>
         </div>
       </div>
-
-      {/* All property cards */}
       {!loading && hotels.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-4">
@@ -2056,10 +2110,8 @@ const Dashboard = ({ onBook, onLogout }: DashboardProps) => {
       </div>
     );
 
-  if (role === "guest") {
+  if (role === "guest")
     return <GuestDashboard onBook={onBook} onLogout={onLogout} />;
-  }
-
   return (
     <HostDashboardShell
       onBook={onBook}
@@ -2137,17 +2189,13 @@ const HostDashboardShell = ({
 
   return (
     <div className="min-h-screen flex overflow-hidden bg-gray-50">
-      <style>{`
-        @keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
-      `}</style>
-
+      <style>{`@keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }`}</style>
       {mobileOpen && (
         <div
           className="fixed inset-0 bg-black/60 z-40 lg:hidden"
           onClick={() => setMobileOpen(false)}
         />
       )}
-
       <div
         className={`fixed inset-y-0 left-0 z-50 lg:hidden transition-transform duration-300 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
       >
@@ -2162,7 +2210,6 @@ const HostDashboardShell = ({
           isAdmin={isAdmin}
         />
       </div>
-
       <div className="hidden lg:flex shrink-0">
         <Sidebar
           role="host"
@@ -2173,7 +2220,6 @@ const HostDashboardShell = ({
           isAdmin={isAdmin}
         />
       </div>
-
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <TopBar
           title={PAGE_TITLES[active]}
