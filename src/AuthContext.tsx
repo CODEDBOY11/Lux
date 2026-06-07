@@ -123,7 +123,7 @@ async function ensureSupabaseUser(
   // Brand new user — create record
   const nameParts = (fbUser.displayName ?? "").trim().split(" ");
   const result = await AuthDB.register({
-    role, // only for genuinely new users
+    role,
     email,
     firstName: nameParts[0] || "User",
     lastName: nameParts.slice(1).join(" ") || "",
@@ -156,10 +156,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(Session.get());
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-
-  // ── Guard flag: set to true when login() or getRedirectResult() already
-  // handled the session. Tells onAuthStateChanged to skip its own lookup
-  // so it doesn't race/overwrite with a stale value.
   const loginHandled = useRef(false);
 
   const refreshUser = useCallback(() => setUser(Session.get()), []);
@@ -187,8 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         );
         Session.set(localUser);
         setUser(localUser);
-        loginHandled.current = true; // prevent onAuthStateChanged from overwriting
-
+        loginHandled.current = true;
         navigate(roleToPath(localUser.role), { replace: true });
       })
       .catch((err) => {
@@ -198,54 +193,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
     // ── Auth state observer ──
-    const unsub = onAuthStateChanged(auth, async (fbUser) => {
-      const unsub = onAuthStateChanged(auth, async (fbUser) => {
-        if (fbUser) {
-          if (loginHandled.current) {
-            loginHandled.current = false;
-            setLoading(false);
-            return;
-          }
-
-          const existing =
-            (await AuthDB.getByFirebaseUid(fbUser.uid)) ??
-            (await AuthDB.getByEmail(
-              (fbUser.email ?? "").toLowerCase().trim(),
-            ));
-
-          if (existing) {
-            if (fbUser.emailVerified && !existing.emailVerified) {
-              await AuthDB.verifyEmail(existing.id);
-            }
-            // ✅ Use existing directly — skip getById which is returning null
-            const remembered = Session.isRemembered();
-            Session.set(existing, remembered);
-            setUser(existing);
-
-            console.log(
-              "👤 onAuthStateChanged user:",
-              existing.email,
-              "| role:",
-              existing.role,
-            );
-          }
-        } else {
-          Session.clear();
-          setUser(null);
-        }
-        setLoading(false);
-      });
+    return onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
-        // If login() or getRedirectResult() already set the user this cycle,
-        // skip the lookup — the session is already correct.
         if (loginHandled.current) {
           loginHandled.current = false;
           setLoading(false);
           return;
         }
 
-        // Page refresh / returning user — re-fetch from Supabase to get
-        // the latest role (critical for admin).
         const existing =
           (await AuthDB.getByFirebaseUid(fbUser.uid)) ??
           (await AuthDB.getByEmail((fbUser.email ?? "").toLowerCase().trim()));
@@ -254,11 +209,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (fbUser.emailVerified && !existing.emailVerified) {
             await AuthDB.verifyEmail(existing.id);
           }
-          // Always re-fetch to get the freshest role from Supabase
-          const fresh = (await AuthDB.getById(existing.id)) ?? existing;
           const remembered = Session.isRemembered();
-          Session.set(fresh, remembered);
-          setUser(fresh);
+          Session.set(existing, remembered);
+          setUser(existing);
+          console.log(
+            "👤 onAuthStateChanged:",
+            existing.email,
+            "| role:",
+            existing.role,
+          );
         }
       } else {
         Session.clear();
@@ -266,8 +225,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setLoading(false);
     });
-
-    return unsub;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Email / password login ── */
@@ -293,10 +250,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const localUser = await ensureSupabaseUser(fbUser);
       Session.set(localUser, rememberMe);
       setUser(localUser);
-
-      // Tell onAuthStateChanged (which fires immediately after) to skip its
-      // own lookup — we already have the correct user with the correct role.
       loginHandled.current = true;
+
+      console.log(
+        "✅ login() user:",
+        localUser.email,
+        "| role:",
+        localUser.role,
+      );
+      console.log("✅ navigating to:", roleToPath(localUser.role));
 
       navigate(roleToPath(localUser.role), { replace: true });
       return { ok: true, user: localUser };
@@ -329,16 +291,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch {
         /* best-effort */
       }
-      const localUser = await ensureSupabaseUser(fbUser);
-      console.log(
-        "✅ login() got user:",
-        localUser.email,
-        "| role:",
-        localUser.role,
-      );
-      console.log("✅ navigating to:", roleToPath(localUser.role));
-      loginHandled.current = true;
-      navigate(roleToPath(localUser.role), { replace: true });
 
       const result = await AuthDB.register({
         ...data,
@@ -424,7 +376,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 /* ─────────────── ProtectedRoute ─────────────── */
-
 export function ProtectedRoute({
   children,
   role,
