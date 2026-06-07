@@ -1,3 +1,17 @@
+/**
+ * BookingPage.tsx — with Paystack inline payment
+ *
+ * SETUP:
+ *   1. Add to .env.local:
+ *        VITE_PAYSTACK_PUBLIC_KEY=pk_live_xxxxxxxxxxxx
+ *   2. Add Paystack inline script to your index.html <head>:
+ *        <script src="https://js.paystack.co/v1/inline.js"></script>
+ *
+ * FLOW:
+ *   form → confirm → [Paystack popup] → on success: BookingsDB.add() → done
+ *                                      → on close/fail: stay on confirm, show error
+ */
+
 import { useState, useEffect, useRef } from "react";
 import { MessagesDB, type Conversation } from "../index";
 import {
@@ -22,6 +36,26 @@ import {
 import { StarIcon as StarOutline } from "@heroicons/react/24/outline";
 import { useAuth } from "../AuthContext";
 import { BookingsDB, ReviewsDB, type Hotel, type Booking } from "../index";
+
+/* ─────────────── Paystack types ─────────────── */
+declare global {
+  interface Window {
+    PaystackPop: {
+      setup(options: {
+        key: string;
+        email: string;
+        amount: number; // in kobo (multiply USD by 100, or use NGN)
+        currency?: string;
+        ref: string;
+        metadata?: Record<string, unknown>;
+        onClose: () => void;
+        callback: (response: { reference: string; status: string }) => void;
+      }): { openIframe(): void };
+    };
+  }
+}
+
+const PAYSTACK_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY as string;
 
 /* ─────────────── Helpers ─────────────── */
 const DEFAULT_IMAGE =
@@ -55,7 +89,7 @@ const AMENITY_ICONS: Record<string, string> = {
   "Hot Tub": "♨️",
 };
 
-/* ─────────────── Star Picker (for review modal) ─────────────── */
+/* ─────────────── Star Picker ─────────────── */
 function StarPicker({
   value,
   onChange,
@@ -85,7 +119,6 @@ function StarPicker({
               transform: hovered === star ? "scale(1.2)" : "scale(1)",
               transition: "transform 0.15s",
             }}
-            aria-label={`${star} star${star > 1 ? "s" : ""}`}
           >
             {filled ? (
               <StarIcon
@@ -107,7 +140,6 @@ function StarPicker({
   );
 }
 
-/* ─────────────── Sub-rating row (for review modal) ─────────────── */
 function SubRating({
   label,
   value,
@@ -161,24 +193,14 @@ function GuestReviewModal({
   const [reviewError, setReviewError] = useState("");
 
   useEffect(() => {
-    ReviewsDB.existsForBooking(booking.id).then((exists) => {
-      setAlreadyReviewed(exists);
-    });
+    ReviewsDB.existsForBooking(booking.id).then(setAlreadyReviewed);
   }, [booking.id]);
 
   const handleReviewSubmit = async () => {
-    if (rating === 0) {
-      setReviewError("Please select an overall rating.");
-      return;
-    }
-    if (!body.trim()) {
-      setReviewError("Please write a short review.");
-      return;
-    }
-    if (!user) {
-      setReviewError("You must be signed in to leave a review.");
-      return;
-    }
+    if (rating === 0) return setReviewError("Please select an overall rating.");
+    if (!body.trim()) return setReviewError("Please write a short review.");
+    if (!user)
+      return setReviewError("You must be signed in to leave a review.");
     setReviewError("");
     setSaving(true);
     try {
@@ -212,9 +234,7 @@ function GuestReviewModal({
     }
   };
 
-  if (alreadyReviewed === null) return null;
-  if (alreadyReviewed) return null;
-
+  if (alreadyReviewed === null || alreadyReviewed) return null;
   const ratingLabels = ["", "Poor", "Fair", "Good", "Great", "Exceptional"];
 
   return (
@@ -228,7 +248,6 @@ function GuestReviewModal({
         justifyContent: "center",
       }}
     >
-      {/* Backdrop */}
       <div
         onClick={reviewStep === "done" ? onClose : undefined}
         style={{
@@ -238,8 +257,6 @@ function GuestReviewModal({
           backdropFilter: "blur(10px)",
         }}
       />
-
-      {/* Panel */}
       <div
         style={{
           position: "relative",
@@ -253,11 +270,9 @@ function GuestReviewModal({
           borderRadius: "24px 24px 0 0",
           scrollbarWidth: "none",
         }}
-        className="sm:rounded-3xl sm:mb-6"
       >
         {reviewStep === "write" && (
           <>
-            {/* Sticky header */}
             <div
               style={{
                 position: "sticky",
@@ -290,7 +305,6 @@ function GuestReviewModal({
                     fontSize: 22,
                     fontWeight: 600,
                     color: "#f5f0e8",
-                    lineHeight: 1.1,
                   }}
                 >
                   Leave a Review
@@ -309,16 +323,12 @@ function GuestReviewModal({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  flexShrink: 0,
-                  marginTop: 4,
                 }}
               >
                 <XMarkIcon style={{ width: 16, height: 16 }} />
               </button>
             </div>
-
             <div style={{ padding: "20px 24px 32px" }}>
-              {/* Property card */}
               <div
                 style={{
                   display: "flex",
@@ -375,15 +385,13 @@ function GuestReviewModal({
                       marginTop: 3,
                     }}
                   >
-                    Booking ref:{" "}
+                    Ref:{" "}
                     <span style={{ fontFamily: "monospace", color: "#C9A96E" }}>
                       {booking.ref}
                     </span>
                   </p>
                 </div>
               </div>
-
-              {/* Overall rating */}
               <div style={{ marginBottom: 28, textAlign: "center" }}>
                 <p
                   style={{
@@ -412,15 +420,12 @@ function GuestReviewModal({
                       fontWeight: 600,
                       color: rating > 0 ? "#C9A96E" : "rgba(245,240,232,0.2)",
                       minHeight: 20,
-                      transition: "color 0.2s",
                     }}
                   >
                     {ratingLabels[rating]}
                   </p>
                 </div>
               </div>
-
-              {/* Sub-ratings */}
               <div
                 style={{
                   background: "rgba(245,240,232,0.03)",
@@ -464,8 +469,6 @@ function GuestReviewModal({
                   onChange={setValueRating}
                 />
               </div>
-
-              {/* Title */}
               <div style={{ marginBottom: 14 }}>
                 <label
                   style={{
@@ -484,7 +487,7 @@ function GuestReviewModal({
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Summarise your stay in a few words…"
+                  placeholder="Summarise your stay…"
                   maxLength={100}
                   style={{
                     width: "100%",
@@ -497,7 +500,6 @@ function GuestReviewModal({
                     outline: "none",
                     boxSizing: "border-box",
                     fontFamily: "inherit",
-                    transition: "border-color 0.2s",
                   }}
                   onFocus={(e) => (e.target.style.borderColor = "#C9A96E")}
                   onBlur={(e) =>
@@ -505,8 +507,6 @@ function GuestReviewModal({
                   }
                 />
               </div>
-
-              {/* Body */}
               <div style={{ marginBottom: 22 }}>
                 <label
                   style={{
@@ -526,7 +526,7 @@ function GuestReviewModal({
                   onChange={(e) => setBody(e.target.value)}
                   rows={5}
                   maxLength={1500}
-                  placeholder="Tell future guests about the property, the host, and what made your stay memorable…"
+                  placeholder="Tell future guests about the property…"
                   style={{
                     width: "100%",
                     background: "rgba(245,240,232,0.05)",
@@ -539,7 +539,6 @@ function GuestReviewModal({
                     resize: "none",
                     boxSizing: "border-box",
                     fontFamily: "inherit",
-                    transition: "border-color 0.2s",
                   }}
                   onFocus={(e) => (e.target.style.borderColor = "#C9A96E")}
                   onBlur={(e) =>
@@ -557,8 +556,6 @@ function GuestReviewModal({
                   {body.length}/1500
                 </p>
               </div>
-
-              {/* Error */}
               {reviewError && (
                 <div
                   style={{
@@ -574,8 +571,6 @@ function GuestReviewModal({
                   {reviewError}
                 </div>
               )}
-
-              {/* CTA */}
               <button
                 onClick={handleReviewSubmit}
                 disabled={saving}
@@ -594,8 +589,6 @@ function GuestReviewModal({
                   alignItems: "center",
                   justifyContent: "center",
                   gap: 8,
-                  letterSpacing: "0.04em",
-                  transition: "opacity 0.2s",
                 }}
               >
                 {saving ? (
@@ -617,25 +610,9 @@ function GuestReviewModal({
                   "Submit Review"
                 )}
               </button>
-
-              <p
-                style={{
-                  textAlign: "center",
-                  fontSize: 11,
-                  color: "rgba(245,240,232,0.2)",
-                  marginTop: 14,
-                  lineHeight: 1.6,
-                }}
-              >
-                Reviews are shared with the host and visible to other guests.
-                <br />
-                You can only leave one review per stay.
-              </p>
             </div>
           </>
         )}
-
-        {/* Done step */}
         {reviewStep === "done" && (
           <div
             style={{
@@ -686,38 +663,6 @@ function GuestReviewModal({
             >
               Review Submitted
             </h2>
-            <p
-              style={{
-                fontSize: 13,
-                color: "rgba(245,240,232,0.45)",
-                lineHeight: 1.8,
-                maxWidth: 320,
-                marginBottom: 32,
-              }}
-            >
-              Your feedback helps future guests and gives{" "}
-              <strong style={{ color: "#f5f0e8" }}>{hotel.hostName}</strong> the
-              chance to keep improving. It means a lot.
-            </p>
-            <div
-              style={{
-                display: "flex",
-                gap: 4,
-                marginBottom: 32,
-                justifyContent: "center",
-              }}
-            >
-              {[1, 2, 3, 4, 5].map((s) => (
-                <StarIcon
-                  key={s}
-                  style={{
-                    width: 22,
-                    height: 22,
-                    color: s <= rating ? "#C9A96E" : "rgba(245,240,232,0.1)",
-                  }}
-                />
-              ))}
-            </div>
             <button
               onClick={onClose}
               style={{
@@ -729,7 +674,6 @@ function GuestReviewModal({
                 borderRadius: 14,
                 border: "none",
                 cursor: "pointer",
-                letterSpacing: "0.04em",
               }}
             >
               Done
@@ -743,18 +687,15 @@ function GuestReviewModal({
 
 /* ─────────────── Concierge Chat ─────────────── */
 type ChatMsg = { role: "user" | "concierge"; text: string; time: string };
-
 const nowTime = () =>
   new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
 const CONCIERGE_RESPONSES = [
-  "Thank you for reaching out! I'd be delighted to assist you. What would you like to know about your stay?",
-  "Great question! Let me check that for you. Our team is available 24/7 to ensure your experience is flawless.",
-  "Absolutely, we can arrange that for you. Would you like me to note this as a special request on your booking?",
-  "Of course! We'd be happy to accommodate that. Is there anything else you'd like to know?",
+  "Thank you for reaching out! I'd be delighted to assist you.",
+  "Great question! Our team is available 24/7 to ensure your experience is flawless.",
+  "Absolutely, we can arrange that for you. Anything else?",
+  "Of course! We'd be happy to accommodate that.",
   "I've passed your request to our host team — you'll see their reply here shortly.",
   "That's a wonderful choice! I'll make sure everything is prepared before your arrival.",
-  "We'll have that ready for you upon arrival. Our team takes pride in every detail.",
 ];
 
 function ConciergeChat({
@@ -771,7 +712,7 @@ function ConciergeChat({
   const [messages, setMessages] = useState<ChatMsg[]>([
     {
       role: "concierge",
-      text: `Welcome to ${hotel.name}! I'm your personal concierge${guestName ? `, ${guestName.split(" ")[0]}` : ""}. How can I make your stay exceptional today?`,
+      text: `Welcome to ${hotel.name}! I'm your personal concierge${guestName ? `, ${guestName.split(" ")[0]}` : ""}. How can I make your stay exceptional?`,
       time: nowTime(),
     },
   ]);
@@ -806,9 +747,7 @@ function ConciergeChat({
     const text = input.trim();
     if (!text) return;
     setInput("");
-
     setMessages((m) => [...m, { role: "user", text, time: nowTime() }]);
-
     if (guestId && conversation) {
       MessagesDB.sendMessage({
         conversationId: conversation.id,
@@ -819,17 +758,18 @@ function ConciergeChat({
         body: text,
       }).catch(console.error);
     }
-
     setTyping(true);
     setTimeout(
       () => {
-        const reply =
-          CONCIERGE_RESPONSES[
-            Math.floor(Math.random() * CONCIERGE_RESPONSES.length)
-          ];
         setMessages((m) => [
           ...m,
-          { role: "concierge", text: reply, time: nowTime() },
+          {
+            role: "concierge",
+            text: CONCIERGE_RESPONSES[
+              Math.floor(Math.random() * CONCIERGE_RESPONSES.length)
+            ],
+            time: nowTime(),
+          },
         ]);
         setTyping(false);
       },
@@ -879,7 +819,6 @@ function ConciergeChat({
         }}
         className="w-full rounded-t-3xl md:w-[390px] md:rounded-3xl md:mr-6 md:mb-6"
       >
-        {/* Header */}
         <div
           style={{
             background: "rgba(201,169,110,0.08)",
@@ -907,7 +846,6 @@ function ConciergeChat({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  flexShrink: 0,
                 }}
               >
                 <UserIcon style={{ width: 18, height: 18, color: "#C9A96E" }} />
@@ -954,22 +892,12 @@ function ConciergeChat({
               <XMarkIcon style={{ width: 16, height: 16 }} />
             </button>
           </div>
-          <p style={{ fontSize: 11, color: "rgba(245,240,232,0.3)" }}>
-            {hotel.name}
-            {!guestId && (
-              <span style={{ color: "rgba(201,169,110,0.6)", marginLeft: 8 }}>
-                · Sign in to save your chat history
-              </span>
-            )}
-          </p>
         </div>
-
-        {/* Messages */}
         <div
           style={{
             flex: 1,
             overflowY: "auto",
-            padding: "16px",
+            padding: 16,
             display: "flex",
             flexDirection: "column",
             gap: 12,
@@ -1027,10 +955,6 @@ function ConciergeChat({
                     background:
                       m.role === "user" ? "#C9A96E" : "rgba(245,240,232,0.07)",
                     color: m.role === "user" ? "#0e0d0b" : "#f5f0e8",
-                    border:
-                      m.role === "concierge"
-                        ? "1px solid rgba(245,240,232,0.08)"
-                        : "none",
                   }}
                 >
                   {m.text}
@@ -1049,11 +973,9 @@ function ConciergeChat({
                   height: 26,
                   borderRadius: "50%",
                   background: "rgba(201,169,110,0.12)",
-                  border: "1px solid rgba(201,169,110,0.2)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  flexShrink: 0,
                 }}
               >
                 <UserIcon style={{ width: 13, height: 13, color: "#C9A96E" }} />
@@ -1063,10 +985,8 @@ function ConciergeChat({
                   padding: "12px 16px",
                   borderRadius: "18px 18px 18px 4px",
                   background: "rgba(245,240,232,0.07)",
-                  border: "1px solid rgba(245,240,232,0.08)",
                   display: "flex",
                   gap: 4,
-                  alignItems: "center",
                 }}
               >
                 {[0, 1, 2].map((i) => (
@@ -1088,8 +1008,6 @@ function ConciergeChat({
           )}
           <div ref={bottomRef} />
         </div>
-
-        {/* Quick replies */}
         <div
           style={{
             padding: "8px 16px",
@@ -1117,23 +1035,12 @@ function ConciergeChat({
                 cursor: "pointer",
                 whiteSpace: "nowrap",
                 flexShrink: 0,
-                transition: "background 0.15s",
               }}
-              onMouseOver={(e) =>
-                ((e.target as HTMLButtonElement).style.background =
-                  "rgba(201,169,110,0.12)")
-              }
-              onMouseOut={(e) =>
-                ((e.target as HTMLButtonElement).style.background =
-                  "rgba(201,169,110,0.05)")
-              }
             >
               {q}
             </button>
           ))}
         </div>
-
-        {/* Input */}
         <div
           style={{
             padding: "12px 16px",
@@ -1181,7 +1088,6 @@ function ConciergeChat({
               alignItems: "center",
               justifyContent: "center",
               flexShrink: 0,
-              transition: "background 0.2s",
             }}
           >
             <PaperAirplaneIcon
@@ -1214,11 +1120,9 @@ function MiniCalendar({
   const initial = value ? new Date(value + "T00:00:00") : today;
   const [viewYear, setViewYear] = useState(initial.getFullYear());
   const [viewMonth, setViewMonth] = useState(initial.getMonth());
-
   const firstDay = new Date(viewYear, viewMonth, 1).getDay();
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
   const minDate = min ? new Date(min + "T00:00:00") : today;
-
   const MONTHS = [
     "January",
     "February",
@@ -1234,11 +1138,9 @@ function MiniCalendar({
     "December",
   ];
   const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-
   const selected = value ? new Date(value + "T00:00:00") : null;
   const toISO = (y: number, m: number, d: number) =>
     `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-
   const prev = () => {
     if (viewMonth === 0) {
       setViewYear((y) => y - 1);
@@ -1250,6 +1152,19 @@ function MiniCalendar({
       setViewYear((y) => y + 1);
       setViewMonth(0);
     } else setViewMonth((m) => m + 1);
+  };
+  const navBtn: React.CSSProperties = {
+    width: 28,
+    height: 28,
+    borderRadius: "50%",
+    background: "rgba(245,240,232,0.06)",
+    border: "none",
+    color: "#f5f0e8",
+    fontSize: 16,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
   };
 
   return (
@@ -1344,7 +1259,6 @@ function MiniCalendar({
                     ? "rgba(245,240,232,0.18)"
                     : "#f5f0e8",
                 cursor: isDisabled ? "not-allowed" : "pointer",
-                transition: "all 0.15s",
               }}
               onMouseEnter={(e) => {
                 if (!isSelected && !isDisabled)
@@ -1366,21 +1280,7 @@ function MiniCalendar({
   );
 }
 
-const navBtn: React.CSSProperties = {
-  width: 28,
-  height: 28,
-  borderRadius: "50%",
-  background: "rgba(245,240,232,0.06)",
-  border: "none",
-  color: "#f5f0e8",
-  fontSize: 16,
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-
-/* ─────────────── Gallery overlay ─────────────── */
+/* ─────────────── Gallery ─────────────── */
 function Gallery({
   hotel,
   activeImg,
@@ -1396,6 +1296,17 @@ function Gallery({
   prevImg: () => void;
   nextImg: () => void;
 }) {
+  const circleBtn: React.CSSProperties = {
+    width: 40,
+    height: 40,
+    borderRadius: "50%",
+    border: "none",
+    color: "#fff",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  };
   return (
     <div
       style={{
@@ -1506,18 +1417,6 @@ function Gallery({
   );
 }
 
-const circleBtn: React.CSSProperties = {
-  width: 40,
-  height: 40,
-  borderRadius: "50%",
-  border: "none",
-  color: "#fff",
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-
 /* ─────────────── Room config ─────────────── */
 const makeRoomTypes = (hotel: Hotel) => {
   const baseFeatures = hotel.amenities.slice(0, 5);
@@ -1549,9 +1448,7 @@ const makeRoomTypes = (hotel: Hotel) => {
   ];
 };
 
-/* ═══════════════════════════════════════════════════════════
-   PROPS
-═══════════════════════════════════════════════════════════ */
+/* ─────────────── PROPS ─────────────── */
 type Props = {
   hotel: Hotel;
   onBack?: () => void;
@@ -1559,7 +1456,7 @@ type Props = {
 };
 
 /* ═══════════════════════════════════════════════════════════
-   BOOKING PAGE
+   MAIN COMPONENT
 ═══════════════════════════════════════════════════════════ */
 export default function BookingPage({
   hotel,
@@ -1567,8 +1464,8 @@ export default function BookingPage({
   onBookingComplete,
 }: Props) {
   const { user } = useAuth();
-
   const roomTypes = makeRoomTypes(hotel);
+
   const [activeImg, setActiveImg] = useState(0);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [wishlisted, setWishlisted] = useState(false);
@@ -1591,27 +1488,14 @@ export default function BookingPage({
   const [showCheckInCal, setShowCheckInCal] = useState(false);
   const [showCheckOutCal, setShowCheckOutCal] = useState(false);
   const [imgErrors, setImgErrors] = useState<Record<number, boolean>>({});
-
-  // Review modal state
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [completedBooking, setCompletedBooking] = useState<Booking | null>(
     null,
   );
-
-  // Live listing reviews from DB
   const [listingReviews, setListingReviews] = useState<
     import("../index").Review[]
   >([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
-
-  useEffect(() => {
-    if (activeTab !== "reviews") return;
-    setReviewsLoading(true);
-    ReviewsDB.byListing(hotel.id)
-      .then(setListingReviews)
-      .catch(console.error)
-      .finally(() => setReviewsLoading(false));
-  }, [activeTab, hotel.id]);
 
   const [guestInfo, setGuestInfo] = useState({
     name: user ? `${user.firstName} ${user.lastName}`.trim() : "",
@@ -1623,12 +1507,20 @@ export default function BookingPage({
   const today = new Date().toISOString().split("T")[0];
 
   useEffect(() => {
+    if (activeTab !== "reviews") return;
+    setReviewsLoading(true);
+    ReviewsDB.byListing(hotel.id)
+      .then(setListingReviews)
+      .catch(console.error)
+      .finally(() => setReviewsLoading(false));
+  }, [activeTab, hotel.id]);
+
+  useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 60);
     window.addEventListener("scroll", handler, { passive: true });
     return () => window.removeEventListener("scroll", handler);
   }, []);
 
-  /* Lock body scroll when modal/chat open */
   useEffect(() => {
     document.body.style.overflow =
       step !== "idle" || chatOpen || showReviewModal ? "hidden" : "";
@@ -1658,47 +1550,103 @@ export default function BookingPage({
 
   const formatDate = (iso: string) => {
     if (!iso) return "Select date";
-    const d = new Date(iso + "T00:00:00");
-    return d.toLocaleDateString("en-US", {
+    return new Date(iso + "T00:00:00").toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",
     });
   };
 
-  /* ── Confirm → Supabase ── */
-  const handleConfirm = async () => {
-    setSaving(true);
+  /* ════════════════════════════════════════════════
+     PAYSTACK PAYMENT
+     - Amount is in kobo (Naira) or cents (USD).
+     - Paystack supports NGN natively. For USD, set currency: "USD".
+     - Total is already in USD; multiply by 100 for cents.
+  ════════════════════════════════════════════════ */
+  const generateRef = () =>
+    `ZB-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+
+  const handlePayWithPaystack = () => {
+    if (!window.PaystackPop) {
+      setSaveError("Paystack script not loaded. Check your index.html.");
+      return;
+    }
+    if (!PAYSTACK_KEY) {
+      setSaveError("Missing VITE_PAYSTACK_PUBLIC_KEY in .env.local");
+      return;
+    }
     setSaveError("");
-    try {
-      const booking = await BookingsDB.add({
-        guestId: user?.id ?? "guest_anonymous",
-        guestName: guestInfo.name,
-        guestEmail: guestInfo.email,
-        guestPhone: guestInfo.phone,
+    setSaving(true);
+
+    const payRef = generateRef();
+
+    const handler = window.PaystackPop.setup({
+      key: PAYSTACK_KEY,
+      email: guestInfo.email,
+      // Amount in kobo/cents — total is USD, multiply by 100
+      amount: total * 100,
+      currency: "USD", // change to "NGN" if charging in Naira
+      ref: payRef,
+      metadata: {
         listingId: hotel.id,
         listingName: hotel.name,
-        hostId: hotel.hostId,
-        checkIn: checkIn || today,
-        checkOut:
-          checkOut ||
-          new Date(Date.now() + 86400000).toISOString().split("T")[0],
+        guestName: guestInfo.name,
+        guestPhone: guestInfo.phone,
+        checkIn,
+        checkOut,
+        nights,
         guests,
-        nights: Math.max(nights, 1),
-        totalAmount: total,
-        specialRequests: guestInfo.requests,
-      });
-      setBookingRef(booking.ref);
-      setCompletedBooking(booking);
-      setStep("done");
-    } catch (err: any) {
-      setSaveError(err.message ?? "Failed to save booking. Please try again.");
-    } finally {
-      setSaving(false);
-    }
+        roomType: room.name,
+      },
+      onClose: () => {
+        // User closed the popup without paying
+        setSaving(false);
+        setSaveError("Payment was cancelled. Please try again.");
+      },
+      callback: async (response) => {
+        // Payment succeeded on Paystack's end
+        if (response.status !== "success") {
+          setSaving(false);
+          setSaveError("Payment was not completed. Please try again.");
+          return;
+        }
+        // Save booking to Supabase with confirmed status
+        try {
+          const booking = await BookingsDB.add({
+            guestId: user?.id ?? "guest_anonymous",
+            guestName: guestInfo.name,
+            guestEmail: guestInfo.email,
+            guestPhone: guestInfo.phone,
+            listingId: hotel.id,
+            listingName: hotel.name,
+            hostId: hotel.hostId,
+            checkIn: checkIn || today,
+            checkOut:
+              checkOut ||
+              new Date(Date.now() + 86400000).toISOString().split("T")[0],
+            guests,
+            nights: Math.max(nights, 1),
+            totalAmount: total,
+            specialRequests: guestInfo.requests,
+          });
+          setBookingRef(response.reference); // use Paystack ref as booking ref
+          setCompletedBooking(booking);
+          setStep("done");
+        } catch (err: any) {
+          setSaveError(
+            err.message ??
+              "Payment succeeded but booking failed. Contact support.",
+          );
+        } finally {
+          setSaving(false);
+        }
+      },
+    });
+
+    handler.openIframe();
   };
 
-  /* ── Calendar popover close on outside click ── */
+  /* Calendar outside-click */
   const calInRef = useRef<HTMLDivElement>(null);
   const calOutRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -1712,9 +1660,7 @@ export default function BookingPage({
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  /* ══════════════════════════════
-     BOOKING MODAL (dark luxury)
-  ══════════════════════════════ */
+  /* ── Booking Modal ── */
   const BookingModal = () => (
     <div
       style={{
@@ -1822,7 +1768,6 @@ export default function BookingPage({
                 <XMarkIcon style={{ width: 16, height: 16 }} />
               </button>
             </div>
-
             <div
               style={{
                 padding: "20px 24px",
@@ -1831,7 +1776,6 @@ export default function BookingPage({
                 gap: 16,
               }}
             >
-              {/* Property summary */}
               <div
                 style={{
                   background: "rgba(245,240,232,0.04)",
@@ -1898,8 +1842,6 @@ export default function BookingPage({
                   </p>
                 </div>
               </div>
-
-              {/* Dates */}
               <div
                 style={{
                   display: "grid",
@@ -1956,8 +1898,6 @@ export default function BookingPage({
                   </div>
                 ))}
               </div>
-
-              {/* Guest fields */}
               {[
                 {
                   label: "Full Name",
@@ -2017,7 +1957,6 @@ export default function BookingPage({
                   />
                 </div>
               ))}
-
               <div>
                 <label
                   style={{
@@ -2038,7 +1977,7 @@ export default function BookingPage({
                     setGuestInfo((g) => ({ ...g, requests: e.target.value }))
                   }
                   rows={3}
-                  placeholder="Early check-in, dietary requirements, celebrations…"
+                  placeholder="Early check-in, dietary requirements…"
                   style={{
                     width: "100%",
                     background: "rgba(245,240,232,0.05)",
@@ -2058,8 +1997,6 @@ export default function BookingPage({
                   }
                 />
               </div>
-
-              {/* Price breakdown */}
               <div
                 style={{
                   borderTop: "1px solid rgba(245,240,232,0.08)",
@@ -2071,7 +2008,7 @@ export default function BookingPage({
               >
                 {[
                   [
-                    `$${room.price.toLocaleString()} × ${Math.max(nights, 1)} ${nights === 1 ? "night" : "nights"}`,
+                    `$${room.price.toLocaleString()} × ${Math.max(nights, 1)} nights`,
                     `$${subtotal.toLocaleString()}`,
                   ],
                   ["Taxes & resort fees (12%)", `$${taxes.toLocaleString()}`],
@@ -2106,7 +2043,6 @@ export default function BookingPage({
                   </span>
                 </div>
               </div>
-
               <button
                 onClick={() => {
                   if (guestInfo.name && guestInfo.email) setStep("confirm");
@@ -2131,13 +2067,11 @@ export default function BookingPage({
                     guestInfo.name && guestInfo.email
                       ? "pointer"
                       : "not-allowed",
-                  transition: "all 0.2s",
                   letterSpacing: "0.04em",
                 }}
               >
                 Continue to Payment →
               </button>
-
               <div
                 style={{
                   display: "flex",
@@ -2157,7 +2091,7 @@ export default function BookingPage({
           </>
         )}
 
-        {/* ── STEP: confirm ── */}
+        {/* ── STEP: confirm — PAYSTACK ── */}
         {step === "confirm" && (
           <>
             <div
@@ -2210,7 +2144,6 @@ export default function BookingPage({
                 ← Edit details
               </button>
             </div>
-
             <div
               style={{
                 padding: "20px 24px",
@@ -2219,12 +2152,13 @@ export default function BookingPage({
                 gap: 16,
               }}
             >
+              {/* Reservation summary */}
               <div
                 style={{
                   background: "rgba(245,240,232,0.04)",
                   border: "1px solid rgba(245,240,232,0.08)",
                   borderRadius: 16,
-                  padding: "20px",
+                  padding: 20,
                 }}
               >
                 <p
@@ -2291,30 +2225,88 @@ export default function BookingPage({
                 </div>
               </div>
 
+              {/* Paystack payment section */}
               <div
                 style={{
-                  border: "1px dashed rgba(201,169,110,0.25)",
+                  background: "rgba(0,100,50,0.08)",
+                  border: "1px solid rgba(0,180,80,0.2)",
                   borderRadius: 16,
-                  padding: 20,
-                  textAlign: "center",
+                  padding: "18px 20px",
                 }}
               >
-                <div style={{ fontSize: 28, marginBottom: 8 }}>💳</div>
-                <p
+                <div
                   style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: "rgba(245,240,232,0.7)",
-                    marginBottom: 6,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    marginBottom: 10,
                   }}
                 >
-                  Secure Payment
-                </p>
-                <p style={{ fontSize: 12, color: "rgba(245,240,232,0.3)" }}>
-                  Connect Stripe, Paystack, or your preferred gateway here
-                </p>
+                  {/* Paystack green mark icon */}
+                  <div
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 10,
+                      background: "rgba(0,180,80,0.12)",
+                      border: "1px solid rgba(0,180,80,0.25)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <span style={{ fontSize: 20 }}>🔐</span>
+                  </div>
+                  <div>
+                    <p
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: "#f5f0e8",
+                      }}
+                    >
+                      Pay with Paystack
+                    </p>
+                    <p
+                      style={{
+                        fontSize: 11,
+                        color: "rgba(245,240,232,0.4)",
+                        marginTop: 2,
+                      }}
+                    >
+                      Cards, bank transfer, USSD, mobile money & more
+                    </p>
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {[
+                    "Visa",
+                    "Mastercard",
+                    "Verve",
+                    "Bank Transfer",
+                    "USSD",
+                    "Mobile Money",
+                  ].map((m) => (
+                    <span
+                      key={m}
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: "rgba(245,240,232,0.5)",
+                        background: "rgba(245,240,232,0.05)",
+                        border: "1px solid rgba(245,240,232,0.08)",
+                        borderRadius: 6,
+                        padding: "3px 8px",
+                      }}
+                    >
+                      {m}
+                    </span>
+                  ))}
+                </div>
               </div>
 
+              {/* Error */}
               {saveError && (
                 <div
                   style={{
@@ -2330,25 +2322,26 @@ export default function BookingPage({
                 </div>
               )}
 
+              {/* PAY NOW BUTTON */}
               <button
-                onClick={handleConfirm}
+                onClick={handlePayWithPaystack}
                 disabled={saving}
                 style={{
                   width: "100%",
-                  background: "#f5f0e8",
-                  color: "#0e0d0b",
+                  background: saving ? "rgba(0,180,80,0.4)" : "#00b451",
+                  color: "#fff",
                   fontWeight: 700,
                   fontSize: 14,
                   padding: "16px 0",
                   borderRadius: 14,
                   border: "none",
                   cursor: saving ? "not-allowed" : "pointer",
-                  opacity: saving ? 0.7 : 1,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   gap: 8,
                   letterSpacing: "0.04em",
+                  transition: "background 0.2s",
                 }}
               >
                 {saving ? (
@@ -2357,19 +2350,35 @@ export default function BookingPage({
                       style={{
                         width: 16,
                         height: 16,
-                        border: "2px solid rgba(0,0,0,0.2)",
-                        borderTopColor: "#0e0d0b",
+                        border: "2px solid rgba(255,255,255,0.3)",
+                        borderTopColor: "#fff",
                         borderRadius: "50%",
                         animation: "spin 0.7s linear infinite",
                         display: "inline-block",
                       }}
                     />
-                    Saving reservation…
+                    Processing…
                   </>
                 ) : (
-                  "Confirm Reservation"
+                  <>🔐 Pay ${total.toLocaleString()} securely</>
                 )}
               </button>
+
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  justifyContent: "center",
+                  fontSize: 11,
+                  color: "rgba(245,240,232,0.28)",
+                }}
+              >
+                <ShieldCheckIcon
+                  style={{ width: 13, height: 13, color: "#00b451" }}
+                />
+                Secured by Paystack · PCI DSS compliant
+              </div>
             </div>
           </>
         )}
@@ -2423,7 +2432,7 @@ export default function BookingPage({
                 marginBottom: 10,
               }}
             >
-              You're all set!
+              Payment Successful!
             </h2>
             <p
               style={{
@@ -2436,7 +2445,7 @@ export default function BookingPage({
             >
               Your reservation at{" "}
               <strong style={{ color: "#f5f0e8" }}>{hotel.name}</strong> is
-              confirmed. A summary has been sent to{" "}
+              confirmed and paid. A confirmation has been sent to{" "}
               <strong style={{ color: "#f5f0e8" }}>{guestInfo.email}</strong>.
             </p>
             <div
@@ -2446,7 +2455,7 @@ export default function BookingPage({
                 borderRadius: 16,
                 padding: "16px 32px",
                 width: "100%",
-                marginBottom: 24,
+                marginBottom: 16,
               }}
             >
               <p
@@ -2459,13 +2468,13 @@ export default function BookingPage({
                   marginBottom: 8,
                 }}
               >
-                Booking Reference
+                Payment Reference
               </p>
               <p
                 style={{
-                  fontSize: 26,
+                  fontSize: 22,
                   fontWeight: 700,
-                  letterSpacing: "0.2em",
+                  letterSpacing: "0.15em",
                   color: "#C9A96E",
                   fontFamily: "monospace",
                 }}
@@ -2475,24 +2484,19 @@ export default function BookingPage({
             </div>
             <div
               style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 8,
-                alignItems: "center",
+                background: "rgba(0,180,80,0.06)",
+                border: "1px solid rgba(0,180,80,0.2)",
+                borderRadius: 12,
+                padding: "10px 20px",
+                marginBottom: 24,
+                width: "100%",
               }}
             >
-              <p style={{ fontSize: 12, color: "rgba(245,240,232,0.35)" }}>
+              <p style={{ fontSize: 12, color: "rgba(245,240,232,0.5)" }}>
                 Status:{" "}
-                <strong style={{ color: "#C9A96E" }}>
-                  Pending host confirmation
-                </strong>
-              </p>
-              <p style={{ fontSize: 11, color: "rgba(245,240,232,0.25)" }}>
-                You'll be notified when the host confirms your booking
+                <strong style={{ color: "#4ade80" }}>✓ Confirmed & Paid</strong>
               </p>
             </div>
-
-            {/* ── Leave a review prompt ── */}
             {completedBooking && user && (
               <button
                 onClick={() => {
@@ -2500,7 +2504,7 @@ export default function BookingPage({
                   setShowReviewModal(true);
                 }}
                 style={{
-                  marginTop: 20,
+                  marginBottom: 12,
                   display: "flex",
                   alignItems: "center",
                   gap: 8,
@@ -2515,18 +2519,12 @@ export default function BookingPage({
               >
                 <StarIcon style={{ width: 16, height: 16, color: "#C9A96E" }} />
                 <span
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 700,
-                    color: "#C9A96E",
-                    letterSpacing: "0.02em",
-                  }}
+                  style={{ fontSize: 13, fontWeight: 700, color: "#C9A96E" }}
                 >
                   Leave a Review
                 </span>
               </button>
             )}
-
             <button
               onClick={() => {
                 setStep("idle");
@@ -2540,7 +2538,7 @@ export default function BookingPage({
                 else if (onBack) onBack();
               }}
               style={{
-                marginTop: 16,
+                marginTop: 4,
                 fontSize: 13,
                 fontWeight: 700,
                 color: "#C9A96E",
@@ -2560,9 +2558,7 @@ export default function BookingPage({
     </div>
   );
 
-  /* ═══════════════════════════════════════════════════════════
-     MAIN RENDER — dark luxury theme matching ExplorePage
-  ═══════════════════════════════════════════════════════════ */
+  /* ── MAIN RENDER ── */
   return (
     <div
       style={{
@@ -2584,29 +2580,17 @@ export default function BookingPage({
         .room-card:hover { border-color:rgba(201,169,110,0.3) !important; }
         input[type="date"]::-webkit-calendar-picker-indicator { filter:invert(1); opacity:0.4; cursor:pointer; }
         textarea::placeholder, input::placeholder { color:rgba(245,240,232,0.2); }
-
         @media (max-width: 767px) {
-          .hero-grid { display:none !important; }
-          .hero-mobile { display:block !important; }
-          .main-grid { grid-template-columns:1fr !important; }
-          .booking-widget-col { display:none !important; }
-          .quick-stats-grid { grid-template-columns:1fr 1fr !important; }
-          .amenities-grid { grid-template-columns:1fr 1fr !important; }
-          .policies-grid { grid-template-columns:1fr !important; }
-          .reviews-grid { grid-template-columns:1fr !important; }
-          .reviews-summary { flex-direction:column !important; gap:16px !important; }
-          .room-card-inner { flex-direction:column !important; }
-          .room-card-img { width:100% !important; height:180px !important; }
-          .title-h1 { font-size:28px !important; }
-          .tabs-row { overflow-x:auto; -webkit-overflow-scrolling:touch; }
-          .page-padding { padding-left:16px !important; padding-right:16px !important; }
-          .hero-grid-wrap { padding:12px 16px 16px !important; }
-          .content-wrap { padding:0 16px 140px !important; }
+          .hero-grid { display:none !important; } .hero-mobile { display:block !important; }
+          .main-grid { grid-template-columns:1fr !important; } .booking-widget-col { display:none !important; }
+          .quick-stats-grid { grid-template-columns:1fr 1fr !important; } .amenities-grid { grid-template-columns:1fr 1fr !important; }
+          .policies-grid { grid-template-columns:1fr !important; } .reviews-grid { grid-template-columns:1fr !important; }
+          .reviews-summary { flex-direction:column !important; gap:16px !important; } .room-card-inner { flex-direction:column !important; }
+          .room-card-img { width:100% !important; height:180px !important; } .title-h1 { font-size:28px !important; }
+          .tabs-row { overflow-x:auto; -webkit-overflow-scrolling:touch; } .page-padding { padding-left:16px !important; padding-right:16px !important; }
+          .hero-grid-wrap { padding:12px 16px 16px !important; } .content-wrap { padding:0 16px 140px !important; }
         }
-        @media (min-width: 768px) {
-          .hero-mobile { display:none !important; }
-          .hero-grid { display:grid !important; }
-        }
+        @media (min-width: 768px) { .hero-mobile { display:none !important; } .hero-grid { display:grid !important; } }
       `}</style>
 
       {galleryOpen && (
@@ -2628,8 +2612,6 @@ export default function BookingPage({
           onClose={() => setChatOpen(false)}
         />
       )}
-
-      {/* ── Guest Review Modal ── */}
       {showReviewModal && completedBooking && user && (
         <GuestReviewModal
           booking={completedBooking}
@@ -2781,7 +2763,7 @@ export default function BookingPage({
         </div>
       </header>
 
-      {/* ── HERO: mobile single image ── */}
+      {/* ── HERO mobile ── */}
       <div
         className="hero-mobile"
         style={{ display: "none", position: "relative" }}
@@ -2875,71 +2857,10 @@ export default function BookingPage({
               />
             ))}
           </div>
-          <button
-            onClick={() => setGalleryOpen(true)}
-            style={{
-              position: "absolute",
-              bottom: 14,
-              right: 14,
-              background: "rgba(14,13,11,0.65)",
-              backdropFilter: "blur(8px)",
-              border: "1px solid rgba(245,240,232,0.15)",
-              borderRadius: 99,
-              padding: "4px 10px",
-              fontSize: 11,
-              color: "#f5f0e8",
-              cursor: "pointer",
-              fontWeight: 600,
-            }}
-          >
-            {hotel.images.length} photos
-          </button>
-          <div
-            style={{
-              position: "absolute",
-              top: 14,
-              left: 14,
-              display: "flex",
-              gap: 8,
-            }}
-          >
-            <span
-              style={{
-                background: "rgba(14,13,11,0.75)",
-                backdropFilter: "blur(10px)",
-                border: "1px solid rgba(245,240,232,0.1)",
-                borderRadius: 99,
-                padding: "5px 12px",
-                fontSize: 10,
-                fontWeight: 700,
-                color: "#C9A96E",
-                textTransform: "uppercase",
-                letterSpacing: "0.1em",
-              }}
-            >
-              {hotel.category}
-            </span>
-            {hotel.featured && (
-              <span
-                style={{
-                  background: "#C9A96E",
-                  borderRadius: 99,
-                  padding: "5px 12px",
-                  fontSize: 10,
-                  fontWeight: 900,
-                  color: "#0e0d0b",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                }}
-              >
-                Featured
-              </span>
-            )}
-          </div>
         </div>
       </div>
 
-      {/* ── HERO: desktop 2-col grid ── */}
+      {/* ── HERO desktop ── */}
       <div
         className="hero-grid-wrap page-padding"
         style={{ maxWidth: 1200, margin: "0 auto", padding: "16px 24px 24px" }}
@@ -3027,7 +2948,6 @@ export default function BookingPage({
                     fontWeight: 900,
                     color: "#0e0d0b",
                     textTransform: "uppercase",
-                    letterSpacing: "0.1em",
                   }}
                 >
                   Featured
@@ -3127,9 +3047,8 @@ export default function BookingPage({
             alignItems: "start",
           }}
         >
-          {/* ── LEFT ── */}
+          {/* LEFT */}
           <div style={{ animation: "fadeUp 0.5s ease both", minWidth: 0 }}>
-            {/* Title */}
             <div style={{ marginBottom: 24 }}>
               <div
                 style={{
@@ -3299,7 +3218,7 @@ export default function BookingPage({
               ))}
             </div>
 
-            {/* ── OVERVIEW TAB ── */}
+            {/* OVERVIEW */}
             {activeTab === "overview" && (
               <div
                 style={{ display: "flex", flexDirection: "column", gap: 32 }}
@@ -3326,7 +3245,6 @@ export default function BookingPage({
                     {hotel.description}
                   </p>
                 </div>
-
                 <div>
                   <h2
                     style={{
@@ -3403,7 +3321,6 @@ export default function BookingPage({
                     </button>
                   )}
                 </div>
-
                 <div>
                   <h2
                     style={{
@@ -3453,7 +3370,7 @@ export default function BookingPage({
                       {
                         icon: "💳",
                         title: "Payment",
-                        desc: "All major cards, wire transfer, BNPL",
+                        desc: "Paystack — cards, bank transfer, USSD, mobile money",
                       },
                     ].map((p) => (
                       <div
@@ -3499,7 +3416,7 @@ export default function BookingPage({
               </div>
             )}
 
-            {/* ── ROOMS TAB ── */}
+            {/* ROOMS */}
             {activeTab === "rooms" && (
               <div
                 style={{ display: "flex", flexDirection: "column", gap: 14 }}
@@ -3523,7 +3440,6 @@ export default function BookingPage({
                       border: `2px solid ${selectedRoom === rt.id ? "#C9A96E" : "rgba(245,240,232,0.07)"}`,
                       borderRadius: 18,
                       overflow: "hidden",
-                      transition: "border-color 0.2s",
                     }}
                   >
                     <div
@@ -3685,7 +3601,6 @@ export default function BookingPage({
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            transition: "all 0.2s",
                           }}
                         >
                           {selectedRoom === rt.id && (
@@ -3705,15 +3620,13 @@ export default function BookingPage({
               </div>
             )}
 
-            {/* ── REVIEWS TAB ── */}
+            {/* REVIEWS */}
             {activeTab === "reviews" &&
               (() => {
-                // Derived stats from real reviews
                 const avgRating = listingReviews.length
                   ? listingReviews.reduce((s, r) => s + r.rating, 0) /
                     listingReviews.length
                   : hotel.rating;
-
                 const subAvg = (
                   key: "cleanliness" | "service" | "location" | "value",
                 ) => {
@@ -3724,14 +3637,12 @@ export default function BookingPage({
                     ? vals.reduce((s, v) => s + v, 0) / vals.length
                     : null;
                 };
-
                 const fmtDate = (iso: string) =>
                   new Date(iso).toLocaleDateString("en-US", {
                     month: "short",
                     day: "numeric",
                     year: "numeric",
                   });
-
                 return (
                   <div
                     style={{
@@ -3740,7 +3651,6 @@ export default function BookingPage({
                       gap: 20,
                     }}
                   >
-                    {/* ── Summary bar ── */}
                     <div
                       className="reviews-summary"
                       style={{
@@ -3754,7 +3664,6 @@ export default function BookingPage({
                         flexWrap: "wrap",
                       }}
                     >
-                      {/* Big rating number */}
                       <div style={{ textAlign: "center", flexShrink: 0 }}>
                         <p
                           style={{
@@ -3799,8 +3708,6 @@ export default function BookingPage({
                           {listingReviews.length !== 1 ? "s" : ""}
                         </p>
                       </div>
-
-                      {/* Sub-rating bars — from real data */}
                       <div
                         style={{
                           flex: 1,
@@ -3822,7 +3729,6 @@ export default function BookingPage({
                           ][]
                         ).map(([label, key]) => {
                           const val = subAvg(key);
-                          const pct = val !== null ? (val / 5) * 100 : 0;
                           return (
                             <div
                               key={label}
@@ -3855,7 +3761,7 @@ export default function BookingPage({
                                     height: "100%",
                                     borderRadius: 99,
                                     background: "#C9A96E",
-                                    width: `${pct}%`,
+                                    width: `${val !== null ? (val / 5) * 100 : 0}%`,
                                     transition: "width 0.6s ease",
                                   }}
                                 />
@@ -3876,10 +3782,7 @@ export default function BookingPage({
                         })}
                       </div>
                     </div>
-
-                    {/* ── Review cards ── */}
                     {reviewsLoading ? (
-                      /* Skeleton */
                       <div
                         className="reviews-grid"
                         style={{
@@ -3896,86 +3799,13 @@ export default function BookingPage({
                               border: "1px solid rgba(245,240,232,0.07)",
                               borderRadius: 16,
                               padding: 20,
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: 10,
+                              height: 140,
+                              animation: "pulse 1.4s ease infinite",
                             }}
-                          >
-                            <div
-                              style={{
-                                display: "flex",
-                                gap: 10,
-                                alignItems: "center",
-                              }}
-                            >
-                              <div
-                                style={{
-                                  width: 38,
-                                  height: 38,
-                                  borderRadius: "50%",
-                                  background: "rgba(245,240,232,0.07)",
-                                  animation: "pulse 1.4s ease infinite",
-                                  flexShrink: 0,
-                                }}
-                              />
-                              <div
-                                style={{
-                                  flex: 1,
-                                  display: "flex",
-                                  flexDirection: "column",
-                                  gap: 6,
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    height: 12,
-                                    borderRadius: 6,
-                                    background: "rgba(245,240,232,0.07)",
-                                    width: "60%",
-                                    animation: "pulse 1.4s ease infinite",
-                                  }}
-                                />
-                                <div
-                                  style={{
-                                    height: 10,
-                                    borderRadius: 6,
-                                    background: "rgba(245,240,232,0.05)",
-                                    width: "40%",
-                                    animation: "pulse 1.4s ease infinite",
-                                  }}
-                                />
-                              </div>
-                            </div>
-                            <div
-                              style={{
-                                height: 12,
-                                borderRadius: 6,
-                                background: "rgba(245,240,232,0.07)",
-                                animation: "pulse 1.4s ease infinite",
-                              }}
-                            />
-                            <div
-                              style={{
-                                height: 10,
-                                borderRadius: 6,
-                                background: "rgba(245,240,232,0.05)",
-                                animation: "pulse 1.4s ease infinite",
-                              }}
-                            />
-                            <div
-                              style={{
-                                height: 10,
-                                borderRadius: 6,
-                                background: "rgba(245,240,232,0.05)",
-                                width: "80%",
-                                animation: "pulse 1.4s ease infinite",
-                              }}
-                            />
-                          </div>
+                          />
                         ))}
                       </div>
                     ) : listingReviews.length === 0 ? (
-                      /* Empty state */
                       <div
                         style={{
                           textAlign: "center",
@@ -3985,7 +3815,6 @@ export default function BookingPage({
                           borderRadius: 18,
                         }}
                       >
-                        <div style={{ fontSize: 36, marginBottom: 12 }}>✦</div>
                         <p
                           style={{
                             fontFamily: "Cormorant Garamond, serif",
@@ -4023,12 +3852,8 @@ export default function BookingPage({
                               border: "1px solid rgba(245,240,232,0.07)",
                               borderRadius: 16,
                               padding: 20,
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: 0,
                             }}
                           >
-                            {/* Guest header */}
                             <div
                               style={{
                                 display: "flex",
@@ -4098,8 +3923,6 @@ export default function BookingPage({
                                 ))}
                               </div>
                             </div>
-
-                            {/* Title */}
                             {r.title && (
                               <p
                                 style={{
@@ -4112,8 +3935,6 @@ export default function BookingPage({
                                 {r.title}
                               </p>
                             )}
-
-                            {/* Body */}
                             <p
                               style={{
                                 fontSize: 12,
@@ -4123,74 +3944,6 @@ export default function BookingPage({
                             >
                               {r.body}
                             </p>
-
-                            {/* Sub-ratings inline */}
-                            {(r.cleanliness ||
-                              r.service ||
-                              r.location ||
-                              r.value) && (
-                              <div
-                                style={{
-                                  display: "flex",
-                                  gap: 10,
-                                  flexWrap: "wrap",
-                                  marginTop: 10,
-                                }}
-                              >
-                                {(
-                                  [
-                                    ["Clean", r.cleanliness],
-                                    ["Service", r.service],
-                                    ["Location", r.location],
-                                    ["Value", r.value],
-                                  ] as [string, number | undefined][]
-                                )
-                                  .filter(([, v]) => v !== undefined)
-                                  .map(([label, val]) => (
-                                    <span
-                                      key={label}
-                                      style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: 4,
-                                        fontSize: 10,
-                                        color: "rgba(245,240,232,0.4)",
-                                        background: "rgba(245,240,232,0.04)",
-                                        border:
-                                          "1px solid rgba(245,240,232,0.07)",
-                                        borderRadius: 99,
-                                        padding: "3px 8px",
-                                      }}
-                                    >
-                                      <StarIcon
-                                        style={{
-                                          width: 9,
-                                          height: 9,
-                                          color: "#C9A96E",
-                                        }}
-                                      />
-                                      {label} {(val as number).toFixed(1)}
-                                    </span>
-                                  ))}
-                              </div>
-                            )}
-
-                            {/* Helpful count */}
-                            {r.helpful > 0 && (
-                              <p
-                                style={{
-                                  fontSize: 11,
-                                  color: "rgba(245,240,232,0.2)",
-                                  marginTop: 10,
-                                }}
-                              >
-                                {r.helpful}{" "}
-                                {r.helpful === 1 ? "person" : "people"} found
-                                this helpful
-                              </p>
-                            )}
-
-                            {/* Host reply */}
                             {r.hostReply && (
                               <div
                                 style={{
@@ -4201,46 +3954,16 @@ export default function BookingPage({
                                   padding: "12px 14px",
                                 }}
                               >
-                                <div
+                                <p
                                   style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 6,
-                                    marginBottom: 6,
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    color: "#C9A96E",
+                                    marginBottom: 4,
                                   }}
                                 >
-                                  <div
-                                    style={{
-                                      width: 20,
-                                      height: 20,
-                                      borderRadius: "50%",
-                                      background: "rgba(201,169,110,0.15)",
-                                      border: "1px solid rgba(201,169,110,0.3)",
-                                      display: "flex",
-                                      alignItems: "center",
-                                      justifyContent: "center",
-                                      flexShrink: 0,
-                                    }}
-                                  >
-                                    <UserIcon
-                                      style={{
-                                        width: 10,
-                                        height: 10,
-                                        color: "#C9A96E",
-                                      }}
-                                    />
-                                  </div>
-                                  <p
-                                    style={{
-                                      fontSize: 11,
-                                      fontWeight: 700,
-                                      color: "#C9A96E",
-                                      letterSpacing: "0.05em",
-                                    }}
-                                  >
-                                    {hotel.hostName ?? "Host"} replied
-                                  </p>
-                                </div>
+                                  {hotel.hostName ?? "Host"} replied
+                                </p>
                                 <p
                                   style={{
                                     fontSize: 12,
@@ -4261,7 +3984,7 @@ export default function BookingPage({
               })()}
           </div>
 
-          {/* ── RIGHT — Booking widget ── */}
+          {/* RIGHT — Booking widget */}
           <div
             className="booking-widget-col"
             style={{
@@ -4339,7 +4062,6 @@ export default function BookingPage({
                   </span>
                 </div>
               </div>
-
               <div
                 style={{
                   padding: "20px 24px",
@@ -4348,7 +4070,7 @@ export default function BookingPage({
                   gap: 14,
                 }}
               >
-                {/* Calendar date pickers */}
+                {/* Date pickers */}
                 <div
                   style={{
                     display: "grid",
@@ -4356,7 +4078,6 @@ export default function BookingPage({
                     gap: 8,
                   }}
                 >
-                  {/* Check-in */}
                   <div style={{ position: "relative" }} ref={calInRef}>
                     <button
                       onClick={() => {
@@ -4371,7 +4092,6 @@ export default function BookingPage({
                         padding: "10px 12px",
                         textAlign: "left",
                         cursor: "pointer",
-                        transition: "border-color 0.2s",
                       }}
                     >
                       <p
@@ -4424,7 +4144,6 @@ export default function BookingPage({
                       </div>
                     )}
                   </div>
-                  {/* Check-out */}
                   <div style={{ position: "relative" }} ref={calOutRef}>
                     <button
                       onClick={() => {
@@ -4439,7 +4158,6 @@ export default function BookingPage({
                         padding: "10px 12px",
                         textAlign: "left",
                         cursor: "pointer",
-                        transition: "border-color 0.2s",
                       }}
                     >
                       <p
@@ -4495,7 +4213,6 @@ export default function BookingPage({
                     )}
                   </div>
                 </div>
-
                 {/* Guests */}
                 <div
                   style={{
@@ -4585,8 +4302,7 @@ export default function BookingPage({
                     </button>
                   </div>
                 </div>
-
-                {/* Room selector mini */}
+                {/* Room selector */}
                 <div>
                   <p
                     style={{
@@ -4619,7 +4335,6 @@ export default function BookingPage({
                               : "rgba(245,240,232,0.03)",
                           border: `1px solid ${selectedRoom === rt.id ? "rgba(201,169,110,0.35)" : "rgba(245,240,232,0.07)"}`,
                           cursor: "pointer",
-                          transition: "all 0.2s",
                         }}
                       >
                         <span
@@ -4627,10 +4342,6 @@ export default function BookingPage({
                             fontSize: 13,
                             fontWeight: 500,
                             color: "#f5f0e8",
-                            textAlign: "left",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
                           }}
                         >
                           {rt.name}
@@ -4653,7 +4364,6 @@ export default function BookingPage({
                     ))}
                   </div>
                 </div>
-
                 {/* Price breakdown */}
                 {nights > 0 && (
                   <div
@@ -4703,7 +4413,6 @@ export default function BookingPage({
                     </div>
                   </div>
                 )}
-
                 {/* Reserve CTA */}
                 <button
                   onClick={() => setStep("form")}
@@ -4718,7 +4427,6 @@ export default function BookingPage({
                     border: "none",
                     cursor: "pointer",
                     letterSpacing: "0.04em",
-                    transition: "background 0.2s",
                   }}
                   onMouseOver={(e) =>
                     ((e.target as HTMLButtonElement).style.background =
@@ -4734,7 +4442,6 @@ export default function BookingPage({
                     ? `$${total.toLocaleString()}`
                     : `From $${room.price.toLocaleString()}`}
                 </button>
-
                 <div
                   style={{
                     display: "flex",
@@ -4750,8 +4457,7 @@ export default function BookingPage({
                   />
                   Free cancellation · No charge until confirmed
                 </div>
-
-                {/* Concierge row */}
+                {/* Concierge */}
                 <div
                   style={{
                     borderTop: "1px solid rgba(245,240,232,0.07)",
@@ -4833,7 +4539,6 @@ export default function BookingPage({
                 </div>
               </div>
             </div>
-
             {/* Trust badges */}
             <div
               style={{
@@ -4874,7 +4579,7 @@ export default function BookingPage({
         </div>
       </div>
 
-      {/* ── Mobile CTA bar ── */}
+      {/* Mobile CTA bar */}
       <div
         style={{
           position: "fixed",
@@ -4932,7 +4637,6 @@ export default function BookingPage({
             flexShrink: 0,
           }}
         >
-          {/* Concierge chat button on mobile */}
           <button
             onClick={() => setChatOpen(true)}
             style={{
@@ -4948,7 +4652,6 @@ export default function BookingPage({
               justifyContent: "center",
               position: "relative",
             }}
-            aria-label="Chat with concierge"
           >
             <ChatBubbleLeftRightIcon style={{ width: 20, height: 20 }} />
             <span
