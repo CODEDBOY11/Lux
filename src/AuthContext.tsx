@@ -218,6 +218,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             "| role:",
             existing.role,
           );
+        } else {
+          // ✅ Handle new OAuth users if getRedirectResult didn't catch them
+          const savedRole =
+            (localStorage.getItem(REDIRECT_ROLE_KEY) as UserRole) ?? "guest";
+          const savedProvider =
+            (localStorage.getItem(REDIRECT_PROVIDER_KEY) as
+              | "google"
+              | "apple") ?? "google";
+
+          // Clear the stored role/provider so we don't reuse them
+          localStorage.removeItem(REDIRECT_ROLE_KEY);
+          localStorage.removeItem(REDIRECT_PROVIDER_KEY);
+
+          const newUser = await ensureSupabaseUser(
+            fbUser,
+            savedRole,
+            savedProvider,
+          );
+          const remembered = Session.isRemembered();
+          Session.set(newUser, remembered);
+          setUser(newUser);
+          console.log(
+            "👤 onAuthStateChanged (new OAuth user):",
+            newUser.email,
+            "| role:",
+            newUser.role,
+          );
         }
       } else {
         Session.clear();
