@@ -44,7 +44,7 @@ const SignupPage = ({
 }: {
   onNavigateToLogin?: () => void;
 }) => {
-  const { register } = useAuth();
+  const { register, loginWithGoogle, loginWithApple } = useAuth();
   const navigate = useNavigate();
   const [role, setRole] = useState<Role>("host");
   const [form, setForm] = useState<SignupForm>({
@@ -444,6 +444,66 @@ const SignupPage = ({
               {errors.terms}
             </p>
           )}
+          {/* Divider */}
+          <div className="flex items-center gap-3 my-5">
+            <div className="flex-1 h-px bg-[rgba(245,240,232,0.06)]" />
+            <span className="text-[11px] text-[rgba(245,240,232,0.2)] uppercase tracking-wider">
+              or sign up with
+            </span>
+            <div className="flex-1 h-px bg-[rgba(245,240,232,0.06)]" />
+          </div>
+
+          {/* Google + Apple */}
+          <div className="grid grid-cols-2 gap-3 mb-5">
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => {
+                setLoading(true);
+                loginWithGoogle(role);
+              }}
+              className="flex items-center justify-center gap-2.5 py-3 rounded-xl border border-[rgba(245,240,232,0.08)] bg-[rgba(245,240,232,0.02)] text-sm text-[rgba(245,240,232,0.6)] hover:border-[rgba(245,240,232,0.18)] hover:bg-[rgba(245,240,232,0.05)] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24">
+                <path
+                  fill="#EA4335"
+                  d="M5.266 9.765A7.077 7.077 0 0 1 12 4.909c1.69 0 3.218.6 4.418 1.582L19.91 3C17.782 1.145 15.055 0 12 0 7.27 0 3.198 2.698 1.24 6.65l4.026 3.115z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M16.04 18.013c-1.09.703-2.474 1.078-4.04 1.078a7.077 7.077 0 0 1-6.723-4.823l-4.04 3.067A11.965 11.965 0 0 0 12 24c2.933 0 5.735-1.043 7.834-3l-3.793-2.987z"
+                />
+                <path
+                  fill="#4A90E2"
+                  d="M19.834 21c2.195-2.048 3.62-5.096 3.62-9 0-.71-.109-1.473-.272-2.182H12v4.637h6.436c-.317 1.559-1.17 2.766-2.395 3.558L19.834 21z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.277 14.268A7.12 7.12 0 0 1 4.909 12c0-.782.125-1.533.357-2.235L1.24 6.65A11.934 11.934 0 0 0 0 12c0 1.92.445 3.73 1.237 5.335l4.04-3.067z"
+                />
+              </svg>
+              Google
+            </button>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => {
+                setLoading(true);
+                loginWithApple(role);
+              }}
+              className="flex items-center justify-center gap-2.5 py-3 rounded-xl border border-[rgba(245,240,232,0.08)] bg-[rgba(245,240,232,0.02)] text-sm text-[rgba(245,240,232,0.6)] hover:border-[rgba(245,240,232,0.18)] hover:bg-[rgba(245,240,232,0.05)] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="rgba(245,240,232,0.7)"
+              >
+                <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
+              </svg>
+              Apple
+            </button>
+          </div>
 
           <button
             onClick={handleSubmit}
