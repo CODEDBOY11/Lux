@@ -26,7 +26,10 @@ import { ListingsDB, type Hotel, type Listing } from "./index";
 
 // 🔐 Prevent logged-in users from accessing auth pages
 function AuthGuard({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+
+  // ✅ Don't redirect while Firebase is still resolving the OAuth result
+  if (loading) return null;
 
   if (user) {
     if (user.role === "admin") return <Navigate to="/admin" replace />;

@@ -17,7 +17,6 @@ import {
 type LoginRole = "host" | "guest";
 type LoginView = "login" | "forgot" | "forgot-sent" | "success";
 
-/* ─── Role config ─── */
 const ROLE_CONFIG = {
   host: {
     icon: BuildingOffice2Icon,
@@ -59,7 +58,6 @@ const ROLE_CONFIG = {
   },
 };
 
-/* ─── Input component ─── */
 const Field = ({
   label,
   error,
@@ -102,7 +100,6 @@ const TextInput = ({
   </div>
 );
 
-/* ─── Main Component ─── */
 const LoginPage = ({
   onNavigateToSignup,
 }: {
@@ -113,8 +110,14 @@ const LoginPage = ({
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  const { login, loginWithGoogle, loginWithApple, forgotPassword } = useAuth();
-  const navigate = useNavigate();
+  const {
+    login,
+    loginWithGoogle,
+    loginWithApple,
+    forgotPassword,
+    loading: authLoading,
+  } = useAuth();
+  // navigation handled inside AuthContext after successful login
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<LoginView>("login");
   const [forgotEmail, setForgotEmail] = useState("");
@@ -127,13 +130,9 @@ const LoginPage = ({
   const config = ROLE_CONFIG[role];
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
-
-  // Reset form when switching roles
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setErrors({});
     setErrorMessage("");
   }, [role]);
@@ -159,16 +158,16 @@ const LoginPage = ({
       return;
     }
     const targetRole = res.user?.role;
-    if (targetRole !== role) {
+    // ✅ Allow admin through without portal check
+    // ✅ Also allow if role matches — navigation is handled by AuthContext
+    if (targetRole !== "admin" && targetRole !== role) {
       setErrorMessage(
         `This account is registered as a ${targetRole === "host" ? "Host" : "Guest"}. Please switch portal.`,
       );
       return;
     }
+    // AuthContext already navigated — just show success screen briefly
     setView("success");
-    setTimeout(() => {
-      navigate(config.redirectPath);
-    }, 1800);
   };
 
   const handleForgot = async () => {
@@ -186,7 +185,6 @@ const LoginPage = ({
     setErrorMessage("");
   };
 
-  /* ── Forgot password view ── */
   const renderForgot = () => (
     <div
       className={`w-full max-w-md transition-all duration-500 ${mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}
@@ -198,7 +196,6 @@ const LoginPage = ({
         <ArrowRightIcon className="w-3.5 h-3.5 rotate-180 group-hover:-translate-x-0.5 transition-transform" />
         Back to sign in
       </button>
-
       <div className="mb-8">
         <div className="w-12 h-12 rounded-2xl bg-[rgba(201,169,110,0.12)] border border-[rgba(201,169,110,0.2)] flex items-center justify-center mb-5">
           <LockClosedIcon className="w-5 h-5 text-[#C9A96E]" />
@@ -211,7 +208,6 @@ const LoginPage = ({
           a few minutes.
         </p>
       </div>
-
       <Field label="Email Address">
         <TextInput
           type="email"
@@ -222,19 +218,16 @@ const LoginPage = ({
           onKeyDown={(e) => e.key === "Enter" && handleForgot()}
         />
       </Field>
-
       <button
         onClick={handleForgot}
         disabled={!forgotEmail}
         className="w-full mt-5 bg-[#C9A96E] disabled:opacity-40 disabled:cursor-not-allowed text-[#0e0d0b] font-semibold py-3.5 rounded-xl text-sm hover:bg-[#dfc08a] transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2"
       >
-        Send Reset Link
-        <ArrowRightIcon className="w-3.5 h-3.5" />
+        Send Reset Link <ArrowRightIcon className="w-3.5 h-3.5" />
       </button>
     </div>
   );
 
-  /* ── Forgot sent view ── */
   const renderForgotSent = () => (
     <div className="w-full max-w-md text-center">
       <div className="w-16 h-16 rounded-full bg-[rgba(126,200,160,0.1)] border border-[rgba(126,200,160,0.25)] flex items-center justify-center mx-auto mb-5">
@@ -264,7 +257,6 @@ const LoginPage = ({
     </div>
   );
 
-  /* ── Success view ── */
   const renderSuccess = () => (
     <div className="w-full max-w-md text-center">
       <div className="w-16 h-16 rounded-full bg-[rgba(126,200,160,0.1)] border border-[rgba(126,200,160,0.25)] flex items-center justify-center mx-auto mb-5">
@@ -272,7 +264,7 @@ const LoginPage = ({
       </div>
       <div className="inline-flex items-center gap-2 bg-[rgba(126,200,160,0.08)] border border-[rgba(126,200,160,0.2)] rounded-full px-4 py-1.5 mb-5">
         <span className="text-xs font-semibold text-[#7ec8a0] uppercase tracking-wider">
-          {role === "host" ? "Host" : "Guest"} Portal
+          Signed In
         </span>
       </div>
       <h2 className="font-['Cormorant_Garamond'] text-3xl text-[#f5f0e8] mb-2">
@@ -290,7 +282,6 @@ const LoginPage = ({
     </div>
   );
 
-  /* ── Main login view ── */
   const renderLogin = () => (
     <div
       className={`w-full max-w-md transition-all duration-500 ${mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}
@@ -304,11 +295,7 @@ const LoginPage = ({
             <button
               key={r}
               onClick={() => setRole(r)}
-              className={`flex-1 flex items-center justify-center gap-2.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                isActive
-                  ? "bg-[#252220] text-[#f5f0e8] shadow-sm border border-[rgba(245,240,232,0.08)]"
-                  : "text-[rgba(245,240,232,0.35)] hover:text-[rgba(245,240,232,0.6)]"
-              }`}
+              className={`flex-1 flex items-center justify-center gap-2.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${isActive ? "bg-[#252220] text-[#f5f0e8] shadow-sm border border-[rgba(245,240,232,0.08)]" : "text-[rgba(245,240,232,0.35)] hover:text-[rgba(245,240,232,0.6)]"}`}
             >
               <Icon className="w-4 h-4" />
               {ROLE_CONFIG[r].label}
@@ -344,7 +331,7 @@ const LoginPage = ({
         </h1>
       </div>
 
-      {/* Role-specific context strip */}
+      {/* Role context strip */}
       <div
         className="rounded-2xl p-4 mb-6 border"
         style={{
@@ -370,14 +357,10 @@ const LoginPage = ({
           >
             {role === "host" ? (
               <BuildingOffice2Icon
-                className="w-4.5 h-4.5"
                 style={{ color: "#C9A96E", width: 18, height: 18 }}
               />
             ) : (
-              <UserIcon
-                className="w-4.5 h-4.5"
-                style={{ color: "#6EADC9", width: 18, height: 18 }}
-              />
+              <UserIcon style={{ color: "#6EADC9", width: 18, height: 18 }} />
             )}
           </div>
           <div className="flex-1 min-w-0">
@@ -427,7 +410,6 @@ const LoginPage = ({
             error={!!errors.email}
           />
         </Field>
-
         <Field label="Password" error={errors.password}>
           <div className="relative">
             <LockClosedIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[rgba(245,240,232,0.3)]" />
@@ -483,10 +465,10 @@ const LoginPage = ({
       <button
         type="button"
         onClick={handleLogin}
-        disabled={loading}
+        disabled={loading || authLoading}
         className="w-full bg-[#C9A96E] disabled:opacity-50 disabled:cursor-not-allowed text-[#0e0d0b] font-semibold py-3.5 rounded-xl text-sm hover:bg-[#dfc08a] transition-all hover:scale-[1.01] active:scale-[0.99] hover:shadow-[0_8px_24px_rgba(201,169,110,0.25)] flex items-center justify-center gap-2.5"
       >
-        {loading ? (
+        {loading || authLoading ? (
           <>
             <span className="w-4 h-4 border-2 border-[rgba(0,0,0,0.2)] border-t-[#0e0d0b] rounded-full animate-spin" />
             Authenticating…
@@ -521,7 +503,7 @@ const LoginPage = ({
       <div className="grid grid-cols-2 gap-3 mb-6">
         <button
           type="button"
-          disabled={loading}
+          disabled={loading || authLoading}
           onClick={() => {
             setLoading(true);
             setErrorMessage("");
@@ -551,7 +533,7 @@ const LoginPage = ({
         </button>
         <button
           type="button"
-          disabled={loading}
+          disabled={loading || authLoading}
           onClick={() => {
             setLoading(true);
             setErrorMessage("");
@@ -614,8 +596,6 @@ const LoginPage = ({
           style={{ backgroundImage: `url('${config.bgImage}')`, opacity: 0.3 }}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-[rgba(14,13,11,0.75)] via-[rgba(14,13,11,0.4)] to-[rgba(14,13,11,0.9)]" />
-
-        {/* Role-colored accent line */}
         <div
           className="absolute top-0 left-0 right-0 h-0.5 transition-all duration-500"
           style={{
@@ -625,7 +605,6 @@ const LoginPage = ({
                 : "linear-gradient(90deg, transparent, #6EADC9, transparent)",
           }}
         />
-
         <div className="relative z-10 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-5 h-5 bg-[#C9A96E] rotate-45 rounded-sm" />
@@ -655,7 +634,6 @@ const LoginPage = ({
             {config.badge}
           </div>
         </div>
-
         <div className="relative z-10">
           <blockquote className="font-['Cormorant_Garamond'] text-[26px] italic leading-snug text-[#f5f0e8] mb-5">
             "{config.quote}"
@@ -663,7 +641,6 @@ const LoginPage = ({
           <cite className="text-xs text-[rgba(245,240,232,0.4)] uppercase tracking-widest not-italic">
             — LuxStay {role === "host" ? "Host Community" : "Guest Network"}
           </cite>
-
           <div className="flex gap-8 mt-10">
             {config.stats.map(({ val, label }) => (
               <div key={label}>
@@ -686,7 +663,6 @@ const LoginPage = ({
       <div className="bg-[#1a1916] flex flex-col justify-center items-center px-6 py-12 lg:px-10 relative overflow-hidden">
         <div className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full bg-[rgba(201,169,110,0.03)] pointer-events-none" />
         <div className="absolute -bottom-24 -left-24 w-80 h-80 rounded-full bg-[rgba(201,169,110,0.02)] pointer-events-none" />
-
         <div className="relative z-10 w-full flex justify-center">
           {view === "login" && renderLogin()}
           {view === "forgot" && renderForgot()}
