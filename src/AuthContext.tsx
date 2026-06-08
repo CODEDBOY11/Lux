@@ -157,6 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const loginHandled = useRef(false);
+  const oauthRedirectInProgress = useRef(false);
 
   const refreshUser = useCallback(() => setUser(Session.get()), []);
 
@@ -166,8 +167,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // ── OAuth redirect return ──
     getRedirectResult(auth)
       .then(async (result) => {
-        if (!result) return;
+        if (!result) {
+          oauthRedirectInProgress.current = false;
+          return;
+        }
 
+        oauthRedirectInProgress.current = true;
         const savedRole =
           (localStorage.getItem(REDIRECT_ROLE_KEY) as UserRole) ?? "guest";
         const savedProvider =
@@ -175,6 +180,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           "google";
         localStorage.removeItem(REDIRECT_ROLE_KEY);
         localStorage.removeItem(REDIRECT_PROVIDER_KEY);
+
+        console.log(
+          "🔄 getRedirectResult caught OAuth user:",
+          result.user.email,
+        );
 
         const localUser = await ensureSupabaseUser(
           result.user,
@@ -184,12 +194,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         Session.set(localUser);
         setUser(localUser);
         loginHandled.current = true;
+        console.log("✅ Navigating to:", roleToPath(localUser.role));
         navigate(roleToPath(localUser.role), { replace: true });
       })
       .catch((err) => {
-        console.error("getRedirectResult error:", err);
+        console.error("❌ getRedirectResult error:", err);
         localStorage.removeItem(REDIRECT_ROLE_KEY);
         localStorage.removeItem(REDIRECT_PROVIDER_KEY);
+        oauthRedirectInProgress.current = false;
       });
 
     // ── Auth state observer ──
@@ -213,11 +225,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           Session.set(existing, remembered);
           setUser(existing);
           console.log(
-            "👤 onAuthStateChanged:",
+            "👤 onAuthStateChanged (existing user):",
             existing.email,
             "| role:",
             existing.role,
           );
+
+          // ✅ If OAuth redirect was in progress, navigate now
+          if (oauthRedirectInProgress.current) {
+            oauthRedirectInProgress.current = false;
+            console.log(
+              "✅ OAuth complete, navigating to:",
+              roleToPath(existing.role),
+            );
+            navigate(roleToPath(existing.role), { replace: true });
+          }
         } else {
           // ✅ Handle new OAuth users if getRedirectResult didn't catch them
           const savedRole =
@@ -231,6 +253,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           localStorage.removeItem(REDIRECT_ROLE_KEY);
           localStorage.removeItem(REDIRECT_PROVIDER_KEY);
 
+          console.log(
+            "🔄 Creating new OAuth user:",
+            fbUser.email,
+            "| role:",
+            savedRole,
+            "| provider:",
+            savedProvider,
+          );
+
           const newUser = await ensureSupabaseUser(
             fbUser,
             savedRole,
@@ -239,12 +270,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const remembered = Session.isRemembered();
           Session.set(newUser, remembered);
           setUser(newUser);
+          loginHandled.current = true;
           console.log(
-            "👤 onAuthStateChanged (new OAuth user):",
+            "✅ New OAuth user created:",
             newUser.email,
             "| role:",
             newUser.role,
+            "| navigating to:",
+            roleToPath(newUser.role),
           );
+          navigate(roleToPath(newUser.role), { replace: true });
         }
       } else {
         Session.clear();
