@@ -1570,45 +1570,46 @@ export default function BookingPage({
         setSaving(false);
         setSaveError("Payment was cancelled. Please try again.");
       },
-      callback: async (response) => {
+      callback: (response) => {
         if (response.status !== "success") {
           setSaving(false);
           setSaveError("Payment was not completed. Please try again.");
           return;
         }
-        setSaving(true); // ✅ safe here — payment already succeeded
-        try {
-          const booking = await BookingsDB.add({
-            guestId: user?.id ?? "guest_anonymous",
-            guestName: guestInfo.name,
-            guestEmail: guestInfo.email,
-            guestPhone: guestInfo.phone,
-            listingId: hotel.id,
-            listingName: hotel.name,
-            hostId: hotel.hostId,
-            checkIn: checkIn || today,
-            checkOut:
-              checkOut ||
-              new Date(Date.now() + 86400000).toISOString().split("T")[0],
-            guests,
-            nights: Math.max(nights, 1),
-            totalAmount: total,
-            specialRequests: guestInfo.requests,
+        setSaving(true);
+        BookingsDB.add({
+          guestId: user?.id ?? "guest_anonymous",
+          guestName: guestInfo.name,
+          guestEmail: guestInfo.email,
+          guestPhone: guestInfo.phone,
+          listingId: hotel.id,
+          listingName: hotel.name,
+          hostId: hotel.hostId,
+          checkIn: checkIn || today,
+          checkOut:
+            checkOut ||
+            new Date(Date.now() + 86400000).toISOString().split("T")[0],
+          guests,
+          nights: Math.max(nights, 1),
+          totalAmount: total,
+          specialRequests: guestInfo.requests,
+        })
+          .then((booking) => {
+            setBookingRef(response.reference);
+            setCompletedBooking(booking);
+            setStep("done");
+          })
+          .catch((err) => {
+            setSaveError(
+              err.message ??
+                "Payment succeeded but booking failed. Contact support.",
+            );
+          })
+          .finally(() => {
+            setSaving(false);
           });
-          setBookingRef(response.reference);
-          setCompletedBooking(booking);
-          setStep("done");
-        } catch (err: any) {
-          setSaveError(
-            err.message ??
-              "Payment succeeded but booking failed. Contact support.",
-          );
-        } finally {
-          setSaving(false);
-        }
       },
     });
-
     handler.openIframe(); // ✅ called synchronously, no prior state updates
   };
 
