@@ -12,6 +12,7 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithRedirect,
+  signInWithPopup,
   getRedirectResult,
   sendPasswordResetEmail,
   sendEmailVerification,
@@ -157,52 +158,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const loginHandled = useRef(false);
-  const oauthRedirectInProgress = useRef(false);
 
   const refreshUser = useCallback(() => setUser(Session.get()), []);
 
   useEffect(() => {
     seedDemoData();
-
-    // ── OAuth redirect return ──
-    getRedirectResult(auth)
-      .then(async (result) => {
-        if (!result) {
-          oauthRedirectInProgress.current = false;
-          return;
-        }
-
-        oauthRedirectInProgress.current = true;
-        const savedRole =
-          (localStorage.getItem(REDIRECT_ROLE_KEY) as UserRole) ?? "guest";
-        const savedProvider =
-          (localStorage.getItem(REDIRECT_PROVIDER_KEY) as "google" | "apple") ??
-          "google";
-        localStorage.removeItem(REDIRECT_ROLE_KEY);
-        localStorage.removeItem(REDIRECT_PROVIDER_KEY);
-
-        console.log(
-          "🔄 getRedirectResult caught OAuth user:",
-          result.user.email,
-        );
-
-        const localUser = await ensureSupabaseUser(
-          result.user,
-          savedRole,
-          savedProvider,
-        );
-        Session.set(localUser);
-        setUser(localUser);
-        loginHandled.current = true;
-        console.log("✅ Navigating to:", roleToPath(localUser.role));
-        navigate(roleToPath(localUser.role), { replace: true });
-      })
-      .catch((err) => {
-        console.error("❌ getRedirectResult error:", err);
-        localStorage.removeItem(REDIRECT_ROLE_KEY);
-        localStorage.removeItem(REDIRECT_PROVIDER_KEY);
-        oauthRedirectInProgress.current = false;
-      });
 
     // ── Auth state observer ──
     return onAuthStateChanged(auth, async (fbUser) => {
@@ -225,61 +185,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           Session.set(existing, remembered);
           setUser(existing);
           console.log(
-            "👤 onAuthStateChanged (existing user):",
+            "👤 User loaded from session:",
             existing.email,
             "| role:",
             existing.role,
           );
-
-          // ✅ If OAuth redirect was in progress, navigate now
-          if (oauthRedirectInProgress.current) {
-            oauthRedirectInProgress.current = false;
-            console.log(
-              "✅ OAuth complete, navigating to:",
-              roleToPath(existing.role),
-            );
-            navigate(roleToPath(existing.role), { replace: true });
-          }
-        } else {
-          // ✅ Handle new OAuth users if getRedirectResult didn't catch them
-          const savedRole =
-            (localStorage.getItem(REDIRECT_ROLE_KEY) as UserRole) ?? "guest";
-          const savedProvider =
-            (localStorage.getItem(REDIRECT_PROVIDER_KEY) as
-              | "google"
-              | "apple") ?? "google";
-
-          // Clear the stored role/provider so we don't reuse them
-          localStorage.removeItem(REDIRECT_ROLE_KEY);
-          localStorage.removeItem(REDIRECT_PROVIDER_KEY);
-
-          console.log(
-            "🔄 Creating new OAuth user:",
-            fbUser.email,
-            "| role:",
-            savedRole,
-            "| provider:",
-            savedProvider,
-          );
-
-          const newUser = await ensureSupabaseUser(
-            fbUser,
-            savedRole,
-            savedProvider,
-          );
-          const remembered = Session.isRemembered();
-          Session.set(newUser, remembered);
-          setUser(newUser);
-          loginHandled.current = true;
-          console.log(
-            "✅ New OAuth user created:",
-            newUser.email,
-            "| role:",
-            newUser.role,
-            "| navigating to:",
-            roleToPath(newUser.role),
-          );
-          navigate(roleToPath(newUser.role), { replace: true });
         }
       } else {
         Session.clear();
@@ -366,17 +276,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const loginWithGoogle = useCallback((role: UserRole): void => {
-    localStorage.setItem(REDIRECT_ROLE_KEY, role);
-    localStorage.setItem(REDIRECT_PROVIDER_KEY, "google");
-    signInWithRedirect(auth, googleProvider);
-  }, []);
+  const loginWithGoogle = useCallback(
+    (role: UserRole): void => {
+      signInWithPopup(auth, googleProvider)
+        .then(async (result) => {
+          console.log("✅ Google popup success:", result.user.email);
+          const localUser = await ensureSupabaseUser(
+            result.user,
+            role,
+            "google",
+          );
+          Session.set(localUser);
+          setUser(localUser);
+          loginHandled.current = true;
+          navigate(roleToPath(localUser.role), { replace: true });
+        })
+        .catch((err) => {
+          console.error("❌ Google popup error:", err.code, err.message);
+        });
+    },
+    [navigate],
+  );
 
-  const loginWithApple = useCallback((role: UserRole): void => {
-    localStorage.setItem(REDIRECT_ROLE_KEY, role);
-    localStorage.setItem(REDIRECT_PROVIDER_KEY, "apple");
-    signInWithRedirect(auth, appleProvider);
-  }, []);
+  const loginWithApple = useCallback(
+    (role: UserRole): void => {
+      signInWithPopup(auth, appleProvider)
+        .then(async (result) => {
+          console.log("✅ Apple popup success:", result.user.email);
+          const localUser = await ensureSupabaseUser(
+            result.user,
+            role,
+            "apple",
+          );
+          Session.set(localUser);
+          setUser(localUser);
+          loginHandled.current = true;
+          navigate(roleToPath(localUser.role), { replace: true });
+        })
+        .catch((err) => {
+          console.error("❌ Apple popup error:", err.code, err.message);
+        });
+    },
+    [navigate],
+  );
 
   const forgotPassword = useCallback(
     async (email: string): Promise<AuthResult> => {
