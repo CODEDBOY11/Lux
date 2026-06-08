@@ -548,6 +548,7 @@ export const ListingsDB = {
     const { data, error } = await supabase
       .from("listings")
       .select("*")
+      .eq("verification_status", "verified")
       .eq("available", true)
       .order("featured", { ascending: false })
       .order("created_at", { ascending: false });
