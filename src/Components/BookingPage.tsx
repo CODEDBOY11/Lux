@@ -1,17 +1,3 @@
-/**
- * BookingPage.tsx — with Paystack inline payment
- *
- * SETUP:
- *   1. Add to .env.local:
- *        VITE_PAYSTACK_PUBLIC_KEY=pk_live_xxxxxxxxxxxx
- *   2. Add Paystack inline script to your index.html <head>:
- *        <script src="https://js.paystack.co/v1/inline.js"></script>
- *
- * FLOW:
- *   form → confirm → [Paystack popup] → on success: BookingsDB.add() → done
- *                                      → on close/fail: stay on confirm, show error
- */
-
 import { useState, useEffect, useRef } from "react";
 import { MessagesDB, type Conversation } from "../index";
 import {
@@ -37,14 +23,13 @@ import { StarIcon as StarOutline } from "@heroicons/react/24/outline";
 import { useAuth } from "../AuthContext";
 import { BookingsDB, ReviewsDB, type Hotel, type Booking } from "../index";
 
-/* ─────────────── Paystack types ─────────────── */
 declare global {
   interface Window {
     PaystackPop: {
       setup(options: {
         key: string;
         email: string;
-        amount: number; // in kobo (multiply USD by 100, or use NGN)
+        amount: number;
         currency?: string;
         ref: string;
         metadata?: Record<string, unknown>;
@@ -57,10 +42,8 @@ declare global {
 
 const PAYSTACK_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY as string;
 
-/* ─────────────── Helpers ─────────────── */
 const DEFAULT_IMAGE =
   "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=75";
-
 const getSafeImage = (url?: string) =>
   !url || url.includes("bing.com") ? DEFAULT_IMAGE : url;
 
@@ -89,7 +72,6 @@ const AMENITY_ICONS: Record<string, string> = {
   "Hot Tub": "♨️",
 };
 
-/* ─────────────── Star Picker ─────────────── */
 function StarPicker({
   value,
   onChange,
@@ -167,7 +149,6 @@ function SubRating({
   );
 }
 
-/* ─────────────── Guest Review Modal ─────────────── */
 function GuestReviewModal({
   booking,
   hotel,
@@ -226,9 +207,7 @@ function GuestReviewModal({
       setReviewStep("done");
       onReviewSaved?.();
     } catch (err: any) {
-      setReviewError(
-        err.message ?? "Failed to submit review. Please try again.",
-      );
+      setReviewError(err.message ?? "Failed to submit review.");
     } finally {
       setSaving(false);
     }
@@ -685,7 +664,6 @@ function GuestReviewModal({
   );
 }
 
-/* ─────────────── Concierge Chat ─────────────── */
 type ChatMsg = { role: "user" | "concierge"; text: string; time: string };
 const nowTime = () =>
   new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -748,7 +726,7 @@ function ConciergeChat({
     if (!text) return;
     setInput("");
     setMessages((m) => [...m, { role: "user", text, time: nowTime() }]);
-    if (guestId && conversation) {
+    if (guestId && conversation)
       MessagesDB.sendMessage({
         conversationId: conversation.id,
         senderId: guestId,
@@ -757,7 +735,6 @@ function ConciergeChat({
         senderRole: "guest",
         body: text,
       }).catch(console.error);
-    }
     setTyping(true);
     setTimeout(
       () => {
@@ -1104,7 +1081,6 @@ function ConciergeChat({
   );
 }
 
-/* ─────────────── Mini Calendar ─────────────── */
 function MiniCalendar({
   value,
   onChange,
@@ -1166,7 +1142,6 @@ function MiniCalendar({
     alignItems: "center",
     justifyContent: "center",
   };
-
   return (
     <div style={{ width: "100%" }}>
       <p
@@ -1202,7 +1177,7 @@ function MiniCalendar({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(7, 1fr)",
+          gridTemplateColumns: "repeat(7,1fr)",
           marginBottom: 4,
         }}
       >
@@ -1224,7 +1199,7 @@ function MiniCalendar({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(7, 1fr)",
+          gridTemplateColumns: "repeat(7,1fr)",
           gap: 2,
         }}
       >
@@ -1280,7 +1255,6 @@ function MiniCalendar({
   );
 }
 
-/* ─────────────── Gallery ─────────────── */
 function Gallery({
   hotel,
   activeImg,
@@ -1417,7 +1391,6 @@ function Gallery({
   );
 }
 
-/* ─────────────── Room config ─────────────── */
 const makeRoomTypes = (hotel: Hotel) => {
   const baseFeatures = hotel.amenities.slice(0, 5);
   const stdPrice = hotel.pricePerNight;
@@ -1448,16 +1421,12 @@ const makeRoomTypes = (hotel: Hotel) => {
   ];
 };
 
-/* ─────────────── PROPS ─────────────── */
 type Props = {
   hotel: Hotel;
   onBack?: () => void;
   onBookingComplete?: () => void;
 };
 
-/* ═══════════════════════════════════════════════════════════
-   MAIN COMPONENT
-═══════════════════════════════════════════════════════════ */
 export default function BookingPage({
   hotel,
   onBack,
@@ -1557,15 +1526,15 @@ export default function BookingPage({
     });
   };
 
-  /* ════════════════════════════════════════════════
-     PAYSTACK PAYMENT
-     - Amount is in kobo (Naira) or cents (USD).
-     - Paystack supports NGN natively. For USD, set currency: "USD".
-     - Total is already in USD; multiply by 100 for cents.
-  ════════════════════════════════════════════════ */
   const generateRef = () =>
     `ZB-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
 
+  /* ══════════════════════════════════════
+     PAYSTACK — key fix:
+     NO setSaving(true) or any state update
+     before handler.openIframe(). All async
+     work happens inside the callback only.
+  ══════════════════════════════════════ */
   const handlePayWithPaystack = () => {
     if (!window.PaystackPop) {
       setSaveError("Paystack script not loaded. Check your index.html.");
@@ -1575,18 +1544,16 @@ export default function BookingPage({
       setSaveError("Missing VITE_PAYSTACK_PUBLIC_KEY in .env.local");
       return;
     }
-    setSaveError("");
-    setSaving(true);
 
-    const payRef = generateRef();
+    setSaveError(""); // ✅ only a clear, no re-render that blocks popup
 
+    // ✅ Setup synchronously — no await, no state updates before openIframe
     const handler = window.PaystackPop.setup({
       key: PAYSTACK_KEY,
       email: guestInfo.email,
-      // Amount in kobo/cents — total is USD, multiply by 100
       amount: total * 100,
-      currency: "USD", // change to "NGN" if charging in Naira
-      ref: payRef,
+      currency: "NGN", // change to "USD" if needed
+      ref: generateRef(),
       metadata: {
         listingId: hotel.id,
         listingName: hotel.name,
@@ -1599,18 +1566,17 @@ export default function BookingPage({
         roomType: room.name,
       },
       onClose: () => {
-        // User closed the popup without paying
+        // ✅ state updates are safe here — popup is already open/closed
         setSaving(false);
         setSaveError("Payment was cancelled. Please try again.");
       },
       callback: async (response) => {
-        // Payment succeeded on Paystack's end
         if (response.status !== "success") {
           setSaving(false);
           setSaveError("Payment was not completed. Please try again.");
           return;
         }
-        // Save booking to Supabase with confirmed status
+        setSaving(true); // ✅ safe here — payment already succeeded
         try {
           const booking = await BookingsDB.add({
             guestId: user?.id ?? "guest_anonymous",
@@ -1629,7 +1595,7 @@ export default function BookingPage({
             totalAmount: total,
             specialRequests: guestInfo.requests,
           });
-          setBookingRef(response.reference); // use Paystack ref as booking ref
+          setBookingRef(response.reference);
           setCompletedBooking(booking);
           setStep("done");
         } catch (err: any) {
@@ -1643,10 +1609,9 @@ export default function BookingPage({
       },
     });
 
-    handler.openIframe();
+    handler.openIframe(); // ✅ called synchronously, no prior state updates
   };
 
-  /* Calendar outside-click */
   const calInRef = useRef<HTMLDivElement>(null);
   const calOutRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -1660,7 +1625,6 @@ export default function BookingPage({
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  /* ── Booking Modal ── */
   const BookingModal = () => (
     <div
       style={{
@@ -1696,7 +1660,7 @@ export default function BookingPage({
         }}
         className="sm:rounded-3xl"
       >
-        {/* ── STEP: form ── */}
+        {/* FORM */}
         {step === "form" && (
           <>
             <div
@@ -2091,7 +2055,7 @@ export default function BookingPage({
           </>
         )}
 
-        {/* ── STEP: confirm — PAYSTACK ── */}
+        {/* CONFIRM — PAYSTACK */}
         {step === "confirm" && (
           <>
             <div
@@ -2152,7 +2116,6 @@ export default function BookingPage({
                 gap: 16,
               }}
             >
-              {/* Reservation summary */}
               <div
                 style={{
                   background: "rgba(245,240,232,0.04)",
@@ -2225,7 +2188,6 @@ export default function BookingPage({
                 </div>
               </div>
 
-              {/* Paystack payment section */}
               <div
                 style={{
                   background: "rgba(0,100,50,0.08)",
@@ -2242,7 +2204,6 @@ export default function BookingPage({
                     marginBottom: 10,
                   }}
                 >
-                  {/* Paystack green mark icon */}
                   <div
                     style={{
                       width: 40,
@@ -2306,7 +2267,6 @@ export default function BookingPage({
                 </div>
               </div>
 
-              {/* Error */}
               {saveError && (
                 <div
                   style={{
@@ -2322,26 +2282,24 @@ export default function BookingPage({
                 </div>
               )}
 
-              {/* PAY NOW BUTTON */}
+              {/* ✅ PAY BUTTON — direct onClick, no wrapper, no disabled during payment */}
               <button
                 onClick={handlePayWithPaystack}
-                disabled={saving}
                 style={{
                   width: "100%",
-                  background: saving ? "rgba(0,180,80,0.4)" : "#00b451",
+                  background: "#00b451",
                   color: "#fff",
                   fontWeight: 700,
                   fontSize: 14,
                   padding: "16px 0",
                   borderRadius: 14,
                   border: "none",
-                  cursor: saving ? "not-allowed" : "pointer",
+                  cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   gap: 8,
                   letterSpacing: "0.04em",
-                  transition: "background 0.2s",
                 }}
               >
                 {saving ? (
@@ -2383,7 +2341,7 @@ export default function BookingPage({
           </>
         )}
 
-        {/* ── STEP: done ── */}
+        {/* DONE */}
         {step === "done" && (
           <div
             style={{
@@ -2558,7 +2516,6 @@ export default function BookingPage({
     </div>
   );
 
-  /* ── MAIN RENDER ── */
   return (
     <div
       style={{
@@ -2620,7 +2577,7 @@ export default function BookingPage({
         />
       )}
 
-      {/* ── STICKY NAV ── */}
+      {/* STICKY NAV */}
       <header
         style={{
           position: "sticky",
@@ -2763,7 +2720,7 @@ export default function BookingPage({
         </div>
       </header>
 
-      {/* ── HERO mobile ── */}
+      {/* HERO mobile */}
       <div
         className="hero-mobile"
         style={{ display: "none", position: "relative" }}
@@ -2860,7 +2817,7 @@ export default function BookingPage({
         </div>
       </div>
 
-      {/* ── HERO desktop ── */}
+      {/* HERO desktop */}
       <div
         className="hero-grid-wrap page-padding"
         style={{ maxWidth: 1200, margin: "0 auto", padding: "16px 24px 24px" }}
@@ -3033,7 +2990,7 @@ export default function BookingPage({
         </div>
       </div>
 
-      {/* ── MAIN CONTENT ── */}
+      {/* MAIN CONTENT */}
       <div
         className="content-wrap page-padding"
         style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px 120px" }}
@@ -3147,12 +3104,11 @@ export default function BookingPage({
               </div>
             </div>
 
-            {/* Quick stats */}
             <div
               className="quick-stats-grid"
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(4, 1fr)",
+                gridTemplateColumns: "repeat(4,1fr)",
                 gap: 10,
                 marginBottom: 28,
               }}
@@ -3196,7 +3152,6 @@ export default function BookingPage({
               ))}
             </div>
 
-            {/* Tabs */}
             <div
               className="tabs-row"
               style={{
@@ -3218,7 +3173,6 @@ export default function BookingPage({
               ))}
             </div>
 
-            {/* OVERVIEW */}
             {activeTab === "overview" && (
               <div
                 style={{ display: "flex", flexDirection: "column", gap: 32 }}
@@ -3261,7 +3215,7 @@ export default function BookingPage({
                     className="amenities-grid"
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "repeat(3, 1fr)",
+                      gridTemplateColumns: "repeat(3,1fr)",
                       gap: 10,
                     }}
                   >
@@ -3416,7 +3370,6 @@ export default function BookingPage({
               </div>
             )}
 
-            {/* ROOMS */}
             {activeTab === "rooms" && (
               <div
                 style={{ display: "flex", flexDirection: "column", gap: 14 }}
@@ -3620,7 +3573,6 @@ export default function BookingPage({
               </div>
             )}
 
-            {/* REVIEWS */}
             {activeTab === "reviews" &&
               (() => {
                 const avgRating = listingReviews.length
@@ -4070,7 +4022,6 @@ export default function BookingPage({
                   gap: 14,
                 }}
               >
-                {/* Date pickers */}
                 <div
                   style={{
                     display: "grid",
@@ -4213,7 +4164,6 @@ export default function BookingPage({
                     )}
                   </div>
                 </div>
-                {/* Guests */}
                 <div
                   style={{
                     background: "rgba(245,240,232,0.05)",
@@ -4302,7 +4252,6 @@ export default function BookingPage({
                     </button>
                   </div>
                 </div>
-                {/* Room selector */}
                 <div>
                   <p
                     style={{
@@ -4364,7 +4313,6 @@ export default function BookingPage({
                     ))}
                   </div>
                 </div>
-                {/* Price breakdown */}
                 {nights > 0 && (
                   <div
                     style={{
@@ -4413,7 +4361,6 @@ export default function BookingPage({
                     </div>
                   </div>
                 )}
-                {/* Reserve CTA */}
                 <button
                   onClick={() => setStep("form")}
                   style={{
@@ -4457,7 +4404,6 @@ export default function BookingPage({
                   />
                   Free cancellation · No charge until confirmed
                 </div>
-                {/* Concierge */}
                 <div
                   style={{
                     borderTop: "1px solid rgba(245,240,232,0.07)",
@@ -4539,7 +4485,6 @@ export default function BookingPage({
                 </div>
               </div>
             </div>
-            {/* Trust badges */}
             <div
               style={{
                 display: "grid",
@@ -4579,7 +4524,7 @@ export default function BookingPage({
         </div>
       </div>
 
-      {/* Mobile CTA bar */}
+      {/* Mobile CTA */}
       <div
         style={{
           position: "fixed",

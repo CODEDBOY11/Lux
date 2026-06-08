@@ -718,7 +718,7 @@ const ListingForm = ({
                   </select>
                 </div>
                 <div>
-                  <label className={lbl}>Price Per Night (USD) *</label>
+                  <label className={lbl}>Price Per Night (NGN) *</label>
                   <input
                     className={inp}
                     type="number"
