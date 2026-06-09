@@ -113,41 +113,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const remembered = Session.isRemembered();
         const profile = await syncUser(session.user.id, remembered);
 
-        console.log("Supabase User:", session.user);
-        console.log("Database Profile:", profile);
-        // On OAuth callback — check if we need to set role or navigate
-        if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-          if (profile) {
-            // If role was saved before OAuth redirect, apply it
-            const savedRole = localStorage.getItem(
-              OAUTH_ROLE_KEY,
-            ) as UserRole | null;
-            if (
-              savedRole &&
-              profile.role === "guest" &&
-              savedRole !== "guest"
-            ) {
-              // Update role to what user selected
-              const updated = await AuthDB.update(profile.id, {
-                role: savedRole,
-              });
-              if (updated) {
-                localStorage.removeItem(OAUTH_ROLE_KEY);
-                Session.set(updated, remembered);
-                setUser(updated);
-                setLoading(false);
-                navigate(roleToPath(updated.role), { replace: true });
-                return;
-              }
+        if (profile) {
+          const savedRole = localStorage.getItem(
+            OAUTH_ROLE_KEY,
+          ) as UserRole | null;
+          if (savedRole && profile.role === "guest" && savedRole !== "guest") {
+            const updated = await AuthDB.update(profile.id, {
+              role: savedRole,
+            });
+            if (updated) {
+              localStorage.removeItem(OAUTH_ROLE_KEY);
+              Session.set(updated, remembered);
+              setUser(updated);
+              setLoading(false);
+              navigate(roleToPath(updated.role), { replace: true });
+              return;
             }
-            localStorage.removeItem(OAUTH_ROLE_KEY);
-            setLoading(false);
-            // Only navigate on actual sign in events, not token refresh
-            if (event === "SIGNED_IN") {
-              navigate(roleToPath(profile.role), { replace: true });
-            }
-            return;
           }
+          localStorage.removeItem(OAUTH_ROLE_KEY);
+          setLoading(false);
+
+          // ✅ Navigate on SIGNED_IN and INITIAL_SESSION (but not TOKEN_REFRESHED
+          // to avoid re-navigating while user is already on the right page)
+          if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
+            const currentPath = window.location.pathname;
+            const targetPath = roleToPath(profile.role);
+            // Only navigate if on login/signup/callback — not if already on correct page
+            if (
+              currentPath === "/login" ||
+              currentPath === "/signup" ||
+              currentPath === "/auth/callback"
+            ) {
+              navigate(targetPath, { replace: true });
+            }
+          }
+          return;
         }
       } else {
         Session.clear();
@@ -155,7 +155,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setLoading(false);
     });
-
     return () => subscription.unsubscribe();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
