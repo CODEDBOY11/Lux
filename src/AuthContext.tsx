@@ -12,7 +12,6 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithRedirect,
-  signInWithPopup,
   getRedirectResult,
   sendPasswordResetEmail,
   sendEmailVerification,
@@ -164,38 +163,75 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     seedDemoData();
 
+    // ── OAuth redirect return ──
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (!result) return;
+
+        const savedRole =
+          (localStorage.getItem(REDIRECT_ROLE_KEY) as UserRole) ?? "guest";
+        const savedProvider =
+          (localStorage.getItem(REDIRECT_PROVIDER_KEY) as "google" | "apple") ??
+          "google";
+        localStorage.removeItem(REDIRECT_ROLE_KEY);
+        localStorage.removeItem(REDIRECT_PROVIDER_KEY);
+
+        const localUser = await ensureSupabaseUser(
+          result.user,
+          savedRole,
+          savedProvider,
+        );
+        Session.set(localUser);
+        setUser(localUser);
+        loginHandled.current = true;
+        navigate(roleToPath(localUser.role), { replace: true });
+      })
+      .catch((err) => {
+        console.error("getRedirectResult error:", err);
+        localStorage.removeItem(REDIRECT_ROLE_KEY);
+        localStorage.removeItem(REDIRECT_PROVIDER_KEY);
+      });
+
     // ── Auth state observer ──
     return onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
         if (loginHandled.current) {
           loginHandled.current = false;
-          setLoading(false);
+          setLoading(false); // ✅ already handled by login()
           return;
         }
 
-        const existing =
-          (await AuthDB.getByFirebaseUid(fbUser.uid)) ??
-          (await AuthDB.getByEmail((fbUser.email ?? "").toLowerCase().trim()));
+        try {
+          const existing =
+            (await AuthDB.getByFirebaseUid(fbUser.uid)) ??
+            (await AuthDB.getByEmail(
+              (fbUser.email ?? "").toLowerCase().trim(),
+            ));
 
-        if (existing) {
-          if (fbUser.emailVerified && !existing.emailVerified) {
-            await AuthDB.verifyEmail(existing.id);
+          if (existing) {
+            if (fbUser.emailVerified && !existing.emailVerified) {
+              await AuthDB.verifyEmail(existing.id);
+            }
+            const remembered = Session.isRemembered();
+            Session.set(existing, remembered);
+            setUser(existing);
+            console.log(
+              "👤 onAuthStateChanged:",
+              existing.email,
+              "| role:",
+              existing.role,
+            );
           }
-          const remembered = Session.isRemembered();
-          Session.set(existing, remembered);
-          setUser(existing);
-          console.log(
-            "👤 User loaded from session:",
-            existing.email,
-            "| role:",
-            existing.role,
-          );
+        } catch (err) {
+          console.error("onAuthStateChanged Supabase lookup failed:", err);
+        } finally {
+          setLoading(false); // ✅ only set false AFTER supabase lookup completes
         }
       } else {
         Session.clear();
         setUser(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -276,49 +312,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const loginWithGoogle = useCallback(
-    (role: UserRole): void => {
-      signInWithPopup(auth, googleProvider)
-        .then(async (result) => {
-          console.log("✅ Google popup success:", result.user.email);
-          const localUser = await ensureSupabaseUser(
-            result.user,
-            role,
-            "google",
-          );
-          Session.set(localUser);
-          setUser(localUser);
-          loginHandled.current = true;
-          navigate(roleToPath(localUser.role), { replace: true });
-        })
-        .catch((err) => {
-          console.error("❌ Google popup error:", err.code, err.message);
-        });
-    },
-    [navigate],
-  );
+  const loginWithGoogle = useCallback((role: UserRole): void => {
+    localStorage.setItem(REDIRECT_ROLE_KEY, role);
+    localStorage.setItem(REDIRECT_PROVIDER_KEY, "google");
+    signInWithRedirect(auth, googleProvider);
+  }, []);
 
-  const loginWithApple = useCallback(
-    (role: UserRole): void => {
-      signInWithPopup(auth, appleProvider)
-        .then(async (result) => {
-          console.log("✅ Apple popup success:", result.user.email);
-          const localUser = await ensureSupabaseUser(
-            result.user,
-            role,
-            "apple",
-          );
-          Session.set(localUser);
-          setUser(localUser);
-          loginHandled.current = true;
-          navigate(roleToPath(localUser.role), { replace: true });
-        })
-        .catch((err) => {
-          console.error("❌ Apple popup error:", err.code, err.message);
-        });
-    },
-    [navigate],
-  );
+  const loginWithApple = useCallback((role: UserRole): void => {
+    localStorage.setItem(REDIRECT_ROLE_KEY, role);
+    localStorage.setItem(REDIRECT_PROVIDER_KEY, "apple");
+    signInWithRedirect(auth, appleProvider);
+  }, []);
 
   const forgotPassword = useCallback(
     async (email: string): Promise<AuthResult> => {
