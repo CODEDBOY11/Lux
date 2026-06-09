@@ -83,9 +83,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         let profile = await AuthDB.getById(supabaseUserId);
 
         if (!profile) {
-          console.warn("Profile missing for user:", supabaseUserId);
+          console.warn("❌ Profile missing for user:", supabaseUserId);
 
-          return null;
+          // RETRY: Database trigger might be slow, wait and try again
+          console.log("🔄 Retrying in 1 second...");
+          await new Promise((r) => setTimeout(r, 1000));
+
+          profile = await AuthDB.getById(supabaseUserId);
+          if (!profile) {
+            console.warn("❌ Still no profile after retry");
+            return null;
+          }
+
+          console.log("✅ Profile found after retry:", profile.email);
+        } else {
+          console.log("✅ Profile synced:", profile.email);
         }
 
         Session.set(profile, rememberMe);
@@ -93,7 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         return profile;
       } catch (err) {
-        console.error("syncUser failed:", err);
+        console.error("❌ syncUser failed:", err);
         return null;
       }
     },
@@ -147,6 +159,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               navigate(targetPath, { replace: true });
             }
           }
+          return;
+        } else {
+          console.error("❌ Failed to sync user profile - logging out");
+          await supabase.auth.signOut();
+          Session.clear();
+          setUser(null);
+          setLoading(false);
           return;
         }
       } else {
