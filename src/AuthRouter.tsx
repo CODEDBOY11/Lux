@@ -15,6 +15,8 @@
 import { useState } from "react";
 import SignupPage from "./Components/SignupPage";
 import LoginPage from "./Components/LoginPage";
+import AuthCallback from "./AuthCallback";
+import { Route } from "react-router-dom";
 
 type AuthView = "signup" | "login";
 
@@ -31,5 +33,6 @@ const AuthRouter = ({ defaultView = "signup" }: Props) => {
 
   return <LoginPage onNavigateToSignup={() => setView("signup")} />;
 };
+<Route path="/auth/callback" element={<AuthCallback />} />;
 
 export default AuthRouter;

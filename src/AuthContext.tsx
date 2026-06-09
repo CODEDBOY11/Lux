@@ -80,16 +80,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       rememberMe = false,
     ): Promise<User | null> => {
       try {
-        const profile = await AuthDB.getById(supabaseUserId);
-        if (profile) {
-          Session.set(profile, rememberMe);
-          setUser(profile);
-          return profile;
+        let profile = await AuthDB.getById(supabaseUserId);
+
+        if (!profile) {
+          console.warn("Profile missing for user:", supabaseUserId);
+
+          return null;
         }
+
+        Session.set(profile, rememberMe);
+        setUser(profile);
+
+        return profile;
       } catch (err) {
         console.error("syncUser failed:", err);
+        return null;
       }
-      return null;
     },
     [],
   );
@@ -107,6 +113,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const remembered = Session.isRemembered();
         const profile = await syncUser(session.user.id, remembered);
 
+        console.log("Supabase User:", session.user);
+        console.log("Database Profile:", profile);
         // On OAuth callback — check if we need to set role or navigate
         if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
           if (profile) {
@@ -237,33 +245,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   /* ── OAuth — Google ── */
-  const loginWithGoogle = useCallback((role: UserRole): void => {
+  const loginWithGoogle = useCallback(async (role: UserRole) => {
     localStorage.setItem(OAUTH_ROLE_KEY, role);
-    supabase.auth.signInWithOAuth({
+
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
-        queryParams: { access_type: "offline", prompt: "consent" },
       },
     });
-  }, []);
 
+    if (error) {
+      console.error("Google OAuth Error:", error);
+    }
+  }, []);
   /* ── OAuth — Apple ── */
-  const loginWithApple = useCallback((role: UserRole): void => {
+  const loginWithApple = useCallback(async (role: UserRole) => {
     localStorage.setItem(OAUTH_ROLE_KEY, role);
-    supabase.auth.signInWithOAuth({
+
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: "apple",
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
+    if (error) {
+      console.error("Apple OAuth Error:", error);
+    }
   }, []);
 
   /* ── OAuth — GitHub ── */
-  const loginWithGithub = useCallback((role: UserRole): void => {
+  const loginWithGithub = useCallback(async (role: UserRole) => {
     localStorage.setItem(OAUTH_ROLE_KEY, role);
-    supabase.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: "github",
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
+    if (error) {
+      console.error("GitHub OAuth Error:", error);
+    }
   }, []);
 
   /* ── Forgot password ── */
