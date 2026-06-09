@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import type { ReactNode } from "react";
+import { supabase } from "./index";
 import {
   Routes,
   Route,
@@ -161,12 +162,65 @@ function AdminDashboardWrapper() {
   if (!user) return <Navigate to="/login" replace />;
   return <AdminDashboard adminId={user.id} />;
 }
+function AuthCallback() {
+  const navigate = useNavigate();
+  const { user, loading } = useAuth();
+
+  useEffect(() => {
+    // Supabase automatically handles the token from the URL hash.
+    // onAuthStateChange in AuthContext fires and navigates.
+    // This component just shows a spinner while that happens.
+    supabase.auth.getSession().then(({ data }) => {
+      if (!data.session) {
+        // No session after callback — something went wrong
+        navigate("/login", { replace: true });
+      }
+    });
+  }, []);
+
+  // Once AuthContext resolves the user, it will navigate away.
+  // If loading is done and still no user, go to login.
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate("/login", { replace: true });
+    }
+  }, [loading, user]);
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: "100vh",
+        background: "#0e0d0b",
+        color: "#C9A96E",
+        fontFamily: "Cormorant Garamond, serif",
+        fontSize: 22,
+        gap: 12,
+      }}
+    >
+      <span
+        style={{
+          width: 18,
+          height: 18,
+          border: "2px solid rgba(201,169,110,0.3)",
+          borderTopColor: "#C9A96E",
+          borderRadius: "50%",
+          display: "inline-block",
+          animation: "spin 0.8s linear infinite",
+        }}
+      />
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      Signing you in…
+    </div>
+  );
+}
 
 // 🛣️ Application Routes
 function AppRoutes() {
   return (
     <Routes>
-      {/* Auth pages — redirect away if already logged in */}
       <Route
         path="/signup"
         element={
@@ -183,12 +237,8 @@ function AppRoutes() {
           </AuthGuard>
         }
       />
-
-      {/* Public routes */}
       <Route path="/explore" element={<ExplorePage />} />
       <Route path="/listing/:id" element={<ListingRoute />} />
-
-      {/* Host dashboard */}
       <Route
         path="/dashboard"
         element={
@@ -200,8 +250,6 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-
-      {/* Guest dashboard */}
       <Route
         path="/account"
         element={
@@ -213,8 +261,6 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-
-      {/* Admin dashboard */}
       <Route
         path="/admin"
         element={
@@ -227,10 +273,10 @@ function AppRoutes() {
         }
       />
 
-      {/* Home */}
-      <Route path="/" element={<HomePage />} />
+      {/* ✅ OAuth callback route */}
+      <Route path="/auth/callback" element={<AuthCallback />} />
 
-      {/* Catch-all */}
+      <Route path="/" element={<HomePage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
