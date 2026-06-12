@@ -400,6 +400,54 @@ export const AuthDB = {
     return data ? toUser(data) : null;
   },
 
+  /** Create a user from OAuth auth metadata (if they don't exist in DB) */
+  async createFromOAuth(
+    authUserId: string,
+    email: string,
+    role: UserRole = "guest",
+  ): Promise<User | null> {
+    try {
+      // Extract name from email if needed
+      const nameParts = email.split("@")[0].split(".");
+      const firstName =
+        nameParts[0]?.charAt(0).toUpperCase() + nameParts[0]?.slice(1) ||
+        "User";
+      const lastName =
+        nameParts[1]?.charAt(0).toUpperCase() + nameParts[1]?.slice(1) || "";
+
+      const { data: created, error } = await supabase
+        .from("users")
+        .insert({
+          id: authUserId,
+          email: email.toLowerCase().trim(),
+          role,
+          first_name: firstName,
+          last_name: lastName,
+          company: "",
+          country: "",
+          phone: "",
+          avatar: (firstName[0] + (lastName?.[0] ?? "")).toUpperCase(),
+          email_verified: true,
+          marketing_opt_in: false,
+          wishlist: [],
+          bookings: [],
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error("❌ Failed to create OAuth user:", error.message);
+        return null;
+      }
+
+      console.log("✅ OAuth user created in database:", toUser(created).email);
+      return toUser(created);
+    } catch (err) {
+      console.error("❌ createFromOAuth error:", err);
+      return null;
+    }
+  },
+
   async update(
     id: string,
     data: Partial<Omit<User, "id" | "createdAt">>,

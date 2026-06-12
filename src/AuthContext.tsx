@@ -76,38 +76,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ── Helper: load Supabase profile and sync session ──────────────────────
   const syncUser = useCallback(
     async (
-      supabaseUserId: string,
+      supabaseUser: { id: string; email?: string | null },
       rememberMe = false,
     ): Promise<User | null> => {
       try {
-        let profile = await AuthDB.getById(supabaseUserId);
+        // Try by id first (works for new users created via trigger)
+        let profile = await AuthDB.getById(supabaseUser.id);
 
-        if (!profile) {
-          console.warn("❌ Profile missing for user:", supabaseUserId);
-
-          // RETRY: Database trigger might be slow, wait and try again
-          console.log("🔄 Retrying in 1 second...");
-          await new Promise((r) => setTimeout(r, 1000));
-
-          profile = await AuthDB.getById(supabaseUserId);
-          if (!profile) {
-            console.warn("❌ Still no profile after retry");
-            return null;
-          }
-
-          console.log("✅ Profile found after retry:", profile.email);
-        } else {
-          console.log("✅ Profile synced:", profile.email);
+        // Fall back to email lookup (works for existing users with old IDs)
+        if (!profile && supabaseUser.email) {
+          profile = await AuthDB.getByEmail(supabaseUser.email);
         }
 
-        Session.set(profile, rememberMe);
-        setUser(profile);
-
-        return profile;
+        if (profile) {
+          Session.set(profile, rememberMe);
+          setUser(profile);
+          return profile;
+        }
       } catch (err) {
-        console.error("❌ syncUser failed:", err);
-        return null;
+        console.error("syncUser failed:", err);
       }
+      return null;
     },
     [],
   );
@@ -123,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (session?.user) {
         const remembered = Session.isRemembered();
-        const profile = await syncUser(session.user.id, remembered);
+        const profile = await syncUser(session.user, remembered);
 
         if (profile) {
           const savedRole = localStorage.getItem(
@@ -180,8 +169,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   /* ── Email / password login ── */
   const login = useCallback(
     async (
-      email: string,
-      password: string,
+      email: any,
+      password: any,
       rememberMe = false,
     ): Promise<AuthResult> => {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -196,21 +185,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             : error.message;
         return { ok: false, msg };
       }
-      if (!data.user)
-        return { ok: false, msg: "Sign in failed. Please try again." };
+      if (!data.user) return { ok: false, msg: "Sign in failed." };
 
-      const profile = await AuthDB.getById(data.user.id);
+      // ✅ Look up by email — works regardless of ID mismatch
+      const profile = await AuthDB.getByEmail(data.user.email!);
       if (!profile)
         return { ok: false, msg: "Account not found. Please register first." };
 
       Session.set(profile, rememberMe);
       setUser(profile);
       return { ok: true, user: profile };
-      // Navigation handled by onAuthStateChange
     },
     [],
   );
-
   /* ── Register ── */
   const register = useCallback(
     async (data: RegisterData): Promise<AuthResult> => {
