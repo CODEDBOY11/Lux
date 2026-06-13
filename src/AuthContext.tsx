@@ -229,6 +229,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await new Promise((r) => setTimeout(r, 500));
 
       const updated = await AuthDB.update(authData.user.id, {
+        emailVerified: true,
         role: data.role,
         firstName: data.firstName,
         lastName: data.lastName,
