@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { MessagesDB, type Conversation } from "../index";
+import { WalletDB } from "../index";
 import {
   MapPinIcon,
   ChevronLeftIcon,
@@ -1594,7 +1595,14 @@ export default function BookingPage({
           totalAmount: total,
           specialRequests: guestInfo.requests,
         })
-          .then((booking) => {
+          .then(async (booking) => {
+            // Split payment: 90% to host, 10% to platform
+            await WalletDB.splitBookingPayment(
+              booking.hostId,
+              booking.id,
+              booking.totalAmount,
+              booking.listingName,
+            );
             setBookingRef(response.reference);
             setCompletedBooking(booking);
             setStep("done");

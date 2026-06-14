@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import MessagesInbox from "./Components/MessagesInbox";
 import { useNavigate } from "react-router-dom";
 import ReviewsSection from "./ReviewSection";
-import AdminVerificationPanel from "./Verification/admin";
+import { WalletDB } from "./index";
 import PropertyVerificationForm from "./Verification/Property";
 import {
   HomeIcon,
@@ -29,7 +29,6 @@ import {
   CheckCircleIcon,
   PhotoIcon,
   UserIcon,
-  ArrowTrendingUpIcon,
   ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
 import { StarIcon as StarSolid } from "@heroicons/react/24/solid";
@@ -58,8 +57,7 @@ type NavKey =
   | "messages"
   | "settings"
   | "wishlist"
-  | "history"
-  | "verification";
+  | "history";
 
 /* ─────────────────────────────────────────────────────────
    HELPERS
@@ -190,7 +188,7 @@ const StatCard = ({
 );
 
 /* ─────────────────────────────────────────────────────────
-   SIDEBAR
+   NAV
 ───────────────────────────────────────────────────────── */
 const HOST_NAV = [
   { key: "dashboard" as NavKey, label: "Dashboard", icon: HomeIcon },
@@ -223,12 +221,9 @@ const GUEST_NAV = [
   { key: "settings" as NavKey, label: "Settings", icon: Cog6ToothIcon },
 ];
 
-const ADMIN_NAV_ITEM = {
-  key: "verification" as NavKey,
-  label: "Verification Queue",
-  icon: ShieldCheckIcon,
-};
-
+/* ─────────────────────────────────────────────────────────
+   SIDEBAR
+───────────────────────────────────────────────────────── */
 const Sidebar = ({
   role,
   active,
@@ -237,20 +232,17 @@ const Sidebar = ({
   onClose,
   onLogout,
   isMobile,
-  isAdmin,
 }: {
-  role: "host" | "guest" | "admin";
+  role: "host" | "guest";
   active: NavKey;
   onNav: (k: NavKey) => void;
   pending: number;
   onClose?: () => void;
   onLogout: () => void;
   isMobile?: boolean;
-  isAdmin?: boolean;
 }) => {
   const { user } = useAuth();
-  const baseNav = role === "guest" ? GUEST_NAV : HOST_NAV;
-  const nav = isAdmin ? [...baseNav, ADMIN_NAV_ITEM] : baseNav;
+  const nav = role === "guest" ? GUEST_NAV : HOST_NAV;
   const isGuest = role === "guest";
 
   return (
@@ -293,7 +285,7 @@ const Sidebar = ({
               color: isGuest ? "#6EADC9" : "#C9A96E",
             }}
           >
-            {isAdmin ? "admin" : role}
+            {role}
           </span>
         </div>
         {isMobile && (
@@ -309,7 +301,6 @@ const Sidebar = ({
         {nav.map(({ key, label, icon: Icon }) => {
           const isActive = active === key;
           const hasBadge = key === "bookings" && pending > 0;
-          const isVerifItem = key === "verification";
           return (
             <button
               key={key}
@@ -317,15 +308,17 @@ const Sidebar = ({
                 onNav(key);
                 onClose?.();
               }}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${isActive ? "text-white shadow-md" : "text-white/50 hover:text-white/80 hover:bg-white/5"}`}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                isActive
+                  ? "text-white shadow-md"
+                  : "text-white/50 hover:text-white/80 hover:bg-white/5"
+              }`}
               style={
                 isActive
                   ? {
-                      background: isVerifItem
-                        ? "linear-gradient(135deg,#4ade80,#22c55e)"
-                        : isGuest
-                          ? "linear-gradient(135deg,#6EADC9,#4a8aad)"
-                          : "linear-gradient(135deg,#C9A96E,#9a7030)",
+                      background: isGuest
+                        ? "linear-gradient(135deg,#6EADC9,#4a8aad)"
+                        : "linear-gradient(135deg,#C9A96E,#9a7030)",
                     }
                   : {}
               }
@@ -457,7 +450,7 @@ type LForm = {
   maxGuests: string;
   amenities: string[];
   tags: string;
-  images: string[]; // ← array of URLs (uploaded or pasted)
+  images: string[];
   featured: boolean;
   available: boolean;
 };
@@ -475,7 +468,7 @@ const BLANK: LForm = {
   maxGuests: "2",
   amenities: [],
   tags: "",
-  images: [], // ← empty array
+  images: [],
   featured: false,
   available: true,
 };
@@ -508,7 +501,7 @@ const ListingForm = ({
           maxGuests: String(editing.maxGuests),
           amenities: editing.amenities,
           tags: editing.tags.join(", "),
-          images: editing.images, // ← already an array
+          images: editing.images,
           featured: editing.featured,
           available: editing.available,
         }
@@ -517,8 +510,6 @@ const ListingForm = ({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [createdListingId, setCreatedListingId] = useState<string | null>(null);
-
-  // Image upload state
   const [uploadingImages, setUploadingImages] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [urlInput, setUrlInput] = useState("");
@@ -597,7 +588,7 @@ const ListingForm = ({
         maxGuests: Number(form.maxGuests),
         amenities: form.amenities,
         tags,
-        images: form.images, // ← already an array
+        images: form.images,
         featured: form.featured,
         available: form.available,
       };
@@ -738,7 +729,7 @@ const ListingForm = ({
                     className="flex items-center gap-2 group"
                   >
                     <div
-                      className={`w-4.5 h-4.5 rounded border-2 flex items-center justify-center transition-all ${form[k] ? "bg-[#C9A96E] border-[#C9A96E]" : "border-gray-300 group-hover:border-[#C9A96E]"}`}
+                      className={`rounded border-2 flex items-center justify-center transition-all ${form[k] ? "bg-[#C9A96E] border-[#C9A96E]" : "border-gray-300 group-hover:border-[#C9A96E]"}`}
                       style={{ width: 18, height: 18 }}
                     >
                       {form[k] && (
@@ -873,13 +864,12 @@ const ListingForm = ({
             </div>
           </div>
 
-          {/* Tags & Photos — with device upload */}
+          {/* Tags & Photos */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
             <h3 className="font-bold text-gray-800 text-sm mb-4 flex items-center gap-2">
               <PhotoIcon className="w-4 h-4 text-[#C9A96E]" /> Tags & Photos
             </h3>
             <div className="space-y-5">
-              {/* Tags */}
               <div>
                 <label className={lbl}>Tags (comma-separated)</label>
                 <input
@@ -889,8 +879,6 @@ const ListingForm = ({
                   placeholder="Romantic, Sea View, Private, Luxury"
                 />
               </div>
-
-              {/* Upload from device */}
               <div>
                 <label className={lbl}>Upload Photos from Device</label>
                 <input
@@ -906,11 +894,7 @@ const ListingForm = ({
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className={`w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl p-8 transition-all ${
-                    uploadingImages
-                      ? "border-[#C9A96E]/40 bg-[#C9A96E]/5 cursor-wait"
-                      : "border-gray-200 hover:border-[#C9A96E]/50 hover:bg-amber-50/30 cursor-pointer"
-                  }`}
+                  className={`w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl p-8 transition-all ${uploadingImages ? "border-[#C9A96E]/40 bg-[#C9A96E]/5 cursor-wait" : "border-gray-200 hover:border-[#C9A96E]/50 hover:bg-amber-50/30 cursor-pointer"}`}
                 >
                   {uploadingImages ? (
                     <>
@@ -941,8 +925,6 @@ const ListingForm = ({
                   </p>
                 )}
               </div>
-
-              {/* Paste URL */}
               <div>
                 <label className={lbl}>Or Paste an Image URL</label>
                 <div className="flex gap-2">
@@ -967,8 +949,6 @@ const ListingForm = ({
                   </button>
                 </div>
               </div>
-
-              {/* Image previews */}
               {form.images.length > 0 && (
                 <div>
                   <label className={lbl}>
@@ -1023,7 +1003,7 @@ const ListingForm = ({
             >
               {saving ? (
                 <>
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{" "}
                   Saving…
                 </>
               ) : editing ? (
@@ -1459,68 +1439,256 @@ const HostBookings = () => {
 };
 
 /* ═══════════════════════════════════════════════════════════
-   HOST: EARNINGS
+   HOST: EARNINGS + WALLET + WITHDRAWALS
 ═══════════════════════════════════════════════════════════ */
 const EarningsSection = () => {
   const { user } = useAuth();
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [wallet, setWallet] = useState<import("./index").Wallet | null>(null);
+  const [transactions, setTransactions] = useState<
+    import("./index").WalletTransaction[]
+  >([]);
+  const [withdrawals, setWithdrawals] = useState<
+    import("./index").WithdrawalRequest[]
+  >([]);
   const [loading, setLoading] = useState(true);
+  const [showWithdrawForm, setShowWithdrawForm] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [withdrawError, setWithdrawError] = useState("");
+  const [withdrawSuccess, setWithdrawSuccess] = useState(false);
+  const [form, setForm] = useState({
+    amount: "",
+    bankName: "",
+    accountNumber: "",
+    accountName: "",
+  });
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!user) return;
-    BookingsDB.byHost(user.id)
-      .then(setBookings)
-      .finally(() => setLoading(false));
+    setLoading(true);
+    const [w, tx, wr] = await Promise.all([
+      WalletDB.get(user.id),
+      WalletDB.transactions(user.id),
+      WalletDB.withdrawalsByHost(user.id),
+    ]);
+    setWallet(w);
+    setTransactions(tx);
+    setWithdrawals(wr);
+    setLoading(false);
   }, [user]);
 
-  const confirmed = bookings.filter((b) => b.status === "confirmed");
-  const total = confirmed.reduce((s, b) => s + b.totalAmount, 0);
-  const avgBooking = confirmed.length
-    ? Math.round(total / confirmed.length)
-    : 0;
-  const totalNights = confirmed.reduce((s, b) => s + b.nights, 0);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const handleWithdraw = async () => {
+    setWithdrawError("");
+    const amount = Number(form.amount);
+    if (!amount || amount <= 0)
+      return setWithdrawError("Enter a valid amount.");
+    if (!form.bankName.trim()) return setWithdrawError("Enter your bank name.");
+    if (!form.accountNumber.trim())
+      return setWithdrawError("Enter your account number.");
+    if (!form.accountName.trim())
+      return setWithdrawError("Enter your account name.");
+    if (wallet && amount > wallet.balance)
+      return setWithdrawError(
+        `Insufficient balance. Available: ₦${wallet.balance.toLocaleString()}`,
+      );
+
+    setWithdrawing(true);
+    try {
+      await WalletDB.requestWithdrawal({
+        hostId: user!.id,
+        amount,
+        bankName: form.bankName,
+        accountNumber: form.accountNumber,
+        accountName: form.accountName,
+      });
+      setWithdrawSuccess(true);
+      setShowWithdrawForm(false);
+      setForm({ amount: "", bankName: "", accountNumber: "", accountName: "" });
+      await load();
+    } catch (e: any) {
+      setWithdrawError(e.message ?? "Withdrawal failed.");
+    } finally {
+      setWithdrawing(false);
+    }
+  };
+
+  const inp =
+    "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#C9A96E] focus:ring-2 focus:ring-[#C9A96E]/10 transition-all bg-white";
+  const lbl =
+    "block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5";
+  const pendingWithdrawals = withdrawals.filter(
+    (w) => w.status === "pending",
+  ).length;
 
   return (
     <div
-      className="flex-1 overflow-y-auto bg-gray-50 p-6"
+      className="flex-1 overflow-y-auto bg-gray-50 p-6 space-y-6"
       style={{ animation: "fadeUp 0.3s ease both" }}
     >
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Earnings</h2>
-        <p className="text-gray-400 text-sm mt-0.5">
-          Revenue from confirmed bookings
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">
+            Earnings & Wallet
+          </h2>
+          <p className="text-gray-400 text-sm mt-0.5">
+            Your 90% share of every confirmed booking
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            setShowWithdrawForm(true);
+            setWithdrawSuccess(false);
+            setWithdrawError("");
+          }}
+          className="flex items-center gap-2 bg-[#C9A96E] text-white font-semibold text-sm px-5 py-2.5 rounded-xl hover:bg-[#b8935a] transition-all hover:scale-105 shadow-md shadow-[#C9A96E]/20"
+        >
+          <BanknotesIcon className="w-4 h-4" /> Withdraw Funds
+        </button>
       </div>
-      <div className="flex gap-4 flex-wrap mb-6">
-        <StatCard
-          icon={<BanknotesIcon className="w-5 h-5 text-[#C9A96E]" />}
-          label="Total Earnings"
-          value={fmt$(total)}
-          delay={0}
-          sub="All confirmed bookings"
-        />
-        <StatCard
-          icon={<CalendarDaysIcon className="w-5 h-5 text-[#C9A96E]" />}
-          label="Confirmed Bookings"
-          value={confirmed.length}
-          delay={60}
-        />
-        <StatCard
-          icon={<ArrowTrendingUpIcon className="w-5 h-5 text-[#C9A96E]" />}
-          label="Avg Per Booking"
-          value={fmt$(avgBooking)}
-          delay={120}
-        />
-        <StatCard
-          icon={<ClockIcon className="w-5 h-5 text-[#C9A96E]" />}
-          label="Total Nights Booked"
-          value={totalNights}
-          delay={180}
-        />
-      </div>
+
+      {loading ? (
+        <Sk h="h-28" rounded="rounded-2xl" />
+      ) : (
+        <div className="bg-gradient-to-br from-[#1a1208] to-[#2d1f0a] rounded-2xl p-6 border border-[#C9A96E]/20 shadow-lg relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-48 h-48 rounded-full bg-[#C9A96E]/5 -translate-y-1/2 translate-x-1/2" />
+          <p className="text-[#C9A96E] text-xs font-bold uppercase tracking-widest mb-1">
+            Available Balance
+          </p>
+          <p className="font-['Cormorant_Garamond'] text-5xl font-bold text-white mb-4">
+            ₦{(wallet?.balance ?? 0).toLocaleString()}
+          </p>
+          <div className="flex gap-6 flex-wrap">
+            <div>
+              <p className="text-white/40 text-xs">Total Earned</p>
+              <p className="text-white font-bold">
+                ₦{(wallet?.totalEarned ?? 0).toLocaleString()}
+              </p>
+            </div>
+            <div>
+              <p className="text-white/40 text-xs">Total Withdrawn</p>
+              <p className="text-white font-bold">
+                ₦{(wallet?.totalWithdrawn ?? 0).toLocaleString()}
+              </p>
+            </div>
+            <div>
+              <p className="text-white/40 text-xs">Pending Withdrawals</p>
+              <p className="text-amber-400 font-bold">{pendingWithdrawals}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {withdrawSuccess && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center gap-3 text-emerald-700 text-sm font-semibold">
+          <CheckCircleIcon className="w-5 h-5 shrink-0" />
+          Withdrawal request submitted! Admin will process it within 24–48
+          hours.
+        </div>
+      )}
+
+      {showWithdrawForm && (
+        <div
+          className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6"
+          style={{ animation: "fadeUp 0.2s ease both" }}
+        >
+          <div className="flex items-center justify-between mb-5">
+            <h3 className="font-bold text-gray-900">
+              Withdraw to Bank Account
+            </h3>
+            <button
+              onClick={() => setShowWithdrawForm(false)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <XMarkIcon className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label className={lbl}>Amount (₦)</label>
+              <input
+                className={inp}
+                type="number"
+                min="1"
+                placeholder={`Max: ₦${(wallet?.balance ?? 0).toLocaleString()}`}
+                value={form.amount}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, amount: e.target.value }))
+                }
+              />
+            </div>
+            <div>
+              <label className={lbl}>Bank Name</label>
+              <input
+                className={inp}
+                placeholder="e.g. Guaranty Trust Bank"
+                value={form.bankName}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, bankName: e.target.value }))
+                }
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={lbl}>Account Number</label>
+                <input
+                  className={inp}
+                  placeholder="0123456789"
+                  value={form.accountNumber}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, accountNumber: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className={lbl}>Account Name</label>
+                <input
+                  className={inp}
+                  placeholder="As on bank record"
+                  value={form.accountName}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, accountName: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+            {withdrawError && (
+              <p className="text-sm text-red-500 flex items-center gap-1.5">
+                <XMarkIcon className="w-4 h-4 shrink-0" />
+                {withdrawError}
+              </p>
+            )}
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={handleWithdraw}
+                disabled={withdrawing}
+                className="flex-1 bg-[#C9A96E] disabled:opacity-50 text-white font-bold py-3 rounded-xl text-sm hover:bg-[#b8935a] transition-all flex items-center justify-center gap-2"
+              >
+                {withdrawing ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{" "}
+                    Processing…
+                  </>
+                ) : (
+                  "Submit Withdrawal"
+                )}
+              </button>
+              <button
+                onClick={() => setShowWithdrawForm(false)}
+                className="px-5 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100">
-          <h3 className="font-bold text-gray-900">Earnings History</h3>
+          <h3 className="font-bold text-gray-900">Transaction History</h3>
         </div>
         {loading ? (
           <div className="p-6 space-y-3">
@@ -1528,57 +1696,92 @@ const EarningsSection = () => {
               <Sk key={i} h="h-10" />
             ))}
           </div>
-        ) : confirmed.length === 0 ? (
+        ) : transactions.length === 0 ? (
           <div className="p-12 text-center">
             <BanknotesIcon className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-            <p className="text-gray-400 text-sm">No confirmed bookings yet</p>
+            <p className="text-gray-400 text-sm">No transactions yet</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  {["Guest", "Property", "Dates", "Nights", "Earned"].map(
-                    (h) => (
-                      <th
-                        key={h}
-                        className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-6 py-3"
-                      >
-                        {h}
-                      </th>
-                    ),
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {confirmed.map((b, i) => (
-                  <tr
-                    key={b.id}
-                    className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
-                    style={{ animation: `fadeUp 0.3s ease ${i * 30}ms both` }}
+          <div className="divide-y divide-gray-50">
+            {transactions.map((tx, i) => (
+              <div
+                key={tx.id}
+                className="flex items-center justify-between px-6 py-3.5 hover:bg-gray-50/60 transition-colors"
+                style={{ animation: `fadeUp 0.3s ease ${i * 25}ms both` }}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold ${tx.type === "credit" ? "bg-emerald-500" : "bg-red-400"}`}
                   >
-                    <td className="px-6 py-3.5 text-sm font-medium text-gray-800">
-                      {b.guestName}
-                    </td>
-                    <td className="px-6 py-3.5 text-sm text-gray-600 truncate max-w-[140px]">
-                      {b.listingName}
-                    </td>
-                    <td className="px-6 py-3.5 text-sm text-gray-500 whitespace-nowrap">
-                      {fmtDate(b.checkIn)} → {fmtDate(b.checkOut)}
-                    </td>
-                    <td className="px-6 py-3.5 text-sm text-gray-500">
-                      {b.nights}
-                    </td>
-                    <td className="px-6 py-3.5 text-sm font-bold text-emerald-600">
-                      {fmt$(b.totalAmount)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    {tx.type === "credit" ? "+" : "−"}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">
+                      {tx.description}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {fmtDate(tx.createdAt)}
+                    </p>
+                  </div>
+                </div>
+                <p
+                  className={`font-bold text-sm ${tx.type === "credit" ? "text-emerald-600" : "text-red-500"}`}
+                >
+                  {tx.type === "credit" ? "+" : "−"}₦
+                  {tx.amount.toLocaleString()}
+                </p>
+              </div>
+            ))}
           </div>
         )}
       </div>
+
+      {withdrawals.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h3 className="font-bold text-gray-900">Withdrawal Requests</h3>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {withdrawals.map((wr, i) => (
+              <div
+                key={wr.id}
+                className="flex items-center justify-between px-6 py-3.5 hover:bg-gray-50/60"
+                style={{ animation: `fadeUp 0.3s ease ${i * 25}ms both` }}
+              >
+                <div>
+                  <p className="text-sm font-medium text-gray-800">
+                    {wr.bankName} · {wr.accountNumber}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {wr.accountName} · {fmtDate(wr.createdAt)}
+                  </p>
+                  {wr.adminNote && (
+                    <p className="text-xs text-red-500 mt-0.5">
+                      {wr.adminNote}
+                    </p>
+                  )}
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-gray-800">
+                    ₦{wr.amount.toLocaleString()}
+                  </p>
+                  <span
+                    className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                      wr.status === "approved"
+                        ? "text-emerald-600 bg-emerald-50 border-emerald-200"
+                        : wr.status === "rejected"
+                          ? "text-red-500 bg-red-50 border-red-200"
+                          : "text-amber-600 bg-amber-50 border-amber-200"
+                    }`}
+                  >
+                    {wr.status.charAt(0).toUpperCase() + wr.status.slice(1)}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1598,6 +1801,7 @@ const SettingsSection = () => {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const isGuest = user?.role === "guest";
+  const accent = isGuest ? "#6EADC9" : "#C9A96E";
 
   const save = async () => {
     setSaving(true);
@@ -1611,7 +1815,6 @@ const SettingsSection = () => {
     "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#C9A96E] focus:ring-2 focus:ring-[#C9A96E]/10 transition-all bg-white";
   const lbl =
     "block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5";
-  const accent = isGuest ? "#6EADC9" : "#C9A96E";
 
   return (
     <div
@@ -1730,7 +1933,7 @@ const SettingsSection = () => {
         >
           {saving ? (
             <>
-              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{" "}
               Saving…
             </>
           ) : saved ? (
@@ -2112,13 +2315,10 @@ const Dashboard = ({ onBook, onLogout }: DashboardProps) => {
 
   if (role === "guest")
     return <GuestDashboard onBook={onBook} onLogout={onLogout} />;
-  return (
-    <HostDashboardShell
-      onBook={onBook}
-      onLogout={handleLogout}
-      isAdmin={role === "admin"}
-    />
-  );
+
+  // Admins have their own dashboard — redirect them there via your router
+  // If an admin lands here, just show the host shell as a fallback
+  return <HostDashboardShell onBook={onBook} onLogout={handleLogout} />;
 };
 
 export default Dashboard;
@@ -2129,11 +2329,9 @@ export default Dashboard;
 const HostDashboardShell = ({
   onBook,
   onLogout,
-  isAdmin = false,
 }: {
   onBook?: (hotel: Hotel) => void;
   onLogout: () => void;
-  isAdmin?: boolean;
 }) => {
   const [active, setActive] = useState<NavKey>("dashboard");
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -2157,7 +2355,6 @@ const HostDashboardShell = ({
     settings: "Settings",
     wishlist: "Wishlist",
     history: "Travel History",
-    verification: "Verification Queue",
   };
 
   const content = () => {
@@ -2176,12 +2373,6 @@ const HostDashboardShell = ({
         return <MessagesInbox />;
       case "settings":
         return <SettingsSection />;
-      case "verification":
-        return isAdmin ? (
-          <AdminVerificationPanel adminId={user!.id} />
-        ) : (
-          <HostHome onNavigate={setActive} onBook={onBook} />
-        );
       default:
         return <HostHome onNavigate={setActive} onBook={onBook} />;
     }
@@ -2207,7 +2398,6 @@ const HostDashboardShell = ({
           onClose={() => setMobileOpen(false)}
           onLogout={onLogout}
           isMobile
-          isAdmin={isAdmin}
         />
       </div>
       <div className="hidden lg:flex shrink-0">
@@ -2217,7 +2407,6 @@ const HostDashboardShell = ({
           onNav={setActive}
           pending={pending}
           onLogout={onLogout}
-          isAdmin={isAdmin}
         />
       </div>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">

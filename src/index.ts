@@ -1513,3 +1513,273 @@ export const ListingImagesDB = {
     await supabase.storage.from("listing-images").remove([path]);
   },
 };
+/* ─────────────────────────────────────────────────────────────
+   TYPES
+───────────────────────────────────────────────────────────── */
+export interface Wallet {
+  id: string;
+  userId: string;
+  balance: number;
+  totalEarned: number;
+  totalWithdrawn: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WalletTransaction {
+  id: string;
+  walletId: string;
+  userId: string;
+  type: "credit" | "debit";
+  amount: number;
+  description: string;
+  bookingId?: string;
+  createdAt: string;
+}
+
+export interface WithdrawalRequest {
+  id: string;
+  hostId: string;
+  amount: number;
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  status: "pending" | "approved" | "rejected";
+  adminNote?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  // joined fields for admin view
+  hostFirstName?: string;
+  hostLastName?: string;
+  hostEmail?: string;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   ROW MAPPERS
+───────────────────────────────────────────────────────────── */
+function toWallet(r: any): Wallet {
+  return {
+    id: r.id,
+    userId: r.user_id,
+    balance: Number(r.balance),
+    totalEarned: Number(r.total_earned),
+    totalWithdrawn: Number(r.total_withdrawn),
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+function toTransaction(r: any): WalletTransaction {
+  return {
+    id: r.id,
+    walletId: r.wallet_id,
+    userId: r.user_id,
+    type: r.type,
+    amount: Number(r.amount),
+    description: r.description ?? "",
+    bookingId: r.booking_id ?? undefined,
+    createdAt: r.created_at,
+  };
+}
+
+function toWithdrawal(r: any): WithdrawalRequest {
+  return {
+    id: r.id,
+    hostId: r.host_id,
+    amount: Number(r.amount),
+    bankName: r.bank_name,
+    accountNumber: r.account_number,
+    accountName: r.account_name,
+    status: r.status,
+    adminNote: r.admin_note ?? undefined,
+    reviewedBy: r.reviewed_by ?? undefined,
+    reviewedAt: r.reviewed_at ?? undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    hostFirstName: r.first_name ?? undefined,
+    hostLastName: r.last_name ?? undefined,
+    hostEmail: r.email ?? undefined,
+  };
+}
+
+/* ─────────────────────────────────────────────────────────────
+   PLATFORM ADMIN USER ID
+   Replace this with your actual admin user id from Supabase.
+───────────────────────────────────────────────────────────── */
+export const PLATFORM_ADMIN_ID = "ac5dfecb-537c-47a1-9f60-2f2c443268f3";
+export const PLATFORM_FEE_PCT = 0.1; // 10%
+
+/* ─────────────────────────────────────────────────────────────
+   WalletDB
+───────────────────────────────────────────────────────────── */
+export const WalletDB = {
+  /** Get wallet for a user (returns null if not yet created) */
+  async get(userId: string): Promise<Wallet | null> {
+    const { data } = await supabase
+      .from("wallets")
+      .select("*")
+      .eq("user_id", userId)
+      .maybeSingle();
+    return data ? toWallet(data) : null;
+  },
+
+  /** Get transaction history for a user */
+  async transactions(userId: string): Promise<WalletTransaction[]> {
+    const { data, error } = await supabase
+      .from("wallet_transactions")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("WalletDB.transactions:", error.message);
+      return [];
+    }
+    return (data ?? []).map(toTransaction);
+  },
+
+  /**
+   * Called after a successful Paystack payment.
+   * Credits 90% to the host wallet and 10% to the platform admin wallet.
+   */
+  async splitBookingPayment(
+    hostId: string,
+    bookingId: string,
+    totalAmount: number,
+    listingName: string,
+  ): Promise<void> {
+    const platformCut = Math.round(totalAmount * PLATFORM_FEE_PCT * 100) / 100;
+    const hostCut = Math.round((totalAmount - platformCut) * 100) / 100;
+
+    // Credit host (90%)
+    const { error: hostErr } = await supabase.rpc("credit_wallet", {
+      p_user_id: hostId,
+      p_amount: hostCut,
+      p_desc: `Booking earned: ${listingName}`,
+      p_booking_id: bookingId,
+    });
+    if (hostErr) console.error("WalletDB credit host:", hostErr.message);
+
+    // Credit platform admin (10%)
+    const { error: adminErr } = await supabase.rpc("credit_wallet", {
+      p_user_id: PLATFORM_ADMIN_ID,
+      p_amount: platformCut,
+      p_desc: `Platform fee (10%): ${listingName}`,
+      p_booking_id: bookingId,
+    });
+    if (adminErr) console.error("WalletDB credit admin:", adminErr.message);
+  },
+
+  /** Host submits a withdrawal request (debits wallet immediately) */
+  async requestWithdrawal(data: {
+    hostId: string;
+    amount: number;
+    bankName: string;
+    accountNumber: string;
+    accountName: string;
+  }): Promise<WithdrawalRequest> {
+    // Debit the wallet first (locks the funds)
+    const { error: debitErr } = await supabase.rpc("debit_wallet", {
+      p_user_id: data.hostId,
+      p_amount: data.amount,
+      p_desc: `Withdrawal to ${data.bankName} — ${data.accountNumber}`,
+    });
+    if (debitErr) throw new Error(debitErr.message);
+
+    // Create the withdrawal request record
+    const { data: row, error } = await supabase
+      .from("withdrawal_requests")
+      .insert({
+        host_id: data.hostId,
+        amount: data.amount,
+        bank_name: data.bankName,
+        account_number: data.accountNumber,
+        account_name: data.accountName,
+        status: "pending",
+      })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return toWithdrawal(row);
+  },
+
+  /** Host's withdrawal history */
+  async withdrawalsByHost(hostId: string): Promise<WithdrawalRequest[]> {
+    const { data, error } = await supabase
+      .from("withdrawal_requests")
+      .select("*")
+      .eq("host_id", hostId)
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("WalletDB.withdrawalsByHost:", error.message);
+      return [];
+    }
+    return (data ?? []).map(toWithdrawal);
+  },
+
+  /* ── Admin methods ── */
+
+  /** All withdrawal requests with host info joined */
+  async adminWithdrawals(
+    status?: "pending" | "approved" | "rejected",
+  ): Promise<WithdrawalRequest[]> {
+    let q = supabase
+      .from("withdrawal_requests")
+      .select("*, users(first_name, last_name, email)")
+      .order("created_at", { ascending: false });
+    if (status) q = q.eq("status", status);
+    const { data, error } = await q;
+    if (error) {
+      console.error("WalletDB.adminWithdrawals:", error.message);
+      return [];
+    }
+    return (data ?? []).map((r: any) => ({
+      ...toWithdrawal(r),
+      hostFirstName: r.users?.first_name,
+      hostLastName: r.users?.last_name,
+      hostEmail: r.users?.email,
+    }));
+  },
+
+  async approveWithdrawal(id: string, adminId: string): Promise<void> {
+    const { error } = await supabase
+      .from("withdrawal_requests")
+      .update({
+        status: "approved",
+        reviewed_by: adminId,
+        reviewed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+    if (error) throw new Error(error.message);
+  },
+
+  async rejectWithdrawal(
+    id: string,
+    adminId: string,
+    note: string,
+    hostId: string,
+    amount: number,
+  ): Promise<void> {
+    // Refund the wallet
+    const { error: refundErr } = await supabase.rpc("credit_wallet", {
+      p_user_id: hostId,
+      p_amount: amount,
+      p_desc: "Withdrawal rejected — funds returned",
+    });
+    if (refundErr) throw new Error(refundErr.message);
+
+    const { error } = await supabase
+      .from("withdrawal_requests")
+      .update({
+        status: "rejected",
+        admin_note: note,
+        reviewed_by: adminId,
+        reviewed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+    if (error) throw new Error(error.message);
+  },
+};

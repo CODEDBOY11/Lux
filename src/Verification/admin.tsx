@@ -5,6 +5,7 @@ import {
   ListingsDB,
   BookingsDB,
   ReviewsDB,
+  WalletDB,
   type User,
   type Listing,
   type Booking,
@@ -61,6 +62,7 @@ interface HostStats {
 }
 
 type AdminView =
+  | "withdrawals"
   | "overview"
   | "hosts"
   | "host-detail"
@@ -1645,11 +1647,334 @@ const AllReviewsPanel = () => {
     </div>
   );
 };
+/* ═══════════════════════════════════════════════════════════
+   ADMIN: PLATFORM EARNINGS SUMMARY
+═══════════════════════════════════════════════════════════ */
+const PlatformEarningsSummary = ({ adminId }: { adminId: string }) => {
+  const [wallet, setWallet] = useState<import("../index").Wallet | null>(null);
+
+  useEffect(() => {
+    WalletDB.get(adminId).then(setWallet);
+  }, [adminId]);
+
+  return (
+    <div className="bg-gradient-to-br from-[#1a1208] to-[#2d1f0a] rounded-2xl p-5 border border-[#C9A96E]/20 flex gap-8 flex-wrap mb-6">
+      <div>
+        <p className="text-[#C9A96E] text-[10px] font-bold uppercase tracking-widest mb-1">
+          Platform Balance
+        </p>
+        <p className="font-['Cormorant_Garamond'] text-4xl font-bold text-white">
+          ₦{(wallet?.balance ?? 0).toLocaleString()}
+        </p>
+      </div>
+      <div className="flex flex-col justify-center">
+        <p className="text-white/40 text-xs mb-0.5">
+          Total Platform Earned (10% fees)
+        </p>
+        <p className="text-white font-bold text-xl">
+          ₦{(wallet?.totalEarned ?? 0).toLocaleString()}
+        </p>
+      </div>
+      <div className="flex flex-col justify-center">
+        <p className="text-white/40 text-xs mb-0.5">Total Paid Out to Hosts</p>
+        <p className="text-amber-400 font-bold text-xl">
+          ₦{(wallet?.totalWithdrawn ?? 0).toLocaleString()}
+        </p>
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   ADMIN: WITHDRAWAL REQUESTS PANEL
+═══════════════════════════════════════════════════════════ */
+const WithdrawalsPanel = ({ adminId }: { adminId: string }) => {
+  const [requests, setRequests] = useState<
+    import("../index").WithdrawalRequest[]
+  >([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<
+    "all" | "pending" | "approved" | "rejected"
+  >("pending");
+  const [processing, setProcessing] = useState<string | null>(null);
+  const [rejectModal, setRejectModal] = useState<{
+    id: string;
+    hostId: string;
+    amount: number;
+    note: string;
+  } | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const all = await WalletDB.adminWithdrawals(
+      filter === "all" ? undefined : filter,
+    );
+    setRequests(all);
+    setLoading(false);
+  }, [filter]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const approve = async (wr: import("../index").WithdrawalRequest) => {
+    setProcessing(wr.id);
+    try {
+      await WalletDB.approveWithdrawal(wr.id, adminId);
+      await load();
+    } finally {
+      setProcessing(null);
+    }
+  };
+
+  const reject = async () => {
+    if (!rejectModal || !rejectModal.note.trim()) return;
+    setProcessing(rejectModal.id);
+    try {
+      await WalletDB.rejectWithdrawal(
+        rejectModal.id,
+        adminId,
+        rejectModal.note,
+        rejectModal.hostId,
+        rejectModal.amount,
+      );
+      setRejectModal(null);
+      await load();
+    } finally {
+      setProcessing(null);
+    }
+  };
+
+  const counts = {
+    pending: requests.filter((r) => r.status === "pending").length,
+    approved: requests.filter((r) => r.status === "approved").length,
+    rejected: requests.filter((r) => r.status === "rejected").length,
+  };
+
+  return (
+    <div
+      className="flex-1 overflow-y-auto p-6"
+      style={{ animation: "fadeUp 0.3s ease both" }}
+    >
+      <div className="mb-6">
+        <h2 className="font-['Cormorant_Garamond'] text-3xl text-[#f5f0e8] mb-1">
+          Withdrawal Requests
+        </h2>
+        <p className="text-[rgba(245,240,232,0.4)] text-sm">
+          Review and process host payout requests
+        </p>
+      </div>
+
+      <PlatformEarningsSummary adminId={adminId} />
+
+      {/* Filter tabs */}
+      <div className="flex gap-2 flex-wrap mb-5">
+        {(["pending", "approved", "rejected", "all"] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`text-xs font-semibold px-4 py-2 rounded-full border transition-all ${
+              filter === f
+                ? "bg-[#C9A96E] border-[#C9A96E] text-[#0e0d0b]"
+                : "border-[rgba(245,240,232,0.1)] text-[rgba(245,240,232,0.45)] hover:border-[rgba(201,169,110,0.3)]"
+            }`}
+          >
+            {f.charAt(0).toUpperCase() + f.slice(1)}
+            {f !== "all" && ` (${counts[f] ?? 0})`}
+          </button>
+        ))}
+      </div>
+
+      {/* Reject modal */}
+      {rejectModal && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div
+            className="bg-[#1a1610] border border-[rgba(245,240,232,0.1)] rounded-2xl shadow-2xl p-6 w-full max-w-md"
+            style={{ animation: "fadeUp 0.2s ease both" }}
+          >
+            <h3 className="font-['Cormorant_Garamond'] text-xl text-[#f5f0e8] mb-1">
+              Reject Withdrawal
+            </h3>
+            <p className="text-sm text-[rgba(245,240,232,0.4)] mb-4">
+              ₦{rejectModal.amount.toLocaleString()} will be refunded to the
+              host's wallet automatically.
+            </p>
+            <textarea
+              className="w-full bg-[rgba(245,240,232,0.04)] border border-[rgba(245,240,232,0.08)] rounded-xl p-3 text-sm text-[#f5f0e8] outline-none resize-none focus:border-[#e07070] transition-colors placeholder:text-[rgba(245,240,232,0.2)] mb-4"
+              rows={3}
+              placeholder="Reason for rejection (shown to host)…"
+              value={rejectModal.note}
+              onChange={(e) =>
+                setRejectModal((m) => (m ? { ...m, note: e.target.value } : m))
+              }
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={reject}
+                disabled={!rejectModal.note.trim() || !!processing}
+                className="flex-1 bg-[rgba(220,60,60,0.15)] border border-[rgba(220,60,60,0.3)] text-[#e07070] font-bold py-2.5 rounded-xl text-sm hover:bg-[rgba(220,60,60,0.25)] transition-all disabled:opacity-40 flex items-center justify-center gap-2"
+              >
+                {processing ? (
+                  <span className="w-4 h-4 border-2 border-[#e07070]/30 border-t-[#e07070] rounded-full animate-spin" />
+                ) : (
+                  <XCircleIcon className="w-4 h-4" />
+                )}
+                Reject & Refund
+              </button>
+              <button
+                onClick={() => setRejectModal(null)}
+                className="flex-1 border border-[rgba(245,240,232,0.1)] text-[rgba(245,240,232,0.5)] font-semibold py-2.5 rounded-xl text-sm hover:bg-[rgba(245,240,232,0.04)] transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Table */}
+      <div className="bg-[#1a1610] border border-[rgba(245,240,232,0.07)] rounded-2xl overflow-hidden">
+        {loading ? (
+          <div className="p-5 space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <Sk key={i} h="h-14" />
+            ))}
+          </div>
+        ) : requests.length === 0 ? (
+          <div className="py-16 text-center">
+            <BanknotesIcon className="w-10 h-10 text-[rgba(245,240,232,0.1)] mx-auto mb-3" />
+            <p className="text-[rgba(245,240,232,0.35)] text-sm">
+              No {filter !== "all" ? filter : ""} withdrawal requests
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[700px]">
+              <thead>
+                <tr className="border-b border-[rgba(245,240,232,0.06)]">
+                  {[
+                    "Host",
+                    "Bank Details",
+                    "Amount",
+                    "Requested",
+                    "Status",
+                    "Actions",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className="text-left px-5 py-3 text-[10px] uppercase tracking-widest text-[rgba(245,240,232,0.25)] font-bold"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {requests.map((wr, i) => (
+                  <tr
+                    key={wr.id}
+                    className="border-b border-[rgba(245,240,232,0.04)] hover:bg-[rgba(245,240,232,0.02)] transition-colors"
+                    style={{ animation: `fadeUp 0.3s ease ${i * 30}ms both` }}
+                  >
+                    <td className="px-5 py-3">
+                      <p className="text-sm text-[#f5f0e8] font-medium">
+                        {wr.hostFirstName} {wr.hostLastName}
+                      </p>
+                      <p className="text-xs text-[rgba(245,240,232,0.35)]">
+                        {wr.hostEmail}
+                      </p>
+                    </td>
+                    <td className="px-5 py-3">
+                      <p className="text-sm text-[rgba(245,240,232,0.7)] font-medium">
+                        {wr.bankName}
+                      </p>
+                      <p className="text-xs text-[rgba(245,240,232,0.35)]">
+                        {wr.accountNumber} · {wr.accountName}
+                      </p>
+                    </td>
+                    <td className="px-5 py-3">
+                      <p className="text-sm font-bold text-[#f5f0e8]">
+                        ₦{wr.amount.toLocaleString()}
+                      </p>
+                    </td>
+                    <td className="px-5 py-3 text-xs text-[rgba(245,240,232,0.4)] whitespace-nowrap">
+                      {fmtDate(wr.createdAt)}
+                    </td>
+                    <td className="px-5 py-3">
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                          wr.status === "approved"
+                            ? "text-[#4ade80] bg-[rgba(74,222,128,0.1)] border-[rgba(74,222,128,0.25)]"
+                            : wr.status === "rejected"
+                              ? "text-[#e07070] bg-[rgba(220,60,60,0.1)] border-[rgba(220,60,60,0.25)]"
+                              : "text-[#f59e0b] bg-[rgba(245,158,11,0.1)] border-[rgba(245,158,11,0.25)]"
+                        }`}
+                      >
+                        {wr.status.charAt(0).toUpperCase() + wr.status.slice(1)}
+                      </span>
+                      {wr.status === "rejected" && wr.adminNote && (
+                        <p className="text-[10px] text-[rgba(245,240,232,0.3)] mt-1 max-w-[160px] truncate">
+                          {wr.adminNote}
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-5 py-3">
+                      {wr.status === "pending" ? (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => approve(wr)}
+                            disabled={processing === wr.id}
+                            className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg bg-[rgba(74,222,128,0.1)] text-[#4ade80] border border-[rgba(74,222,128,0.25)] hover:bg-[rgba(74,222,128,0.2)] transition-all disabled:opacity-40"
+                          >
+                            {processing === wr.id ? (
+                              <span className="w-3 h-3 border border-[#4ade80]/30 border-t-[#4ade80] rounded-full animate-spin" />
+                            ) : (
+                              <CheckCircleIcon className="w-3.5 h-3.5" />
+                            )}
+                            Approve
+                          </button>
+                          <button
+                            onClick={() =>
+                              setRejectModal({
+                                id: wr.id,
+                                hostId: wr.hostId,
+                                amount: wr.amount,
+                                note: "",
+                              })
+                            }
+                            disabled={!!processing}
+                            className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg bg-[rgba(220,60,60,0.08)] text-[#e07070] border border-[rgba(220,60,60,0.2)] hover:bg-[rgba(220,60,60,0.15)] transition-all disabled:opacity-40"
+                          >
+                            <XCircleIcon className="w-3.5 h-3.5" />
+                            Reject
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-[rgba(245,240,232,0.25)]">
+                          {wr.reviewedAt ? fmtDate(wr.reviewedAt) : "—"}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 /* ═══════════════════════════════════════════════════════════
    SIDEBAR
 ═══════════════════════════════════════════════════════════ */
 const NAV = [
+  {
+    key: "withdrawals" as AdminView,
+    label: "Withdrawals",
+    icon: BanknotesIcon,
+  },
   {
     key: "overview" as AdminView,
     label: "Overview",
@@ -1756,6 +2081,7 @@ export default function AdminDashboard({ adminId }: { adminId: string }) {
           {(view === "hosts" || view === "host-detail") && (
             <HostsPanel adminId={adminId} />
           )}
+          {view === "withdrawals" && <WithdrawalsPanel adminId={adminId} />}
           {view === "verification" && <VerificationPanel adminId={adminId} />}
           {view === "bookings" && <AllBookingsPanel />}
           {view === "reviews" && <AllReviewsPanel />}
