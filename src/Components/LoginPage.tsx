@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../AuthContext";
+import { useNavigate } from "react-router-dom";
 import {
   EyeIcon,
   EyeSlashIcon,
@@ -110,12 +111,14 @@ const LoginPage = ({
   const [showPw, setShowPw] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const {
+    user,
     login,
     loginWithGoogle,
     loginWithApple,
     forgotPassword,
     loading: authLoading,
   } = useAuth();
+  const navigate = useNavigate();
   // navigation handled inside AuthContext after successful login
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<LoginView>("login");
@@ -135,7 +138,13 @@ const LoginPage = ({
     setErrors({});
     setErrorMessage("");
   }, [role]);
-
+  useEffect(() => {
+    if (!authLoading && user) {
+      if (user.role === "admin") navigate("/admin", { replace: true });
+      else if (user.role === "host") navigate("/dashboard", { replace: true });
+      else navigate("/account", { replace: true });
+    }
+  }, [user, authLoading, navigate]);
   const validate = (): boolean => {
     const e: { email?: string; password?: string } = {};
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
@@ -143,6 +152,7 @@ const LoginPage = ({
     if (!password) e.password = "Password is required";
     else if (password.length < 6) e.password = "Minimum 6 characters";
     setErrors(e);
+
     return Object.keys(e).length === 0;
   };
 
@@ -290,6 +300,7 @@ const LoginPage = ({
         {(["host", "guest"] as const).map((r) => {
           const Icon = ROLE_CONFIG[r].icon;
           const isActive = role === r;
+
           return (
             <button
               key={r}
@@ -580,7 +591,38 @@ const LoginPage = ({
       </p>
     </div>
   );
+  if (authLoading) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100vh",
+          background: "#0e0d0b",
+          color: "#C9A96E",
+          fontFamily: "Cormorant Garamond, serif",
+          fontSize: 22,
+          gap: 12,
+        }}
+      >
+        <span
+          style={{
+            width: 18,
+            height: 18,
+            border: "2px solid rgba(201,169,110,0.3)",
+            borderTopColor: "#C9A96E",
+            borderRadius: "50%",
+            display: "inline-block",
+            animation: "spin 0.8s linear infinite",
+          }}
+        />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
 
+  if (user) return null;
   return (
     <div className="min-h-screen bg-[#0e0d0b] grid grid-cols-1 lg:grid-cols-2">
       <style>{`

@@ -320,10 +320,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async (): Promise<void> => {
     await supabase.auth.signOut();
     Session.clear();
+    // Also clear Supabase's own stored session
+    localStorage.removeItem("sb-bwfftarbhvbhywucgftx-auth-token");
+    sessionStorage.removeItem("sb-bwfftarbhvbhywucgftx-auth-token");
     setUser(null);
     navigate("/", { replace: true });
   }, [navigate]);
-
   /* ── Update user profile ── */
   const updateUser = useCallback(
     async (data: Partial<User>): Promise<void> => {
