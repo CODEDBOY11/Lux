@@ -118,7 +118,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const savedRole = localStorage.getItem(
             OAUTH_ROLE_KEY,
           ) as UserRole | null;
-          if (savedRole && profile.role === "guest" && savedRole !== "guest") {
+
+          // Only apply savedRole if this is a genuinely new user
+          // A new user would have been just created by the trigger with default 'guest' role
+          // AND they selected a different role on the login page
+          // BUT only if their account was JUST created (within last 10 seconds)
+          const isNewAccount = profile.createdAt
+            ? Date.now() - new Date(profile.createdAt).getTime() < 10_000
+            : false;
+
+          if (
+            savedRole &&
+            savedRole !== "guest" &&
+            profile.role === "guest" &&
+            isNewAccount
+          ) {
+            // Brand new OAuth user — update to their chosen role
             const updated = await AuthDB.update(profile.id, {
               role: savedRole,
             });
@@ -131,15 +146,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               return;
             }
           }
+
+          // Existing user — always use their role from DB, ignore savedRole
           localStorage.removeItem(OAUTH_ROLE_KEY);
           setLoading(false);
 
-          // ✅ Navigate on SIGNED_IN and INITIAL_SESSION (but not TOKEN_REFRESHED
-          // to avoid re-navigating while user is already on the right page)
           if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
             const currentPath = window.location.pathname;
             const targetPath = roleToPath(profile.role);
-            // Only navigate if on login/signup/callback — not if already on correct page
             if (
               currentPath === "/login" ||
               currentPath === "/signup" ||
