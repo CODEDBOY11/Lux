@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /account
+Disallow: /admin
+Disallow: /auth
+
+Sitemap: https://lux-d1ok.vercel.app/sitemap.xml

@@ -13,6 +13,7 @@ import {
   LockClosedIcon,
   EnvelopeIcon,
 } from "@heroicons/react/24/outline";
+import SEO from "../seo";
 
 type LoginRole = "host" | "guest";
 type LoginView = "login" | "forgot" | "forgot-sent" | "success";
@@ -714,5 +715,5 @@ const LoginPage = ({
     </div>
   );
 };
-
+<SEO title="Sign In" url="https://lux-d1ok.vercel.app/login" />;
 export default LoginPage;

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { MessagesDB, type Conversation } from "../index";
+import SEO from "../seo";
 import { WalletDB } from "../index";
 import {
   MapPinIcon,
@@ -83,10 +84,12 @@ function StarPicker({
   size?: number;
 }) {
   const [hovered, setHovered] = useState(0);
+
   return (
     <div style={{ display: "flex", gap: 4 }}>
       {[1, 2, 3, 4, 5].map((star) => {
         const filled = star <= (hovered || value);
+
         return (
           <button
             key={star}
@@ -216,6 +219,19 @@ function GuestReviewModal({
 
   if (alreadyReviewed === null || alreadyReviewed) return null;
   const ratingLabels = ["", "Poor", "Fair", "Good", "Great", "Exceptional"];
+  <SEO
+    url={`https://lux-d1ok.vercel.app/listing/${hotel.id}`}
+    listing={{
+      name: hotel.name,
+      location: hotel.location,
+      city: hotel.city,
+      country: hotel.country,
+      category: hotel.category,
+      pricePerNight: hotel.pricePerNight,
+      rating: hotel.rating,
+      images: hotel.images,
+    }}
+  />;
 
   return (
     <div

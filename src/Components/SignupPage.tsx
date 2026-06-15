@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import { EyeIcon, EyeSlashIcon, CheckIcon } from "@heroicons/react/24/outline";
+import SEO from "../seo";
 
 type Role = "host" | "guest";
 
@@ -539,5 +540,8 @@ const SignupPage = ({
     </div>
   );
 };
-
+<SEO
+  title="Create an Account — Host or Guest"
+  url="https://lux-d1ok.vercel.app/signup"
+/>;
 export default SignupPage;

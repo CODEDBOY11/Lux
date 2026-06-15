@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import SEO from "./seo";
 
 import {
   MagnifyingGlassIcon,
@@ -908,3 +909,8 @@ export default function ExplorePage() {
     </div>
   );
 }
+<SEO
+  title="Luxury Hotels, Villas & Apartments — Book Instantly"
+  description="Find verified luxury stays worldwide. Villas, apartments, resorts and boutique hotels from trusted hosts."
+  url="https://lux-d1ok.vercel.app/explore"
+/>;
