@@ -1,9 +1,12 @@
 {
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" },
     {
       "source": "/sitemap.xml",
       "destination": "/api/sitemap.xml"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "/robots.txt"
     },
     {
       "source": "/((?!api).*)",
