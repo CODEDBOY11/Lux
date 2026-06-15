@@ -2,8 +2,16 @@
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" },
     {
-      "source": "/((?!sitemap.xml|robots.txt|google.*\\.html).*)",
-      "destination": "/index.html"
+      "rewrites": [
+        {
+          "source": "/sitemap.xml",
+          "destination": "/api/sitemap.xml"
+        },
+        {
+          "source": "/((?!api).*)",
+          "destination": "/index.html"
+        }
+      ]
     }
   ]
 }
