@@ -105,6 +105,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     seedDemoData();
 
     // ── Listen to Supabase auth state changes ────────────────────────────
+    const timeout = setTimeout(() => {
+      setLoading(false);
+    }, 5000);
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -168,12 +171,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await supabase.auth.signOut();
           Session.clear();
           setUser(null);
+          clearTimeout(timeout);
           setLoading(false);
           return;
         }
       } else {
         Session.clear();
         setUser(null);
+        clearTimeout(timeout);
       }
       setLoading(false);
     });
