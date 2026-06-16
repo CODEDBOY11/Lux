@@ -1498,7 +1498,11 @@ export const ListingImagesDB = {
 
     const { error } = await supabase.storage
       .from("listing-images")
-      .upload(path, file, { upsert: false, cacheControl: "3600" });
+      .upload(path, file, {
+        upsert: false,
+        cacheControl: "3600",
+        contentType: file.type,
+      });
 
     if (error) throw new Error(error.message);
 

@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import ReviewsSection from "./ReviewSection";
 import { WalletDB } from "./index";
 import PropertyVerificationForm from "./Verification/Property";
+import imageCompression from "browser-image-compression";
 import {
   HomeIcon,
   BuildingOffice2Icon,
@@ -538,17 +539,32 @@ const ListingForm = ({
     setUploadingImages(true);
     setUploadError("");
     try {
-      const urls = await Promise.all(
-        Array.from(files).map((f) => ListingImagesDB.upload(hostId, f)),
+      // Step 1 — compress all files first
+      const compressed = await Promise.all(
+        Array.from(files).map((file) =>
+          imageCompression(file, {
+            maxSizeMB: 0.5,
+            maxWidthOrHeight: 1280,
+            useWebWorker: true,
+            fileType: "image/webp",
+          }),
+        ),
       );
-      set("images")([...form.images, ...urls]);
+
+      // Step 2 — upload one by one so user sees progress
+      const urls: string[] = [];
+      for (const f of compressed) {
+        const url = await ListingImagesDB.upload(hostId, f);
+        urls.push(url);
+        // Update images after each upload so host sees them appearing
+        set("images")([...form.images, ...urls]);
+      }
     } catch (err: any) {
       setUploadError(err.message ?? "Upload failed. Please try again.");
     } finally {
       setUploadingImages(false);
     }
   };
-
   const addUrlManually = () => {
     const trimmed = urlInput.trim();
     if (!trimmed) return;
