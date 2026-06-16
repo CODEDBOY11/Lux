@@ -36,7 +36,6 @@ import { useAuth } from "./AuthContext";
 import {
   ListingsDB,
   BookingsDB,
-  ListingImagesDB,
   listingToHotel,
   type Hotel,
   type Booking,
