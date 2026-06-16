@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 import ReviewsSection from "./ReviewSection";
 import { WalletDB } from "./index";
 import PropertyVerificationForm from "./Verification/Property";
-import imageCompression from "browser-image-compression";
 import {
   HomeIcon,
   BuildingOffice2Icon,
@@ -539,24 +538,16 @@ const ListingForm = ({
     setUploadingImages(true);
     setUploadError("");
     try {
-      // Step 1 — compress all files first
-      const compressed = await Promise.all(
-        Array.from(files).map((file) =>
-          imageCompression(file, {
-            maxSizeMB: 0.5,
-            maxWidthOrHeight: 1280,
-            useWebWorker: true,
-            fileType: "image/webp",
-          }),
-        ),
-      );
+      const { uploadToCloudinary } = await import("./cloudinary"); // adjust path
 
-      // Step 2 — upload one by one so user sees progress
       const urls: string[] = [];
-      for (const f of compressed) {
-        const url = await ListingImagesDB.upload(hostId, f);
+      for (const file of Array.from(files)) {
+        const url = await uploadToCloudinary(file, "image", (percent) => {
+          // optional: you could show percent in UI
+          console.log(`Uploading: ${percent}%`);
+        });
         urls.push(url);
-        // Update images after each upload so host sees them appearing
+        // Show each image as it finishes
         set("images")([...form.images, ...urls]);
       }
     } catch (err: any) {

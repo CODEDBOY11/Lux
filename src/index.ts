@@ -1411,8 +1411,8 @@ export const VerificationDB = {
   // Uploads a file to the "verification-docs" Supabase Storage bucket.
   // Returns the public URL of the uploaded file.
   async uploadFile(
-    hostId: string,
-    listingId: string,
+    _hostId: string,
+    _listingId: string,
     file: File,
     category:
       | "host_id"
@@ -1422,20 +1422,9 @@ export const VerificationDB = {
       | "photo"
       | "video",
   ): Promise<string> {
-    const ext = file.name.split(".").pop();
-    const path = `${hostId}/${listingId}/${category}_${Date.now()}.${ext}`;
-
-    const { error } = await supabase.storage
-      .from("verification-docs")
-      .upload(path, file, { upsert: true });
-
-    if (error) throw new Error(error.message);
-
-    const { data } = supabase.storage
-      .from("verification-docs")
-      .getPublicUrl(path);
-
-    return data.publicUrl;
+    const { uploadToCloudinary } = await import("./cloudinary");
+    const type = category === "video" ? "video" : "image";
+    return uploadToCloudinary(file, type);
   },
 
   // ── Admin: get full verification queue ───────────────────
@@ -1492,29 +1481,15 @@ export const VerificationDB = {
 /* ─────────────── ListingImagesDB ─────────────── */
 
 export const ListingImagesDB = {
-  async upload(hostId: string, file: File): Promise<string> {
-    const ext = file.name.split(".").pop();
-    const path = `${hostId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-
-    const { error } = await supabase.storage
-      .from("listing-images")
-      .upload(path, file, {
-        upsert: false,
-        cacheControl: "3600",
-        contentType: file.type,
-      });
-
-    if (error) throw new Error(error.message);
-
-    const { data } = supabase.storage.from("listing-images").getPublicUrl(path);
-
-    return data.publicUrl;
+  async upload(_hostId: string, file: File): Promise<string> {
+    const { uploadToCloudinary } = await import("./cloudinary");
+    return uploadToCloudinary(file, "image");
   },
 
-  async delete(url: string): Promise<void> {
-    const path = url.split("/listing-images/")[1];
-    if (!path) return;
-    await supabase.storage.from("listing-images").remove([path]);
+  async delete(_url: string): Promise<void> {
+    // Cloudinary deletion needs backend — skip for now
+    // Old Supabase images still work fine, just won't be deleted
+    console.log("Image hosted on Cloudinary — deletion skipped");
   },
 };
 /* ─────────────────────────────────────────────────────────────
