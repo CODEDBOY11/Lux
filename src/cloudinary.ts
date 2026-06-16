@@ -8,10 +8,6 @@ export async function uploadToCloudinary(
   const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
   const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
-  if (!cloudName || !uploadPreset) {
-    throw new Error("Missing Cloudinary config in .env.local");
-  }
-
   // Compress images before upload
   let fileToUpload: File = file;
   if (type === "image") {
