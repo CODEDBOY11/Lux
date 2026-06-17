@@ -10,7 +10,6 @@ import { useNavigate } from "react-router-dom";
 import {
   supabase,
   AuthDB,
-  Session,
   seedDemoData,
   type User,
   type UserRole,
@@ -63,22 +62,34 @@ function roleToPath(role: UserRole): string {
   return "/account";
 }
 
-// Store pending role for OAuth sign-ups (before redirect)
+// Store pending role for OAuth sign-ups (before redirect) — this is the
+// ONLY thing we keep in localStorage, since it must survive a full page
+// redirect to the OAuth provider and back.
 const OAUTH_ROLE_KEY = "zb_oauth_role";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  // No local cache hydration — always start null and let Supabase's own
+  // onAuthStateChange tell us the real, current session.
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  const refreshUser = useCallback(() => setUser(Session.get()), []);
+  // Re-fetch the current user directly from Supabase + DB, no local cache.
+  const refreshUser = useCallback(() => {
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (data.user) {
+        const profile = await AuthDB.getById(data.user.id);
+        if (profile) setUser(profile);
+      }
+    });
+  }, []);
 
-  // ── Helper: load Supabase profile and sync session ──────────────────────
+  // ── Helper: load Supabase profile and sync into React state ─────────────
   const syncUser = useCallback(
-    async (
-      supabaseUser: { id: string; email?: string | null },
-      rememberMe = false,
-    ): Promise<User | null> => {
+    async (supabaseUser: {
+      id: string;
+      email?: string | null;
+    }): Promise<User | null> => {
       try {
         // Try by id first (works for new users created via trigger)
         let profile = await AuthDB.getById(supabaseUser.id);
@@ -89,7 +100,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (profile) {
-          Session.set(profile, rememberMe);
           setUser(profile);
           return profile;
         }
@@ -104,18 +114,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     seedDemoData();
 
-    // ── Listen to Supabase auth state changes ────────────────────────────
+    // Safety net — never let the spinner hang forever if Supabase is slow
     const timeout = setTimeout(() => {
       setLoading(false);
     }, 5000);
+
+    // ── Listen to Supabase auth state changes ────────────────────────────
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log("🔐 Supabase auth event:", event, session?.user?.email);
 
       if (session?.user) {
-        const remembered = Session.isRemembered();
-        const profile = await syncUser(session.user, remembered);
+        const profile = await syncUser(session.user);
 
         if (profile) {
           const savedRole = localStorage.getItem(
@@ -123,9 +134,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ) as UserRole | null;
 
           // Only apply savedRole if this is a genuinely new user
-          // A new user would have been just created by the trigger with default 'guest' role
-          // AND they selected a different role on the login page
-          // BUT only if their account was JUST created (within last 10 seconds)
+          // (created in the last 10 seconds) who selected a role on the
+          // login/signup page before being redirected to OAuth.
           const isNewAccount = profile.createdAt
             ? Date.now() - new Date(profile.createdAt).getTime() < 10_000
             : false;
@@ -136,14 +146,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             profile.role === "guest" &&
             isNewAccount
           ) {
-            // Brand new OAuth user — update to their chosen role
             const updated = await AuthDB.update(profile.id, {
               role: savedRole,
             });
             if (updated) {
               localStorage.removeItem(OAUTH_ROLE_KEY);
-              Session.set(updated, remembered);
               setUser(updated);
+              clearTimeout(timeout);
               setLoading(false);
               navigate(roleToPath(updated.role), { replace: true });
               return;
@@ -152,6 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           // Existing user — always use their role from DB, ignore savedRole
           localStorage.removeItem(OAUTH_ROLE_KEY);
+          clearTimeout(timeout);
           setLoading(false);
 
           if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
@@ -169,28 +179,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           console.error("❌ Failed to sync user profile - logging out");
           await supabase.auth.signOut();
-          Session.clear();
           setUser(null);
           clearTimeout(timeout);
           setLoading(false);
           return;
         }
       } else {
-        Session.clear();
         setUser(null);
         clearTimeout(timeout);
       }
       setLoading(false);
     });
-    return () => subscription.unsubscribe();
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Email / password login ── */
   const login = useCallback(
     async (
-      email: any,
-      password: any,
-      rememberMe = false,
+      email: string,
+      password: string,
+      _rememberMe = false,
     ): Promise<AuthResult> => {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -206,21 +218,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       if (!data.user) return { ok: false, msg: "Sign in failed." };
 
-      // ✅ Look up by email — works regardless of ID mismatch
       const profile = await AuthDB.getByEmail(data.user.email!);
       if (!profile)
         return { ok: false, msg: "Account not found. Please register first." };
 
-      Session.set(profile, rememberMe);
       setUser(profile);
       return { ok: true, user: profile };
     },
     [],
   );
+
   /* ── Register ── */
   const register = useCallback(
     async (data: RegisterData): Promise<AuthResult> => {
-      // 1. Create Supabase auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
@@ -243,8 +253,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       if (!authData.user) return { ok: false, msg: "Registration failed." };
 
-      // 2. The trigger auto-creates a users row, but we need to update it with full details
-      // Wait a moment for trigger to fire
+      // Wait a moment for the DB trigger to create the users row
       await new Promise((r) => setTimeout(r, 500));
 
       const updated = await AuthDB.update(authData.user.id, {
@@ -259,9 +268,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         avatar: (data.firstName[0] + (data.lastName?.[0] ?? "")).toUpperCase(),
       });
 
-      // Sign out — user must verify email
+      // Sign out — user must verify email / log in fresh
       await supabase.auth.signOut();
-      Session.clear();
       setUser(null);
 
       return { ok: true, user: updated ?? undefined };
@@ -272,29 +280,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   /* ── OAuth — Google ── */
   const loginWithGoogle = useCallback(async (role: UserRole) => {
     localStorage.setItem(OAUTH_ROLE_KEY, role);
-
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
       },
     });
-
-    if (error) {
-      console.error("Google OAuth Error:", error);
-    }
+    if (error) console.error("Google OAuth Error:", error);
   }, []);
+
   /* ── OAuth — Apple ── */
   const loginWithApple = useCallback(async (role: UserRole) => {
     localStorage.setItem(OAUTH_ROLE_KEY, role);
-
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "apple",
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
-    if (error) {
-      console.error("Apple OAuth Error:", error);
-    }
+    if (error) console.error("Apple OAuth Error:", error);
   }, []);
 
   /* ── OAuth — GitHub ── */
@@ -304,9 +306,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       provider: "github",
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
-    if (error) {
-      console.error("GitHub OAuth Error:", error);
-    }
+    if (error) console.error("GitHub OAuth Error:", error);
   }, []);
 
   /* ── Forgot password ── */
@@ -324,22 +324,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   /* ── Logout ── */
   const logout = useCallback(async (): Promise<void> => {
     await supabase.auth.signOut();
-    Session.clear();
-    // Also clear Supabase's own stored session
-    localStorage.removeItem("sb-bwfftarbhvbhywucgftx-auth-token");
-    sessionStorage.removeItem("sb-bwfftarbhvbhywucgftx-auth-token");
     setUser(null);
     navigate("/", { replace: true });
   }, [navigate]);
+
   /* ── Update user profile ── */
   const updateUser = useCallback(
     async (data: Partial<User>): Promise<void> => {
       if (!user) return;
       const updated = await AuthDB.update(user.id, data);
-      if (updated) {
-        Session.set(updated, Session.isRemembered());
-        setUser(updated);
-      }
+      if (updated) setUser(updated);
     },
     [user],
   );
