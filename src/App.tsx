@@ -40,6 +40,8 @@ function AuthGuard({ children }: { children: ReactNode }) {
 
   return <>{children}</>;
 }
+console.log("Supabase URL:", import.meta.env.VITE_SUPABASE_URL);
+console.log("Supabase Key exists:", !!import.meta.env.VITE_SUPABASE_ANON_KEY);
 
 // 🏨 Dynamic Listing Route
 function ListingRoute() {
