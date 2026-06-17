@@ -583,8 +583,7 @@ export const ListingsDB = {
       .from("listings")
       .select("*")
       .eq("host_id", hostId)
-      .order("created_at", { ascending: false })
-      .eq("verification_status", "verified");
+      .order("created_at", { ascending: false });
     if (error) {
       console.error("ListingsDB.byHost:", error.message);
       return [];
