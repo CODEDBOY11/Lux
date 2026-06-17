@@ -1997,10 +1997,10 @@ export default function BookingPage({
               >
                 {[
                   [
-                    `$${room.price.toLocaleString()} × ${Math.max(nights, 1)} nights`,
-                    `$${subtotal.toLocaleString()}`,
+                    `₦${room.price.toLocaleString()} × ${Math.max(nights, 1)} nights`,
+                    `₦${subtotal.toLocaleString()}`,
                   ],
-                  ["Taxes & resort fees (12%)", `$${taxes.toLocaleString()}`],
+                  ["Taxes & resort fees (12%)", `₦${taxes.toLocaleString()}`],
                 ].map(([k, v]) => (
                   <div
                     key={k}
@@ -2028,7 +2028,7 @@ export default function BookingPage({
                 >
                   <span>Total</span>
                   <span style={{ color: "#C9A96E" }}>
-                    ${total.toLocaleString()}
+                    ₦{total.toLocaleString()}
                   </span>
                 </div>
               </div>
@@ -2208,7 +2208,7 @@ export default function BookingPage({
                 >
                   <span style={{ color: "#f5f0e8" }}>Total Charge</span>
                   <span style={{ color: "#C9A96E" }}>
-                    ${total.toLocaleString()}
+                    ₦{total.toLocaleString()}
                   </span>
                 </div>
               </div>
@@ -2343,7 +2343,7 @@ export default function BookingPage({
                     Processing…
                   </>
                 ) : (
-                  <>🔐 Pay ${total.toLocaleString()} securely</>
+                  <>🔐 Pay ₦{total.toLocaleString()} securely</>
                 )}
               </button>
 
@@ -3145,7 +3145,7 @@ export default function BookingPage({
                 {
                   icon: "✦",
                   label: "Per Night",
-                  val: `$${hotel.pricePerNight.toLocaleString()}`,
+                  val: `₦${hotel.pricePerNight.toLocaleString()}`,
                 },
               ].map((s) => (
                 <div
@@ -3511,7 +3511,7 @@ export default function BookingPage({
                                 color: "#C9A96E",
                               }}
                             >
-                              ${rt.price.toLocaleString()}
+                              ₦{rt.price.toLocaleString()}
                             </p>
                             <p
                               style={{
@@ -4030,7 +4030,7 @@ export default function BookingPage({
                       color: "#f5f0e8",
                     }}
                   >
-                    ${room.price.toLocaleString()}
+                    ₦{room.price.toLocaleString()}
                   </span>
                   <span
                     style={{ fontSize: 13, color: "rgba(245,240,232,0.35)" }}
@@ -4350,10 +4350,10 @@ export default function BookingPage({
                   >
                     {[
                       [
-                        `$${room.price.toLocaleString()} × ${nights} nights`,
-                        `$${subtotal.toLocaleString()}`,
+                        `₦${room.price.toLocaleString()} × ${nights} nights`,
+                        `₦${subtotal.toLocaleString()}`,
                       ],
-                      ["Taxes & resort fees", `$${taxes.toLocaleString()}`],
+                      ["Taxes & resort fees", `₦${taxes.toLocaleString()}`],
                     ].map(([k, v]) => (
                       <div
                         key={k}
@@ -4381,7 +4381,7 @@ export default function BookingPage({
                     >
                       <span>Total</span>
                       <span style={{ color: "#C9A96E" }}>
-                        ${total.toLocaleString()}
+                        ₦{total.toLocaleString()}
                       </span>
                     </div>
                   </div>
@@ -4411,8 +4411,8 @@ export default function BookingPage({
                 >
                   Reserve ·{" "}
                   {nights > 0
-                    ? `$${total.toLocaleString()}`
-                    : `From $${room.price.toLocaleString()}`}
+                    ? `₦${total.toLocaleString()}`
+                    : `From ₦${room.price.toLocaleString()}`}
                 </button>
                 <div
                   style={{
@@ -4578,7 +4578,7 @@ export default function BookingPage({
               color: "#f5f0e8",
             }}
           >
-            ${room.price.toLocaleString()}{" "}
+            ₦{room.price.toLocaleString()}{" "}
             <span
               style={{
                 fontSize: 13,
@@ -4651,7 +4651,7 @@ export default function BookingPage({
               whiteSpace: "nowrap",
             }}
           >
-            Reserve{nights > 0 ? ` · $${total.toLocaleString()}` : ""}
+            Reserve{nights > 0 ? ` · ₦${total.toLocaleString()}` : ""}
           </button>
         </div>
       </div>
