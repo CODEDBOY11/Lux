@@ -67,7 +67,7 @@ function roleToPath(role: UserRole): string {
 const OAUTH_ROLE_KEY = "zb_oauth_role";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(Session.get());
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 

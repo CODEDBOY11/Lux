@@ -906,11 +906,11 @@ export default function ExplorePage() {
           </p>
         )}
       </div>
+      <SEO
+        title="Luxury Hotels, Villas & Apartments — Book Instantly"
+        description="Find verified luxury stays worldwide. Villas, apartments, resorts and boutique hotels from trusted hosts."
+        url="https://lux-d1ok.vercel.app/explore"
+      />
     </div>
   );
 }
-<SEO
-  title="Luxury Hotels, Villas & Apartments — Book Instantly"
-  description="Find verified luxury stays worldwide. Villas, apartments, resorts and boutique hotels from trusted hosts."
-  url="https://lux-d1ok.vercel.app/explore"
-/>;

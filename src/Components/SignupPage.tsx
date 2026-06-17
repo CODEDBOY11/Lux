@@ -537,11 +537,12 @@ const SignupPage = ({
           </p>
         </div>
       </div>
+      <SEO
+        title="Create an Account — Host or Guest"
+        url="https://lux-d1ok.vercel.app/signup"
+      />
     </div>
   );
 };
-<SEO
-  title="Create an Account — Host or Guest"
-  url="https://lux-d1ok.vercel.app/signup"
-/>;
+
 export default SignupPage;

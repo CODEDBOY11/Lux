@@ -712,8 +712,15 @@ const LoginPage = ({
           {view === "success" && renderSuccess()}
         </div>
       </div>
+      <div className="min-h-screen bg-[#0e0d0b] grid grid-cols-1 lg:grid-cols-2">
+        <SEO title="Sign In" url="https://lux-d1ok.vercel.app/login" />
+        <style>{`
+        @keyframes grow { from { width: 0%; } to { width: 100%; } }
+        @keyframes fadeSlideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+      `}</style>
+      </div>
     </div>
   );
 };
-<SEO title="Sign In" url="https://lux-d1ok.vercel.app/login" />;
+
 export default LoginPage;
