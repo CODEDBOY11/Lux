@@ -9,8 +9,8 @@
       "destination": "/robots.txt"
     },
     {
-      "source": "/api/og-listing",
-      "destination": "/api/og-listing"
+      "source": "/api/og-listings",
+      "destination": "/api/og-listings"
     },
     {
       "source": "/api/sitemap.xml",
