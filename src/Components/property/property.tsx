@@ -261,7 +261,7 @@ const PropertyCard = ({
           <div>
             <div className="flex items-baseline gap-1">
               <span className="text-xl font-bold text-gray-900">
-                ${hotel.pricePerNight.toLocaleString()}
+                ₦{hotel.pricePerNight.toLocaleString()}
               </span>
               <span className="text-xs text-gray-400 font-normal">/ night</span>
             </div>

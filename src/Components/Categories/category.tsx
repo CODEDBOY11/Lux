@@ -270,7 +270,7 @@ function CategoryCard({
                   From
                 </p>
                 <p className="text-sm font-bold text-white">
-                  $
+                  ₦
                   {minPrice > 0
                     ? minPrice.toLocaleString()
                     : avgPrice.toLocaleString()}
@@ -296,7 +296,7 @@ function CategoryCard({
                   Avg/night
                 </p>
                 <p className="text-sm font-bold text-white">
-                  ${avgPrice.toLocaleString()}
+                  ₦{avgPrice.toLocaleString()}
                 </p>
               </div>
             </div>
@@ -407,7 +407,7 @@ function CategoryDetail({
                     className="text-sm font-bold"
                     style={{ color: meta.accentColor }}
                   >
-                    ${listing.pricePerNight.toLocaleString()}
+                    ₦{listing.pricePerNight.toLocaleString()}
                     <span className="text-white/30 font-normal text-[10px]">
                       {" "}
                       /night

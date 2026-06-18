@@ -62,7 +62,7 @@ type NavKey =
    HELPERS
 ───────────────────────────────────────────────────────── */
 const fmt$ = (n: number) =>
-  "$" + n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  "₦" + n.toLocaleString("en-US", { maximumFractionDigits: 0 });
 const fmtDate = (d: string) =>
   new Date(d).toLocaleDateString("en-US", {
     month: "short",
