@@ -9,7 +9,15 @@
       "destination": "/robots.txt"
     },
     {
-      "source": "/((?!api).*)",
+      "source": "/api/og-listing",
+      "destination": "/api/og-listing"
+    },
+    {
+      "source": "/api/sitemap.xml",
+      "destination": "/api/sitemap.xml"
+    },
+    {
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
