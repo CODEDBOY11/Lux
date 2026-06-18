@@ -2706,7 +2706,7 @@ export default function BookingPage({
             </button>
             <button
               onClick={() => {
-                const shareUrl = `https://lux-d1ok.vercel.app/api/og-listing?id=${hotel.id}`;
+                const shareUrl = `https://lux-d1ok.vercel.app/api/og-listings?id=${hotel.id}`;
                 const message = `Check out ${hotel.name} in ${hotel.city} on LuxStay!\n₦${hotel.pricePerNight.toLocaleString()}/night 🏡\n${shareUrl}`;
                 if (navigator.share) {
                   navigator
