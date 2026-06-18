@@ -1262,7 +1262,7 @@ const PropertiesSection = ({ onBook }: { onBook?: (h: Hotel) => void }) => {
                     </button>
                     <button
                       onClick={() => {
-                        const url = `https://lux-d1ok.vercel.app/api/og-listing?id=${hotel.id}`;
+                        const url = `https://lux-d1ok.vercel.app/api/og-listings?id=${hotel.id}`;
                         navigator.clipboard.writeText(url);
                         alert("Link copied! Share this on WhatsApp.");
                       }}
