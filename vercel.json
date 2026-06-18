@@ -1,20 +1,15 @@
 {
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
   "rewrites": [
     {
       "source": "/sitemap.xml",
       "destination": "/api/sitemap.xml"
     },
     {
-      "source": "/robots.txt",
-      "destination": "/robots.txt"
-    },
-    {
       "source": "/api/og-listings",
       "destination": "/api/og-listings"
-    },
-    {
-      "source": "/api/sitemap.xml",
-      "destination": "/api/sitemap.xml"
     },
     {
       "source": "/(.*)",

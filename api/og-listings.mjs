@@ -6,7 +6,7 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
-  const { id } = req.query;
+  const id = new URL(req.url, "http://localhost").searchParams.get("id");
   if (!id) return res.status(400).send("Missing id");
 
   const { data: listing, error } = await supabase
@@ -19,10 +19,8 @@ export default async function handler(req, res) {
 
   if (error || !listing) return res.status(404).send("Not found");
 
-  // Use first image from the listing — works for both Cloudinary and Supabase URLs
   let image = listing.images?.[0] ?? null;
 
-  // If it's a Cloudinary URL, add transformation for proper OG dimensions
   if (image && image.includes("cloudinary.com")) {
     image = image.replace(
       "/upload/",
@@ -30,7 +28,6 @@ export default async function handler(req, res) {
     );
   }
 
-  // If still no image, use a real LuxStay branded fallback
   if (!image) {
     image =
       "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1200&h=630&fit=crop&q=80";
@@ -54,7 +51,7 @@ export default async function handler(req, res) {
   <meta property="og:image:secure_url" content="${image}" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:image:type" content="image/jpeg" />
+  <meta property="og:image:type" content="image/webp" />
   <meta property="og:url" content="${url}" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="${title}" />
