@@ -27,7 +27,13 @@ if (!SUPABASE_URL || !SUPABASE_ANON) {
   );
 }
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
+  auth: {
+    persistSession: false, // ← don't save to localStorage at all
+    autoRefreshToken: false, // ← don't try to refresh on reload
+    detectSessionInUrl: true, // ← keep this for OAuth callback
+  },
+});
 
 /* ─────────────── TYPES  (identical to old version) ─────────────── */
 

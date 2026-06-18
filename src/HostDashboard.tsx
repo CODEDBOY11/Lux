@@ -1260,6 +1260,16 @@ const PropertiesSection = ({ onBook }: { onBook?: (h: Hotel) => void }) => {
                         <TrashIcon className="w-3.5 h-3.5" />
                       )}
                     </button>
+                    <button
+                      onClick={() => {
+                        const url = `https://lux-d1ok.vercel.app/api/og-listing?id=${hotel.id}`;
+                        navigator.clipboard.writeText(url);
+                        alert("Link copied! Share this on WhatsApp.");
+                      }}
+                      className="flex-1 flex items-center justify-center gap-1 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 py-2 rounded-xl transition-colors"
+                    >
+                      📋 Share
+                    </button>
                   </div>
                 </div>
               </div>
