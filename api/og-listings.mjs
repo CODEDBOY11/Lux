@@ -22,9 +22,10 @@ export default async function handler(req, res) {
   let image = listing.images?.[0] ?? null;
 
   if (image && image.includes("cloudinary.com")) {
+    // Force exact 1200x630 — this is what WhatsApp needs for large card
     image = image.replace(
       "/upload/",
-      "/upload/w_1200,h_630,c_fill,q_auto,f_auto/",
+      "/upload/w_1200,h_630,c_fill,g_auto,q_auto,f_jpg/",
     );
   }
 

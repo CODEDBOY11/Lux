@@ -260,7 +260,7 @@ const ListingCard = ({
         <div className="flex items-center justify-between pt-2.5 border-t border-[rgba(245,240,232,0.06)]">
           <div>
             <span className="font-['Cormorant_Garamond'] text-lg font-bold text-[#f5f0e8]">
-              ${listing.pricePerNight.toLocaleString()}
+              ₦{listing.pricePerNight.toLocaleString()}
             </span>
             <span className="text-[rgba(245,240,232,0.3)] text-xs">
               {" "}
@@ -356,7 +356,7 @@ const ListingRow = ({
       <div className="flex flex-col items-end justify-between py-4 pr-5 shrink-0">
         <div className="text-right">
           <p className="font-['Cormorant_Garamond'] text-xl font-bold text-[#f5f0e8]">
-            ${listing.pricePerNight.toLocaleString()}
+            ₦{listing.pricePerNight.toLocaleString()}
           </p>
           <p className="text-[rgba(245,240,232,0.3)] text-xs">/night</p>
         </div>
