@@ -167,6 +167,14 @@ const LoginPage = ({
       setErrorMessage(res.msg || "Invalid email or password");
       return;
     }
+    // Check if there's a pending redirect
+    const redirect = sessionStorage.getItem("zb_redirect_after_login");
+    if (redirect) {
+      sessionStorage.removeItem("zb_redirect_after_login");
+      navigate(redirect, { replace: true });
+      return;
+    }
+    setView("success");
     const targetRole = res.user?.role;
     // ✅ Allow admin through without portal check
     // ✅ Also allow if role matches — navigation is handled by AuthContext

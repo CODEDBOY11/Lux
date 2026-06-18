@@ -219,19 +219,6 @@ function GuestReviewModal({
 
   if (alreadyReviewed === null || alreadyReviewed) return null;
   const ratingLabels = ["", "Poor", "Fair", "Good", "Great", "Exceptional"];
-  <SEO
-    url={`https://lux-d1ok.vercel.app/listing/${hotel.id}`}
-    listing={{
-      name: hotel.name,
-      location: hotel.location,
-      city: hotel.city,
-      country: hotel.country,
-      category: hotel.category,
-      pricePerNight: hotel.pricePerNight,
-      rating: hotel.rating,
-      images: hotel.images,
-    }}
-  />;
 
   return (
     <div
@@ -1411,7 +1398,6 @@ function Gallery({
 const makeRoomTypes = (hotel: Hotel) => {
   const baseFeatures = hotel.amenities.slice(0, 5);
   const stdPrice = hotel.pricePerNight;
-  const premPrice = Math.round(stdPrice * 1.22);
   return [
     {
       id: "standard",
@@ -1423,17 +1409,6 @@ const makeRoomTypes = (hotel: Hotel) => {
       features: baseFeatures,
       image: hotel.images[0],
       badge: hotel.featured ? "Featured" : null,
-    },
-    {
-      id: "premium",
-      name: "Grand Reserve",
-      size: `${Math.max(hotel.bedrooms * 34, 80)} m²`,
-      guests: hotel.maxGuests,
-      bed: hotel.bedrooms > 1 ? `${hotel.bedrooms} bedrooms` : "1 bedroom",
-      price: premPrice,
-      features: baseFeatures,
-      image: hotel.images[1] ?? hotel.images[0],
-      badge: "Best Value",
     },
   ];
 };
@@ -1818,7 +1793,7 @@ export default function BookingPage({
                       marginTop: 4,
                     }}
                   >
-                    ${total.toLocaleString()}{" "}
+                    ₦{total.toLocaleString()}{" "}
                     <span
                       style={{
                         fontSize: 11,
@@ -2034,7 +2009,16 @@ export default function BookingPage({
               </div>
               <button
                 onClick={() => {
-                  if (guestInfo.name && guestInfo.email) setStep("confirm");
+                  if (!user) {
+                    // Save intended destination and redirect to login
+                    sessionStorage.setItem(
+                      "zb_redirect_after_login",
+                      `/listing/${hotel.id}`,
+                    );
+                    window.location.href = "/login";
+                    return;
+                  }
+                  setStep("form");
                 }}
                 disabled={!guestInfo.name || !guestInfo.email}
                 style={{
@@ -2550,6 +2534,20 @@ export default function BookingPage({
         fontFamily: "sans-serif",
       }}
     >
+      <SEO
+        url={`https://lux-d1ok.vercel.app/listing/${hotel.id}`}
+        listing={{
+          name: hotel.name,
+          location: hotel.location,
+          city: hotel.city,
+          country: hotel.country,
+          category: hotel.category,
+          pricePerNight: hotel.pricePerNight,
+          rating: hotel.rating,
+          images: hotel.images,
+        }}
+      />
+      ;
       <style>{`
         @keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
         @keyframes spin { to { transform:rotate(360deg); } }
@@ -2574,7 +2572,6 @@ export default function BookingPage({
         }
         @media (min-width: 768px) { .hero-mobile { display:none !important; } .hero-grid { display:grid !important; } }
       `}</style>
-
       {galleryOpen && (
         <Gallery
           hotel={hotel}
@@ -2601,7 +2598,6 @@ export default function BookingPage({
           onClose={() => setShowReviewModal(false)}
         />
       )}
-
       {/* STICKY NAV */}
       <header
         style={{
@@ -2709,6 +2705,20 @@ export default function BookingPage({
               )}
             </button>
             <button
+              onClick={() => {
+                const shareUrl = `https://lux-d1ok.vercel.app/api/og-listing?id=${hotel.id}`;
+                const message = `Check out ${hotel.name} in ${hotel.city} on LuxStay!\n₦${hotel.pricePerNight.toLocaleString()}/night 🏡\n${shareUrl}`;
+                if (navigator.share) {
+                  navigator
+                    .share({ title: hotel.name, text: message, url: shareUrl })
+                    .catch(() => {});
+                } else {
+                  window.open(
+                    `https://wa.me/?text=${encodeURIComponent(message)}`,
+                    "_blank",
+                  );
+                }
+              }}
               style={{
                 width: 36,
                 height: 36,
@@ -2725,7 +2735,18 @@ export default function BookingPage({
               <ShareIcon style={{ width: 16, height: 16 }} />
             </button>
             <button
-              onClick={() => setStep("form")}
+              onClick={() => {
+                if (!user) {
+                  // Save intended destination and redirect to login
+                  sessionStorage.setItem(
+                    "zb_redirect_after_login",
+                    `/listing/${hotel.id}`,
+                  );
+                  window.location.href = "/login";
+                  return;
+                }
+                setStep("form");
+              }}
               style={{
                 display: "none",
                 background: "#C9A96E",
@@ -2744,7 +2765,6 @@ export default function BookingPage({
           </div>
         </div>
       </header>
-
       {/* HERO mobile */}
       <div
         className="hero-mobile"
@@ -2841,7 +2861,6 @@ export default function BookingPage({
           </div>
         </div>
       </div>
-
       {/* HERO desktop */}
       <div
         className="hero-grid-wrap page-padding"
@@ -3014,7 +3033,6 @@ export default function BookingPage({
           ))}
         </div>
       </div>
-
       {/* MAIN CONTENT */}
       <div
         className="content-wrap page-padding"
@@ -4332,7 +4350,7 @@ export default function BookingPage({
                             marginLeft: 8,
                           }}
                         >
-                          ${rt.price.toLocaleString()}
+                          ₦{rt.price.toLocaleString()}
                         </span>
                       </button>
                     ))}
@@ -4548,7 +4566,6 @@ export default function BookingPage({
           </div>
         </div>
       </div>
-
       {/* Mobile CTA */}
       <div
         style={{
