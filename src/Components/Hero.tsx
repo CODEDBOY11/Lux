@@ -378,7 +378,7 @@ const Hero = ({
               <img
                 src={logo}
                 alt="LuxStay Logo"
-                className="w-6 h-6 sm:w-7 sm:h-7"
+                className="w-8 h-8 sm:w-10 sm:h-10"
               />
               <span className="font-['Cormorant_Garamond'] text-white text-lg sm:text-xl tracking-wide font-semibold">
                 LuxStay

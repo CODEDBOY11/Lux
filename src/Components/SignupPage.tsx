@@ -202,7 +202,7 @@ const SignupPage = ({ fixedRole }: { fixedRole: FixedRole }) => {
         />
         <div className="absolute inset-0 bg-gradient-to-b from-[rgba(14,13,11,0.7)] via-[rgba(14,13,11,0.4)] to-[rgba(14,13,11,0.85)]" />
         <div className="relative z-10 flex items-center gap-2.5">
-          <img src={logo} alt="LuxStay Logo" className="w-6 h-6" />
+          <img src={logo} alt="LuxStay Logo" className="w-8 h-8" />
           <span className="font-['Cormorant_Garamond'] text-xl tracking-wide text-[#f5f0e8]">
             LuxStay
           </span>
