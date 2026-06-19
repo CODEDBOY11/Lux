@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import { EyeIcon, EyeSlashIcon, CheckIcon } from "@heroicons/react/24/outline";
 import SEO from "../seo";
-
+import logo from "../../public/logo.svg";
 type FixedRole = "host" | "guest";
 
 type SignupForm = {
@@ -202,7 +202,7 @@ const SignupPage = ({ fixedRole }: { fixedRole: FixedRole }) => {
         />
         <div className="absolute inset-0 bg-gradient-to-b from-[rgba(14,13,11,0.7)] via-[rgba(14,13,11,0.4)] to-[rgba(14,13,11,0.85)]" />
         <div className="relative z-10 flex items-center gap-2.5">
-          <div className="w-5 h-5 bg-[#C9A96E] rotate-45 rounded-sm" />
+          <img src={logo} alt="LuxStay Logo" className="w-6 h-6" />
           <span className="font-['Cormorant_Garamond'] text-xl tracking-wide text-[#f5f0e8]">
             LuxStay
           </span>

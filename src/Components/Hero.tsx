@@ -8,6 +8,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { StarIcon, FireIcon } from "@heroicons/react/24/solid";
 import heroBg from "../assets/hero-bg.png";
+import logo from "../../public/logo.svg";
 import {
   searchHotels,
   getLocationSuggestions,
@@ -374,7 +375,11 @@ const Hero = ({
           <nav className="flex items-center justify-between px-5 sm:px-8 md:px-12 lg:px-16 py-5 sm:py-6">
             {/* Logo */}
             <div className="flex items-center gap-2 select-none cursor-pointer">
-              <div className="w-4 h-4 sm:w-5 sm:h-5 bg-[#C9A96E] rotate-45 rounded-sm" />
+              <img
+                src={logo}
+                alt="LuxStay Logo"
+                className="w-6 h-6 sm:w-7 sm:h-7"
+              />
               <span className="font-['Cormorant_Garamond'] text-white text-lg sm:text-xl tracking-wide font-semibold">
                 LuxStay
               </span>
