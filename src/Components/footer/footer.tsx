@@ -7,7 +7,7 @@ import {
   FiPhone,
   FiMapPin,
 } from "react-icons/fi";
-
+import { Link } from "react-router-dom";
 const socialLinks = [
   { icon: <FiGlobe size={14} />, label: "Website" },
   { icon: <FiFacebook size={14} />, label: "Facebook" },
@@ -47,7 +47,7 @@ export default function Footer() {
               className="text-[22px] font-semibold text-white mb-4"
               style={{ fontFamily: "'Playfair Display', serif" }}
             >
-              Zola Bekker<span className="text-[#C9A96E]">.</span>
+              LuxStay<span className="text-[#C9A96E]">.</span>
             </h2>
             <p className="text-[13px] text-white/45 leading-[1.85] font-light mb-6 max-w-[260px]">
               Discover handpicked luxury stays designed for comfort, elegance,
@@ -154,19 +154,43 @@ export default function Footer() {
           style={{ borderTop: "0.5px solid rgba(255,255,255,0.07)" }}
         >
           <p className="text-[12px] text-white/25 font-light">
-            © {new Date().getFullYear()} Zola Bekker. All rights reserved.
+            © {new Date().getFullYear()} LuxStay. All rights reserved.
           </p>
           <div className="flex gap-5">
             {["Privacy Policy", "Terms of Use", "Cookie Policy"].map(
-              (link, i) => (
-                <a
-                  key={i}
-                  href="#"
-                  className="text-[12px] text-white/25 font-light hover:text-white/60 transition-colors duration-200 no-underline"
-                >
-                  {link}
-                </a>
-              ),
+              (link, i) => {
+                if (link === "Privacy Policy") {
+                  return (
+                    <Link
+                      key={i}
+                      to="/Privacypolicy"
+                      className="text-[12px] text-white/25 font-light hover:text-white/60 transition-colors duration-200 no-underline"
+                    >
+                      {link}
+                    </Link>
+                  );
+                }
+                if (link === "Terms of Use") {
+                  return (
+                    <Link
+                      key={i}
+                      to="/TermsOfUse"
+                      className="text-[12px] text-white/25 font-light hover:text-white/60 transition-colors duration-200 no-underline"
+                    >
+                      {link}
+                    </Link>
+                  );
+                }
+                return (
+                  <a
+                    key={i}
+                    href="#"
+                    className="text-[12px] text-white/25 font-light hover:text-white/60 transition-colors duration-200 no-underline"
+                  >
+                    {link}
+                  </a>
+                );
+              },
             )}
           </div>
         </div>
