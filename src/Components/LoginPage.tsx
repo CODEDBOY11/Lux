@@ -744,7 +744,11 @@ const LoginPage = ({ fixedRole }: { fixedRole: FixedRole }) => {
         />
         <div className="relative z-10 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <img src={logo} alt="LuxStay Logo" className="w-10 h-10" />
+            <img
+              src={logo}
+              alt="LuxStay Logo"
+              className="w-11 h-11 sm:w-12 sm:h-12"
+            />
             <span className="font-['Cormorant_Garamond'] text-xl tracking-wide text-[#f5f0e8]">
               LuxStay
             </span>
