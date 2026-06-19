@@ -5,7 +5,6 @@ import {
   XMarkIcon,
   CalendarDaysIcon,
   UserGroupIcon,
-  SparklesIcon,
 } from "@heroicons/react/24/outline";
 import { StarIcon, FireIcon } from "@heroicons/react/24/solid";
 import heroBg from "../assets/hero-bg.png";
@@ -254,8 +253,6 @@ const Hero = ({
   const [searchResults, setSearchResults] = useState<Hotel[] | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
-  const [featuredHotels, setFeaturedHotels] = useState<Hotel[]>([]);
-  const [] = useState(false);
   const suggestionRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -265,15 +262,6 @@ const Hero = ({
       new Date(form.checkOut).getTime() - new Date(form.checkIn).getTime();
     return Math.max(0, Math.round(diff / 86400000));
   })();
-
-  /* Load featured hotels from DB on mount */
-  useEffect(() => {
-    searchHotels({ query: "" })
-      .then((hotels) =>
-        setFeaturedHotels(hotels.filter((h) => h.featured).slice(0, 3)),
-      )
-      .catch(console.error);
-  }, []);
 
   /* Auto-suggest */
   useEffect(() => {
@@ -759,73 +747,6 @@ const Hero = ({
                 )}
               </div>
             </div>
-
-            {/* ── FEATURED PROPERTIES (loaded from DB) ── */}
-            {featuredHotels.length > 0 && (
-              <div
-                className="w-full max-w-xs sm:max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl mt-10 sm:mt-12"
-                style={{ animation: "fadeUp 0.6s ease 400ms both" }}
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <SparklesIcon className="w-4 h-4 text-[#C9A96E]" />
-                    <p className="text-white/80 text-xs sm:text-sm font-semibold tracking-wide">
-                      Featured Properties
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => quickSearch("")}
-                    className="text-[#C9A96E] text-xs font-semibold hover:underline"
-                  >
-                    View all →
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                  {featuredHotels.map((hotel, i) => (
-                    <button
-                      key={hotel.id}
-                      onClick={() => onBook?.(hotel)}
-                      className="group relative rounded-xl overflow-hidden text-left bg-black/30 backdrop-blur-sm border border-white/10 hover:border-[#C9A96E]/40 transition-all"
-                      style={{
-                        animation: `fadeUp 0.5s ease ${500 + i * 80}ms both`,
-                      }}
-                    >
-                      <div className="relative h-32 sm:h-36 overflow-hidden">
-                        <img
-                          src={hotel.thumbnail}
-                          alt={hotel.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-80 group-hover:opacity-100"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src =
-                              "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400";
-                          }}
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                        <div className="absolute bottom-0 left-0 right-0 p-3">
-                          <p className="font-['Cormorant_Garamond'] text-white font-semibold text-sm sm:text-base leading-tight line-clamp-1">
-                            {hotel.name}
-                          </p>
-                          <div className="flex items-center justify-between mt-1">
-                            <div className="flex items-center gap-1">
-                              <MapPinIcon className="w-3 h-3 text-[#C9A96E]" />
-                              <span className="text-white/60 text-[10px] truncate max-w-[100px]">
-                                {hotel.city}
-                              </span>
-                            </div>
-                            <span className="text-[#C9A96E] text-xs font-bold">
-                              ${hotel.pricePerNight.toLocaleString()}
-                              <span className="text-white/40 font-normal">
-                                /n
-                              </span>
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
 
           {/* ── BOTTOM STATS ── */}
