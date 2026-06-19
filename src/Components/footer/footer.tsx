@@ -163,7 +163,7 @@ export default function Footer() {
                   return (
                     <Link
                       key={i}
-                      to="/Privacypolicy"
+                      to="/privacy"
                       className="text-[12px] text-white/25 font-light hover:text-white/60 transition-colors duration-200 no-underline"
                     >
                       {link}
@@ -174,7 +174,7 @@ export default function Footer() {
                   return (
                     <Link
                       key={i}
-                      to="/TermsOfUse"
+                      to="/terms"
                       className="text-[12px] text-white/25 font-light hover:text-white/60 transition-colors duration-200 no-underline"
                     >
                       {link}
