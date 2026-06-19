@@ -2010,7 +2010,6 @@ export default function BookingPage({
               <button
                 onClick={() => {
                   if (!user) {
-                    // Save intended destination and redirect to login
                     sessionStorage.setItem(
                       "zb_redirect_after_login",
                       `/listing/${hotel.id}`,
@@ -2018,7 +2017,7 @@ export default function BookingPage({
                     window.location.href = "/login";
                     return;
                   }
-                  setStep("form");
+                  setStep("confirm");
                 }}
                 disabled={!guestInfo.name || !guestInfo.email}
                 style={{
@@ -2547,7 +2546,7 @@ export default function BookingPage({
           images: hotel.images,
         }}
       />
-      ;
+
       <style>{`
         @keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
         @keyframes spin { to { transform:rotate(360deg); } }
@@ -2671,7 +2670,7 @@ export default function BookingPage({
                 {hotel.name}
               </p>
               <p style={{ fontSize: 11, color: "rgba(245,240,232,0.4)" }}>
-                ${room.price.toLocaleString()} / night
+                ₦{room.price.toLocaleString()} / night
               </p>
             </div>
           </div>
@@ -2737,7 +2736,6 @@ export default function BookingPage({
             <button
               onClick={() => {
                 if (!user) {
-                  // Save intended destination and redirect to login
                   sessionStorage.setItem(
                     "zb_redirect_after_login",
                     `/listing/${hotel.id}`,
