@@ -10,7 +10,9 @@ import {
 } from "react-router-dom";
 
 import { AuthProvider, ProtectedRoute, useAuth } from "./AuthContext";
-import AuthRouter from "./AuthRouter";
+import LoginPage from "./Components/LoginPage";
+import SignupPage from "./Components/SignupPage";
+import AuthChooser from "./AuthChooser";
 import ExplorePage from "./ExplorePage";
 import HostDashboard from "./HostDashboard";
 import GuestDashboard from "./GuestDashboard";
@@ -22,14 +24,15 @@ import WhyChooseUs from "./Components/Trust/trust";
 import TestimonialsCTA from "./Components/action/action";
 import Footer from "./Components/footer/footer";
 import Hero from "./Components/Hero";
+import PrivacyPolicy from "./Components/Pivacypolicy";
+import TermsOfUse from "./Components/Termsofuse";
 
 import { ListingsDB, type Hotel, type Listing } from "./index";
 
-// 🔐 Prevent logged-in users from accessing auth pages
+// Prevent logged-in users from accessing auth pages
 function AuthGuard({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
 
-  // ✅ Don't redirect while Firebase is still resolving the OAuth result
   if (loading) return null;
 
   if (user) {
@@ -40,10 +43,8 @@ function AuthGuard({ children }: { children: ReactNode }) {
 
   return <>{children}</>;
 }
-console.log("Supabase URL:", import.meta.env.VITE_SUPABASE_URL);
-console.log("Supabase Key exists:", !!import.meta.env.VITE_SUPABASE_ANON_KEY);
 
-// 🏨 Dynamic Listing Route
+// Dynamic Listing Route
 function ListingRoute() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -128,7 +129,7 @@ function ListingRoute() {
   return <BookingPage hotel={hotel} onBack={() => navigate(-1)} />;
 }
 
-// 🏠 Home Page
+// Home Page
 function HomePage() {
   const navigate = useNavigate();
   const [selectedHotel, setSelectedHotel] = useState<Hotel | null>(null);
@@ -158,35 +159,25 @@ function HomePage() {
   );
 }
 
-// 🔑 Admin wrapper — passes logged-in user's id to AdminDashboard
+// Admin wrapper — passes logged-in user's id to AdminDashboard
 function AdminDashboardWrapper() {
   const { user } = useAuth();
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/admin/login" replace />;
   return <AdminDashboard adminId={user.id} />;
 }
+
 function AuthCallback() {
   const navigate = useNavigate();
-  const { user, loading } = useAuth();
 
   useEffect(() => {
     // Supabase automatically handles the token from the URL hash.
-    // onAuthStateChange in AuthContext fires and navigates.
-    // This component just shows a spinner while that happens.
+    // onAuthStateChange in AuthContext fires and navigates from there.
     supabase.auth.getSession().then(({ data }) => {
       if (!data.session) {
-        // No session after callback — something went wrong
         navigate("/login", { replace: true });
       }
     });
   }, []);
-
-  // Once AuthContext resolves the user, it will navigate away.
-  // If loading is done and still no user, go to login.
-  useEffect(() => {
-    if (!loading && !user) {
-      navigate("/login", { replace: true });
-    }
-  }, [loading, user]);
 
   return (
     <div
@@ -219,34 +210,85 @@ function AuthCallback() {
   );
 }
 
-// 🛣️ Application Routes
+// Application Routes
 function AppRoutes() {
   return (
     <Routes>
-      <Route
-        path="/signup"
-        element={
-          <AuthGuard>
-            <AuthRouter defaultView="signup" />
-          </AuthGuard>
-        }
-      />
+      {/* Generic /login and /signup — simple chooser, no portal switcher */}
       <Route
         path="/login"
         element={
           <AuthGuard>
-            <AuthRouter defaultView="login" />
+            <AuthChooser mode="login" />
           </AuthGuard>
         }
       />
+      <Route
+        path="/signup"
+        element={
+          <AuthGuard>
+            <AuthChooser mode="signup" />
+          </AuthGuard>
+        }
+      />
+
+      {/* Guest auth — fixed role, no switcher */}
+      <Route
+        path="/guest/login"
+        element={
+          <AuthGuard>
+            <LoginPage fixedRole="guest" />
+          </AuthGuard>
+        }
+      />
+      <Route
+        path="/guest/signup"
+        element={
+          <AuthGuard>
+            <SignupPage fixedRole="guest" />
+          </AuthGuard>
+        }
+      />
+
+      {/* Host auth — fixed role, no switcher */}
+      <Route
+        path="/host/login"
+        element={
+          <AuthGuard>
+            <LoginPage fixedRole="host" />
+          </AuthGuard>
+        }
+      />
+      <Route
+        path="/host/signup"
+        element={
+          <AuthGuard>
+            <SignupPage fixedRole="host" />
+          </AuthGuard>
+        }
+      />
+
+      {/* Admin login — quiet, unlinked from public nav, no signup ever */}
+      <Route
+        path="/admin/login"
+        element={
+          <AuthGuard>
+            <LoginPage fixedRole="admin" />
+          </AuthGuard>
+        }
+      />
+
       <Route path="/explore" element={<ExplorePage />} />
       <Route path="/listing/:id" element={<ListingRoute />} />
+      <Route path="/privacy" element={<PrivacyPolicy />} />
+      <Route path="/terms" element={<TermsOfUse />} />
+
       <Route
         path="/dashboard"
         element={
           <ProtectedRoute
             role="host"
-            fallback={<Navigate to="/login" replace />}
+            fallback={<Navigate to="/host/login" replace />}
           >
             <HostDashboard />
           </ProtectedRoute>
@@ -257,7 +299,7 @@ function AppRoutes() {
         element={
           <ProtectedRoute
             role="guest"
-            fallback={<Navigate to="/login" replace />}
+            fallback={<Navigate to="/guest/login" replace />}
           >
             <GuestDashboard />
           </ProtectedRoute>
@@ -268,14 +310,13 @@ function AppRoutes() {
         element={
           <ProtectedRoute
             role="admin"
-            fallback={<Navigate to="/login" replace />}
+            fallback={<Navigate to="/admin/login" replace />}
           >
             <AdminDashboardWrapper />
           </ProtectedRoute>
         }
       />
 
-      {/* ✅ OAuth callback route */}
       <Route path="/auth/callback" element={<AuthCallback />} />
 
       <Route path="/" element={<HomePage />} />
@@ -284,7 +325,6 @@ function AppRoutes() {
   );
 }
 
-// 🚀 Main App Component
 export default function App() {
   return (
     <AuthProvider>

@@ -4,7 +4,7 @@ import { useAuth } from "../AuthContext";
 import { EyeIcon, EyeSlashIcon, CheckIcon } from "@heroicons/react/24/outline";
 import SEO from "../seo";
 
-type Role = "host" | "guest";
+type FixedRole = "host" | "guest";
 
 type SignupForm = {
   firstName: string;
@@ -19,8 +19,61 @@ type SignupForm = {
 
 type PasswordStrength = { score: number; label: string; color: string };
 
-const BG_IMAGE =
-  "https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=900&q=80";
+const ROLE_CONFIG: Record<
+  FixedRole,
+  {
+    accentColor: string;
+    bgImage: string;
+    heading: string;
+    subheading: string;
+    welcomeTitle: string;
+    welcomeBody: string;
+    loginPath: string;
+    quote: string;
+    stats: [string, string][];
+    seoTitle: string;
+    seoUrl: string;
+  }
+> = {
+  host: {
+    accentColor: "#C9A96E",
+    bgImage:
+      "https://images.unsplash.com/photo-1540202404-a2f29d618464?w=900&q=80",
+    heading: "Become a Host",
+    subheading: "List your property and start earning with LuxStay.",
+    welcomeTitle: "Welcome to LuxStay",
+    welcomeBody:
+      "Your host account has been created. You can now list your first property and start receiving bookings.",
+    loginPath: "/host/login",
+    quote: "Your property deserves a stage worthy of its elegance.",
+    stats: [
+      ["12K+", "Active Hosts"],
+      ["98%", "Satisfaction"],
+      ["90%", "Host Payout Rate"],
+    ],
+    seoTitle: "Become a Host",
+    seoUrl: "https://lux-d1ok.vercel.app/host/signup",
+  },
+  guest: {
+    accentColor: "#6EADC9",
+    bgImage:
+      "https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=900&q=80",
+    heading: "Create your account",
+    subheading: "Browse and book verified luxury stays.",
+    welcomeTitle: "Welcome to LuxStay",
+    welcomeBody:
+      "Your guest account is ready. You can now browse and book luxury stays.",
+    loginPath: "/guest/login",
+    quote: "Your next unforgettable escape is one search away.",
+    stats: [
+      ["12+", "Properties"],
+      ["4.9★", "Avg Rating"],
+      ["24/7", "Concierge"],
+    ],
+    seoTitle: "Create an Account",
+    seoUrl: "https://lux-d1ok.vercel.app/guest/signup",
+  },
+};
 
 function getStrength(pw: string): PasswordStrength {
   const checks = [
@@ -40,14 +93,10 @@ function getStrength(pw: string): PasswordStrength {
   return map[score];
 }
 
-const SignupPage = ({
-  onNavigateToLogin,
-}: {
-  onNavigateToLogin?: () => void;
-}) => {
+const SignupPage = ({ fixedRole }: { fixedRole: FixedRole }) => {
+  const config = ROLE_CONFIG[fixedRole];
   const { register, loginWithGoogle, loginWithApple } = useAuth();
   const navigate = useNavigate();
-  const [role, setRole] = useState<Role>("host");
   const [form, setForm] = useState<SignupForm>({
     firstName: "",
     lastName: "",
@@ -95,8 +144,10 @@ const SignupPage = ({
     setLoading(true);
     setErrorMessage("");
 
+    // fixedRole is always "host" or "guest" here — admin accounts are never
+    // created through this form, only via direct SQL by a platform operator.
     const res = await register({
-      role,
+      role: fixedRole,
       firstName: form.firstName,
       lastName: form.lastName,
       email: form.email,
@@ -122,22 +173,14 @@ const SignupPage = ({
           <div className="w-16 h-16 rounded-full bg-[rgba(126,200,160,0.12)] border border-[rgba(126,200,160,0.3)] flex items-center justify-center mx-auto mb-5">
             <CheckIcon className="w-7 h-7 text-[#7ec8a0]" />
           </div>
-          <h2 className="font-['Cormorant Garamond'] text-3xl text-[#f5f0e8] mb-3">
-            Welcome to Zola Bekker
+          <h2 className="font-['Cormorant_Garamond'] text-3xl text-[#f5f0e8] mb-3">
+            {config.welcomeTitle}
           </h2>
           <p className="text-sm text-[rgba(245,240,232,0.45)] leading-relaxed mb-7">
-            {role === "host"
-              ? "Your host account has been created. We're reviewing your property details — expect an onboarding email within 24 hours."
-              : "Your guest account is ready. You can now browse and book luxury stays."}
+            {config.welcomeBody}
           </p>
           <button
-            onClick={() => {
-              if (onNavigateToLogin) {
-                onNavigateToLogin();
-              } else {
-                navigate("/login");
-              }
-            }}
+            onClick={() => navigate(config.loginPath)}
             className="w-full bg-[#C9A96E] text-[#0e0d0b] font-medium py-3.5 rounded-xl text-sm hover:bg-[#dfc08a] transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
             Proceed to Sign In →
@@ -149,34 +192,35 @@ const SignupPage = ({
 
   return (
     <div className="min-h-screen bg-[#0e0d0b] grid grid-cols-1 lg:grid-cols-2">
+      <SEO title={config.seoTitle} url={config.seoUrl} />
+
       {/* LEFT PANEL */}
       <div className="hidden lg:flex relative flex-col justify-between p-12 overflow-hidden">
         <div
           className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: `url('${BG_IMAGE}')`, opacity: 0.35 }}
+          style={{ backgroundImage: `url('${config.bgImage}')`, opacity: 0.35 }}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-[rgba(14,13,11,0.7)] via-[rgba(14,13,11,0.4)] to-[rgba(14,13,11,0.85)]" />
         <div className="relative z-10 flex items-center gap-2.5">
           <div className="w-5 h-5 bg-[#C9A96E] rotate-45 rounded-sm" />
-          <span className="font-['Cormorant Garamond'] text-xl tracking-wide text-[#f5f0e8]">
-            Zola Bekker
+          <span className="font-['Cormorant_Garamond'] text-xl tracking-wide text-[#f5f0e8]">
+            LuxStay
           </span>
         </div>
         <div className="relative z-10">
-          <blockquote className="font-['Cormorant Garamond'] text-[28px] italic leading-snug text-[#f5f0e8] mb-5">
-            "Your property deserves a stage worthy of its elegance."
+          <blockquote className="font-['Cormorant_Garamond'] text-[28px] italic leading-snug text-[#f5f0e8] mb-5">
+            "{config.quote}"
           </blockquote>
           <cite className="text-xs text-[rgba(245,240,232,0.45)] uppercase tracking-widest not-italic">
-            — The Zola Bekker Host Promise
+            — LuxStay {fixedRole === "host" ? "Host Promise" : "Guest Network"}
           </cite>
           <div className="flex gap-8 mt-10">
-            {[
-              ["12K+", "Active Hosts"],
-              ["98%", "Satisfaction"],
-              ["$4.2M", "Paid Out Monthly"],
-            ].map(([n, l]) => (
+            {config.stats.map(([n, l]) => (
               <div key={l}>
-                <div className="font-['Cormorant Garamond'] text-[32px] text-[#C9A96E] leading-none">
+                <div
+                  className="font-['Cormorant_Garamond'] text-[32px] leading-none"
+                  style={{ color: config.accentColor }}
+                >
                   {n}
                 </div>
                 <div className="text-[11px] text-[rgba(245,240,232,0.45)] mt-1 uppercase tracking-wider">
@@ -193,71 +237,19 @@ const SignupPage = ({
         <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full bg-[rgba(201,169,110,0.05)] pointer-events-none" />
 
         <div className="w-full max-w-md relative z-10">
-          {/* Step dots */}
-          <div className="flex items-center gap-1.5 mb-8">
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className={`h-2 rounded-full transition-all ${i === 0 ? "w-6 bg-[#C9A96E]" : i === 1 && role === "host" ? "w-2 bg-[#C9A96E] opacity-60" : "w-2 bg-[rgba(245,240,232,0.1)]"}`}
-              />
-            ))}
-          </div>
-
           <div className="mb-8">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-[#C9A96E] mb-2.5">
-              Create Account
+            <p
+              className="text-[11px] uppercase tracking-[0.18em] mb-2.5"
+              style={{ color: config.accentColor }}
+            >
+              {fixedRole === "host" ? "Host Sign Up" : "Create Account"}
             </p>
-            <h1 className="font-['Cormorant Garamond'] text-4xl text-[#f5f0e8] leading-tight">
-              Join Zola Bekker
+            <h1 className="font-['Cormorant_Garamond'] text-4xl text-[#f5f0e8] leading-tight">
+              {config.heading}
             </h1>
             <p className="text-sm text-[rgba(245,240,232,0.45)] mt-2 leading-relaxed">
-              Choose how you'd like to get started on the platform.
+              {config.subheading}
             </p>
-          </div>
-
-          {/* Role cards */}
-          <div className="grid grid-cols-2 gap-3 mb-7">
-            {(
-              [
-                [
-                  "guest",
-                  "🌿",
-                  "Continue as Guest",
-                  "Browse & book luxury stays without hosting",
-                ],
-                [
-                  "host",
-                  "🏛",
-                  "Register as Host",
-                  "List your property & earn with Zola Bekker",
-                ],
-              ] as const
-            ).map(([r, icon, label, desc]) => (
-              <button
-                key={r}
-                onClick={() => setRole(r)}
-                className={`relative text-left p-4 rounded-2xl border-2 transition-all duration-200 overflow-hidden group ${role === r ? "border-[#C9A96E]" : "border-[rgba(245,240,232,0.08)] hover:border-[rgba(201,169,110,0.2)]"}`}
-                style={{ background: "#252220" }}
-              >
-                {role === r && (
-                  <div className="absolute inset-0 bg-gradient-to-br from-[rgba(201,169,110,0.12)] to-transparent pointer-events-none" />
-                )}
-                <div
-                  className={`absolute top-2.5 right-2.5 w-4 h-4 rounded-full border flex items-center justify-center transition-all ${role === r ? "bg-[#C9A96E] border-[#C9A96E]" : "border-[rgba(245,240,232,0.2)]"}`}
-                >
-                  {role === r && (
-                    <CheckIcon className="w-2.5 h-2.5 text-[#0e0d0b]" />
-                  )}
-                </div>
-                <div className="text-xl mb-2">{icon}</div>
-                <div className="text-sm font-medium text-[#f5f0e8] mb-1">
-                  {label}
-                </div>
-                <div className="text-[11px] text-[rgba(245,240,232,0.4)] leading-relaxed">
-                  {desc}
-                </div>
-              </button>
-            ))}
           </div>
 
           {/* Name row */}
@@ -363,54 +355,54 @@ const SignupPage = ({
           </div>
 
           {/* Host-only fields */}
-          <div
-            className={`overflow-hidden transition-all duration-400 ${role === "host" ? "max-h-48 opacity-100" : "max-h-0 opacity-0"}`}
-          >
-            <div className="mb-4">
-              <label className="block text-[11px] uppercase tracking-[0.12em] text-[rgba(245,240,232,0.45)] mb-2">
-                Property / Company Name
-              </label>
-              <input
-                type="text"
-                value={form.company}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, company: e.target.value }))
-                }
-                placeholder="e.g. Villa Soleil, Azure Residences"
-                className="w-full bg-[#252220] border border-[rgba(245,240,232,0.08)] rounded-xl px-4 py-3 text-sm text-[#f5f0e8] placeholder:text-[rgba(245,240,232,0.2)] outline-none focus:border-[#C9A96E] transition-all"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div>
+          {fixedRole === "host" && (
+            <>
+              <div className="mb-4">
                 <label className="block text-[11px] uppercase tracking-[0.12em] text-[rgba(245,240,232,0.45)] mb-2">
-                  Country
+                  Property / Company Name
                 </label>
                 <input
                   type="text"
-                  value={form.country}
+                  value={form.company}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, country: e.target.value }))
+                    setForm((f) => ({ ...f, company: e.target.value }))
                   }
-                  placeholder="France"
+                  placeholder="e.g. Villa Soleil, Azure Residences"
                   className="w-full bg-[#252220] border border-[rgba(245,240,232,0.08)] rounded-xl px-4 py-3 text-sm text-[#f5f0e8] placeholder:text-[rgba(245,240,232,0.2)] outline-none focus:border-[#C9A96E] transition-all"
                 />
               </div>
-              <div>
-                <label className="block text-[11px] uppercase tracking-[0.12em] text-[rgba(245,240,232,0.45)] mb-2">
-                  Phone
-                </label>
-                <input
-                  type="tel"
-                  value={form.phone}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, phone: e.target.value }))
-                  }
-                  placeholder="+33 6 12 34 56"
-                  className="w-full bg-[#252220] border border-[rgba(245,240,232,0.08)] rounded-xl px-4 py-3 text-sm text-[#f5f0e8] placeholder:text-[rgba(245,240,232,0.2)] outline-none focus:border-[#C9A96E] transition-all"
-                />
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className="block text-[11px] uppercase tracking-[0.12em] text-[rgba(245,240,232,0.45)] mb-2">
+                    Country
+                  </label>
+                  <input
+                    type="text"
+                    value={form.country}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, country: e.target.value }))
+                    }
+                    placeholder="Nigeria"
+                    className="w-full bg-[#252220] border border-[rgba(245,240,232,0.08)] rounded-xl px-4 py-3 text-sm text-[#f5f0e8] placeholder:text-[rgba(245,240,232,0.2)] outline-none focus:border-[#C9A96E] transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] uppercase tracking-[0.12em] text-[rgba(245,240,232,0.45)] mb-2">
+                    Phone
+                  </label>
+                  <input
+                    type="tel"
+                    value={form.phone}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, phone: e.target.value }))
+                    }
+                    placeholder="+234 8XX XXX XXXX"
+                    className="w-full bg-[#252220] border border-[rgba(245,240,232,0.08)] rounded-xl px-4 py-3 text-sm text-[#f5f0e8] placeholder:text-[rgba(245,240,232,0.2)] outline-none focus:border-[#C9A96E] transition-all"
+                  />
+                </div>
               </div>
-            </div>
-          </div>
+            </>
+          )}
 
           {/* Terms */}
           <div className="flex items-start gap-3 mb-5">
@@ -425,14 +417,18 @@ const SignupPage = ({
             <p className="text-xs text-[rgba(245,240,232,0.4)] leading-relaxed">
               I agree to the{" "}
               <a
-                href="#"
+                href="/terms"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="text-[#C9A96E] underline underline-offset-2"
               >
-                Terms of Service
+                Terms of Use
               </a>{" "}
               and{" "}
               <a
-                href="#"
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="text-[#C9A96E] underline underline-offset-2"
               >
                 Privacy Policy
@@ -445,6 +441,7 @@ const SignupPage = ({
               {errors.terms}
             </p>
           )}
+
           {/* Divider */}
           <div className="flex items-center gap-3 my-5">
             <div className="flex-1 h-px bg-[rgba(245,240,232,0.06)]" />
@@ -461,7 +458,7 @@ const SignupPage = ({
               disabled={loading}
               onClick={() => {
                 setLoading(true);
-                loginWithGoogle(role);
+                loginWithGoogle(fixedRole);
               }}
               className="flex items-center justify-center gap-2.5 py-3 rounded-xl border border-[rgba(245,240,232,0.08)] bg-[rgba(245,240,232,0.02)] text-sm text-[rgba(245,240,232,0.6)] hover:border-[rgba(245,240,232,0.18)] hover:bg-[rgba(245,240,232,0.05)] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
@@ -490,7 +487,7 @@ const SignupPage = ({
               disabled={loading}
               onClick={() => {
                 setLoading(true);
-                loginWithApple(role);
+                loginWithApple(fixedRole);
               }}
               className="flex items-center justify-center gap-2.5 py-3 rounded-xl border border-[rgba(245,240,232,0.08)] bg-[rgba(245,240,232,0.02)] text-sm text-[rgba(245,240,232,0.6)] hover:border-[rgba(245,240,232,0.18)] hover:bg-[rgba(245,240,232,0.05)] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
@@ -517,7 +514,7 @@ const SignupPage = ({
                 Creating account…
               </>
             ) : (
-              `Create ${role === "host" ? "Host" : "Guest"} Account →`
+              `Create ${fixedRole === "host" ? "Host" : "Guest"} Account →`
             )}
           </button>
           {errorMessage && (
@@ -529,7 +526,7 @@ const SignupPage = ({
           <p className="text-center text-sm text-[rgba(245,240,232,0.4)] mt-5">
             Already have an account?{" "}
             <button
-              onClick={onNavigateToLogin}
+              onClick={() => navigate(config.loginPath)}
               className="text-[#C9A96E] underline underline-offset-2 hover:text-[#dfc08a] transition-colors"
             >
               Sign in
@@ -537,10 +534,6 @@ const SignupPage = ({
           </p>
         </div>
       </div>
-      <SEO
-        title="Create an Account — Host or Guest"
-        url="https://lux-d1ok.vercel.app/signup"
-      />
     </div>
   );
 };
