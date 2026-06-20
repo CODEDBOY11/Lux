@@ -110,9 +110,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           profile = await AuthDB.getByEmail(supabaseUser.email);
         }
 
+        // If still no profile, wait a moment and retry (Supabase trigger might be slow)
+        if (!profile) {
+          console.log(
+            "⏳ Profile not found, waiting for trigger to create it...",
+            supabaseUser.email,
+          );
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          profile = await AuthDB.getById(supabaseUser.id);
+
+          if (!profile && supabaseUser.email) {
+            profile = await AuthDB.getByEmail(supabaseUser.email);
+          }
+        }
+
+        // Last resort: create from OAuth data
+        if (!profile) {
+          console.log(
+            "📝 Creating profile for new OAuth user:",
+            supabaseUser.email,
+          );
+          profile = await AuthDB.createFromOAuth(
+            supabaseUser.id,
+            supabaseUser.email ?? "",
+          );
+        }
+
         if (profile) {
           setUser(profile);
           return profile;
+        } else {
+          console.error("❌ Could not create or fetch user profile");
         }
       } catch (err) {
         console.error("syncUser failed:", err);
@@ -126,10 +154,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     seedDemoData();
 
     // Safety net — never let the spinner hang forever if Supabase is slow
-    // Increased to 10 seconds to allow for slower DB queries
+    // Longer timeout for OAuth flows which involve DB profile creation/fetch
     const timeout = setTimeout(() => {
+      console.warn("⏱️ Auth timeout - clearing loading state");
       setLoading(false);
-    }, 10000);
+    }, 15000);
 
     // ── Listen to Supabase auth state changes ────────────────────────────
     const {
@@ -139,9 +168,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       try {
         if (session?.user) {
+          console.log("📝 Session user found, syncing profile...");
           const profile = await syncUser(session.user);
 
           if (profile) {
+            console.log("✅ Profile loaded, role:", profile.role);
             const savedRole = localStorage.getItem(
               OAUTH_ROLE_KEY,
             ) as UserRole | null;
@@ -159,6 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               profile.role === "guest" &&
               isNewAccount
             ) {
+              console.log("🔄 Updating role to:", savedRole);
               const updated = await AuthDB.update(profile.id, {
                 role: savedRole,
               });
@@ -167,6 +199,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setUser(updated);
                 clearTimeout(timeout);
                 setLoading(false);
+                console.log("🚀 Navigating to:", roleToPath(updated.role));
                 navigate(roleToPath(updated.role), { replace: true });
                 return;
               }
@@ -180,11 +213,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
               const currentPath = window.location.pathname;
               const targetPath = roleToPath(profile.role);
+              console.log(
+                `📍 Current path: ${currentPath}, target: ${targetPath}`,
+              );
               if (
                 currentPath === "/login" ||
                 currentPath === "/signup" ||
                 currentPath === "/auth/callback"
               ) {
+                console.log("🚀 Navigating to:", targetPath);
                 navigate(targetPath, { replace: true });
               }
             }
@@ -198,6 +235,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return;
           }
         } else {
+          console.log("🚪 No session user");
           setUser(null);
           clearTimeout(timeout);
         }

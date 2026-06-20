@@ -414,6 +414,16 @@ export const AuthDB = {
     role: UserRole = "guest",
   ): Promise<User | null> {
     try {
+      // Check if profile already exists (might have been created by trigger)
+      const existing = await this.getById(authUserId);
+      if (existing) {
+        console.log(
+          "✅ OAuth user already exists in database:",
+          existing.email,
+        );
+        return existing;
+      }
+
       // Extract name from email if needed
       const nameParts = email.split("@")[0].split(".");
       const firstName =
@@ -443,6 +453,12 @@ export const AuthDB = {
         .single();
 
       if (error) {
+        // If the error is a conflict (row already exists), try to fetch it
+        if (error.code === "23505") {
+          console.log("ℹ️ User row exists, fetching from database...", email);
+          const fetched = await this.getById(authUserId);
+          if (fetched) return fetched;
+        }
         console.error("❌ Failed to create OAuth user:", error.message);
         return null;
       }
