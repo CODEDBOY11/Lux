@@ -997,6 +997,21 @@ export const ReviewsDB = {
     }
     return (data ?? []).map(toReview);
   },
+  async featured(limit = 30): Promise<Review[]> {
+    const { data, error } = await supabase
+      .from("reviews")
+      .select("*")
+      .gte("rating", 4)
+      .not("body", "is", null)
+      .neq("body", "")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) {
+      console.error("ReviewsDB.featured:", error.message);
+      return [];
+    }
+    return (data ?? []).map(toReview);
+  },
 
   async byGuest(guestId: string): Promise<Review[]> {
     const { data, error } = await supabase
