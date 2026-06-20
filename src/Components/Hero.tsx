@@ -1124,15 +1124,15 @@ export default function Hero({
             <img
               src={logo}
               alt=""
-              style={{ width: 28, height: 28, flexShrink: 0 }}
+              style={{ width: 38, height: 38, flexShrink: 0 }}
             />
             <span
               style={{
                 fontFamily: "Cormorant Garamond, serif",
                 color: T.text,
-                fontSize: 17,
-                fontWeight: 600,
-                letterSpacing: ".01em",
+                fontSize: 22,
+                fontWeight: 700,
+                letterSpacing: "-.01em",
                 whiteSpace: "nowrap",
               }}
             >
