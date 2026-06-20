@@ -442,9 +442,9 @@ function CategoryDetail({
         </div>
       ) : (
         <>
-          {/* Mobile: horizontal scroll */}
+          {/* Mobile + tablet: horizontal scroll */}
           <div
-            className="sm:hidden flex gap-3 overflow-x-auto px-4 py-4"
+            className="lg:hidden flex gap-3 overflow-x-auto px-4 py-4"
             style={{ scrollSnapType: "x mandatory" }}
           >
             {listings.map((listing) => (
@@ -533,7 +533,7 @@ function CategoryDetail({
 
           {/* Desktop: grid */}
           <div
-            className="hidden sm:grid gap-px"
+            className="hidden lg:grid gap-px"
             style={{
               gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
               background: "#F0EDE6",
@@ -768,9 +768,9 @@ const CategorySection = ({
         </div>
 
         {/* ══════════════════════════════════════
-            MOBILE  ≤ 639px  — horizontal scroll strip
+            MOBILE + TABLET  — horizontal scroll strip (below lg)
         ══════════════════════════════════════ */}
-        <div className="sm:hidden">
+        <div className="lg:hidden">
           <div
             className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4"
             style={{
@@ -809,9 +809,9 @@ const CategorySection = ({
         </div>
 
         {/* ══════════════════════════════════════
-            DESKTOP  ≥ 640px  — mosaic grid
+            DESKTOP  ≥ 1024px  — mosaic grid
         ══════════════════════════════════════ */}
-        <div className="hidden sm:block cs-desktop-grid">
+        <div className="hidden lg:block cs-desktop-grid">
           {categories.map((s, i) => (
             <div key={s.key} className={s.key === "villa" ? "cs-wide" : ""}>
               <DesktopCard
