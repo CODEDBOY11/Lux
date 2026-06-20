@@ -317,7 +317,7 @@ const Sidebar = ({
             <span
               style={{
                 fontFamily: "Cormorant Garamond, serif",
-                color: T.text,
+                color: T.white,
                 fontSize: 22,
                 fontWeight: 700,
                 letterSpacing: "-.01em",
