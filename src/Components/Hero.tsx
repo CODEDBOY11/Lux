@@ -3,11 +3,8 @@ import {
   MagnifyingGlassIcon,
   MapPinIcon,
   XMarkIcon,
-  CalendarDaysIcon,
-  UserGroupIcon,
 } from "@heroicons/react/24/outline";
 import { StarIcon, FireIcon } from "@heroicons/react/24/solid";
-import heroBg from "../assets/hero-bg.png";
 import logo from "../../public/logo.svg";
 import {
   searchHotels,
@@ -16,9 +13,6 @@ import {
   type SearchParams,
 } from "../index";
 
-/* ─────────────────────────────────────────────────────────
-   Types
-───────────────────────────────────────────────────────── */
 type SearchState = {
   query: string;
   checkIn: string;
@@ -27,7 +21,7 @@ type SearchState = {
 };
 
 /* ─────────────────────────────────────────────────────────
-   Hotel Card
+   Hotel Card — refined dark card
 ───────────────────────────────────────────────────────── */
 const HotelCard = ({
   hotel,
@@ -41,34 +35,114 @@ const HotelCard = ({
   index?: number;
 }) => (
   <div
-    className="bg-white rounded-2xl overflow-hidden shadow-lg border border-gray-100 flex flex-col group hover:shadow-2xl hover:-translate-y-1 transition-all duration-300"
-    style={{ animation: `fadeUp 0.5s ease ${index * 60}ms both` }}
+    style={{
+      animation: `fadeUp 0.5s ease ${index * 60}ms both`,
+      background: "#1A1814",
+      border: "1px solid rgba(245,240,232,0.08)",
+      borderRadius: 20,
+      overflow: "hidden",
+      display: "flex",
+      flexDirection: "column",
+      transition: "border-color 0.25s, transform 0.25s",
+    }}
+    onMouseEnter={(e) => {
+      (e.currentTarget as HTMLElement).style.borderColor =
+        "rgba(201,169,110,0.35)";
+      (e.currentTarget as HTMLElement).style.transform = "translateY(-3px)";
+    }}
+    onMouseLeave={(e) => {
+      (e.currentTarget as HTMLElement).style.borderColor =
+        "rgba(245,240,232,0.08)";
+      (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+    }}
   >
-    <div className="relative h-48 sm:h-52 overflow-hidden">
+    <div style={{ position: "relative", height: 210, overflow: "hidden" }}>
       <img
         src={hotel.thumbnail}
         alt={hotel.name}
-        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          transition: "transform 0.6s",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
+        onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
         onError={(e) => {
           (e.target as HTMLImageElement).src =
             "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400";
         }}
       />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
-      <span className="absolute top-3 left-3 bg-black/50 backdrop-blur-md text-[#C9A96E] text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border border-[#C9A96E]/30">
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background:
+            "linear-gradient(to top, rgba(15,14,12,0.7) 0%, transparent 50%)",
+        }}
+      />
+      <span
+        style={{
+          position: "absolute",
+          top: 14,
+          left: 14,
+          background: "rgba(15,14,12,0.75)",
+          backdropFilter: "blur(10px)",
+          color: "#C9A96E",
+          fontSize: 9,
+          fontWeight: 700,
+          letterSpacing: "0.22em",
+          textTransform: "uppercase",
+          padding: "5px 12px",
+          borderRadius: 99,
+          border: "1px solid rgba(201,169,110,0.25)",
+        }}
+      >
         {hotel.category}
       </span>
       {hotel.featured && (
-        <span className="absolute top-3 right-3 bg-[#C9A96E] text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full flex items-center gap-1">
-          <FireIcon className="w-2.5 h-2.5" /> Featured
+        <span
+          style={{
+            position: "absolute",
+            top: 14,
+            right: 14,
+            background: "#C9A96E",
+            color: "#0F0E0C",
+            fontSize: 9,
+            fontWeight: 900,
+            letterSpacing: "0.15em",
+            textTransform: "uppercase",
+            padding: "5px 12px",
+            borderRadius: 99,
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+          }}
+        >
+          <FireIcon style={{ width: 10, height: 10 }} /> Featured
         </span>
       )}
       {hotel.rating > 0 && (
-        <div className="absolute bottom-3 left-3 flex items-center gap-1 bg-black/50 backdrop-blur-md px-2.5 py-1 rounded-full">
-          <StarIcon className="w-3 h-3 text-[#C9A96E]" />
-          <span className="text-white text-xs font-bold">{hotel.rating}</span>
+        <div
+          style={{
+            position: "absolute",
+            bottom: 14,
+            left: 14,
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            background: "rgba(15,14,12,0.75)",
+            backdropFilter: "blur(8px)",
+            padding: "5px 10px",
+            borderRadius: 99,
+          }}
+        >
+          <StarIcon style={{ width: 11, height: 11, color: "#C9A96E" }} />
+          <span style={{ color: "#F5F0E8", fontSize: 12, fontWeight: 700 }}>
+            {hotel.rating}
+          </span>
           {hotel.reviewCount > 0 && (
-            <span className="text-white/50 text-[10px]">
+            <span style={{ color: "rgba(245,240,232,0.4)", fontSize: 10 }}>
               ({hotel.reviewCount})
             </span>
           )}
@@ -76,47 +150,150 @@ const HotelCard = ({
       )}
     </div>
 
-    <div className="p-4 sm:p-5 flex flex-col flex-1">
-      <h3 className="font-['Cormorant_Garamond'] font-semibold text-gray-900 text-base sm:text-lg leading-tight mb-1 line-clamp-1">
+    <div
+      style={{
+        padding: "20px 22px 22px",
+        display: "flex",
+        flexDirection: "column",
+        flex: 1,
+      }}
+    >
+      <h3
+        style={{
+          fontFamily: "Cormorant Garamond, serif",
+          fontWeight: 600,
+          color: "#F5F0E8",
+          fontSize: 18,
+          lineHeight: 1.2,
+          marginBottom: 6,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
         {hotel.name}
       </h3>
-      <div className="flex items-center gap-1 text-gray-400 mb-3">
-        <MapPinIcon className="w-3.5 h-3.5 text-[#C9A96E] shrink-0" />
-        <span className="text-xs truncate">{hotel.location}</span>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 5,
+          marginBottom: 12,
+        }}
+      >
+        <MapPinIcon
+          style={{ width: 13, height: 13, color: "#C9A96E", flexShrink: 0 }}
+        />
+        <span
+          style={{
+            color: "rgba(245,240,232,0.4)",
+            fontSize: 12,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {hotel.location}
+        </span>
       </div>
-      <p className="text-gray-500 text-xs leading-relaxed mb-3 flex-1 line-clamp-2">
+      <p
+        style={{
+          color: "rgba(245,240,232,0.45)",
+          fontSize: 12.5,
+          lineHeight: 1.7,
+          marginBottom: 14,
+          flex: 1,
+          display: "-webkit-box",
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+        }}
+      >
         {hotel.shortDescription}
       </p>
-      <div className="flex flex-wrap gap-1 mb-4">
+      <div
+        style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 18 }}
+      >
         {hotel.tags.slice(0, 3).map((tag) => (
           <span
             key={tag}
-            className="text-[10px] font-medium text-[#C9A96E] bg-[#C9A96E]/10 px-2 py-0.5 rounded-full"
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              color: "#C9A96E",
+              background: "rgba(201,169,110,0.1)",
+              border: "1px solid rgba(201,169,110,0.2)",
+              padding: "3px 10px",
+              borderRadius: 99,
+            }}
           >
             {tag}
           </span>
         ))}
       </div>
-      <div className="flex items-end justify-between border-t border-gray-100 pt-3">
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          borderTop: "1px solid rgba(245,240,232,0.07)",
+          paddingTop: 14,
+        }}
+      >
         <div>
-          <div className="flex items-baseline gap-1">
-            <span className="text-xl font-bold text-gray-900">
-              ${hotel.pricePerNight.toLocaleString()}
+          <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+            <span
+              style={{
+                fontFamily: "Cormorant Garamond, serif",
+                fontSize: 22,
+                fontWeight: 700,
+                color: "#F5F0E8",
+              }}
+            >
+              ₦{hotel.pricePerNight.toLocaleString()}
             </span>
-            <span className="text-gray-400 text-xs">/ night</span>
+            <span style={{ color: "rgba(245,240,232,0.35)", fontSize: 11 }}>
+              / night
+            </span>
           </div>
           {nights > 0 && (
-            <p className="text-xs text-gray-400 mt-0.5">
-              ${(hotel.pricePerNight * nights).toLocaleString()} · {nights}n
+            <p
+              style={{
+                fontSize: 11,
+                color: "rgba(245,240,232,0.3)",
+                marginTop: 2,
+              }}
+            >
+              ₦{(hotel.pricePerNight * nights).toLocaleString()} · {nights}n
+              total
             </p>
           )}
         </div>
         <button
           type="button"
           onClick={() => onBook?.(hotel)}
-          className="bg-[#C9A96E] hover:bg-[#b8935a] text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg shadow-[#C9A96E]/30"
+          style={{
+            background: "#C9A96E",
+            color: "#0F0E0C",
+            fontSize: 12,
+            fontWeight: 700,
+            padding: "10px 20px",
+            borderRadius: 12,
+            border: "none",
+            cursor: "pointer",
+            letterSpacing: "0.04em",
+            transition: "background 0.2s, transform 0.15s",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.background = "#DFC08A";
+            (e.currentTarget as HTMLElement).style.transform = "scale(1.04)";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.background = "#C9A96E";
+            (e.currentTarget as HTMLElement).style.transform = "scale(1)";
+          }}
         >
-          Book Now
+          Reserve
         </button>
       </div>
     </div>
@@ -141,80 +318,245 @@ const ResultsPanel = ({
   onClose: () => void;
   onBook?: (hotel: Hotel) => void;
 }) => (
-  <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 md:p-6">
+  <div
+    style={{
+      position: "fixed",
+      inset: 0,
+      zIndex: 50,
+      display: "flex",
+      alignItems: "flex-end",
+      justifyContent: "center",
+    }}
+    className="sm:items-center sm:p-4 md:p-6"
+  >
     <div
-      className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+      style={{
+        position: "absolute",
+        inset: 0,
+        background: "rgba(0,0,0,0.75)",
+        backdropFilter: "blur(8px)",
+      }}
       onClick={onClose}
     />
     <div
-      className="relative z-10 bg-[#faf9f7] w-full sm:max-w-2xl md:max-w-4xl lg:max-w-6xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden"
-      style={{ maxHeight: "92dvh" }}
+      style={{
+        position: "relative",
+        zIndex: 10,
+        background: "#0F0E0C",
+        border: "1px solid rgba(245,240,232,0.1)",
+        width: "100%",
+        maxHeight: "92dvh",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
+      className="sm:max-w-2xl md:max-w-4xl lg:max-w-6xl sm:rounded-3xl rounded-t-3xl"
     >
       {/* Header */}
-      <div className="px-5 sm:px-6 py-4 sm:py-5 bg-white border-b border-gray-100 flex items-center justify-between shrink-0">
+      <div
+        style={{
+          padding: "22px 28px",
+          background: "#141210",
+          borderBottom: "1px solid rgba(245,240,232,0.08)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexShrink: 0,
+        }}
+      >
         <div>
-          <h2 className="font-['Cormorant_Garamond'] text-gray-900 font-semibold text-lg sm:text-xl">
+          <p
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.2em",
+              color: "#C9A96E",
+              textTransform: "uppercase",
+              marginBottom: 4,
+            }}
+          >
+            Search Results
+          </p>
+          <h2
+            style={{
+              fontFamily: "Cormorant Garamond, serif",
+              color: "#F5F0E8",
+              fontWeight: 600,
+              fontSize: 22,
+            }}
+          >
             {loading
               ? "Searching…"
               : results.length > 0
-                ? `${results.length} stay${results.length !== 1 ? "s" : ""} found`
-                : "No results found"}
+                ? `${results.length} propert${results.length !== 1 ? "ies" : "y"} found`
+                : "No properties matched"}
           </h2>
           {query && (
-            <p className="text-gray-400 text-xs sm:text-sm mt-0.5">
+            <p
+              style={{
+                color: "rgba(245,240,232,0.35)",
+                fontSize: 13,
+                marginTop: 2,
+              }}
+            >
               for &ldquo;{query}&rdquo;
             </p>
           )}
         </div>
         <button
           onClick={onClose}
-          className="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors shrink-0"
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: "50%",
+            background: "rgba(245,240,232,0.07)",
+            border: "1px solid rgba(245,240,232,0.1)",
+            color: "#F5F0E8",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
         >
-          <XMarkIcon className="w-4 h-4 text-gray-600" />
+          <XMarkIcon style={{ width: 16, height: 16 }} />
         </button>
       </div>
 
       {/* Body */}
-      <div className="overflow-y-auto flex-1 p-4 sm:p-5 md:p-6">
+      <div style={{ overflowY: "auto", flex: 1, padding: "24px 28px 32px" }}>
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))",
+              gap: 20,
+            }}
+          >
             {[...Array(6)].map((_, i) => (
               <div
                 key={i}
-                className="bg-white rounded-2xl overflow-hidden border border-gray-100 animate-pulse"
-                style={{ animationDelay: `${i * 60}ms` }}
+                style={{
+                  background: "#1A1814",
+                  borderRadius: 20,
+                  overflow: "hidden",
+                  border: "1px solid rgba(245,240,232,0.06)",
+                  animation: "pulse 1.4s ease infinite",
+                  animationDelay: `${i * 80}ms`,
+                }}
               >
-                <div className="h-48 bg-gray-100" />
-                <div className="p-5 space-y-2.5">
-                  <div className="h-4 bg-gray-100 rounded-full w-3/4" />
-                  <div className="h-3 bg-gray-100 rounded-full w-1/2" />
-                  <div className="h-3 bg-gray-100 rounded-full w-full" />
-                  <div className="h-3 bg-gray-100 rounded-full w-2/3" />
+                <div
+                  style={{ height: 210, background: "rgba(245,240,232,0.04)" }}
+                />
+                <div
+                  style={{
+                    padding: 20,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 10,
+                  }}
+                >
+                  <div
+                    style={{
+                      height: 14,
+                      background: "rgba(245,240,232,0.06)",
+                      borderRadius: 99,
+                      width: "70%",
+                    }}
+                  />
+                  <div
+                    style={{
+                      height: 10,
+                      background: "rgba(245,240,232,0.04)",
+                      borderRadius: 99,
+                      width: "45%",
+                    }}
+                  />
+                  <div
+                    style={{
+                      height: 10,
+                      background: "rgba(245,240,232,0.04)",
+                      borderRadius: 99,
+                      width: "90%",
+                    }}
+                  />
                 </div>
               </div>
             ))}
           </div>
         ) : results.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 sm:py-24 text-center">
-            <div className="w-16 h-16 bg-[#C9A96E]/10 border border-[#C9A96E]/20 rounded-2xl flex items-center justify-center mb-5">
-              <MagnifyingGlassIcon className="w-7 h-7 text-[#C9A96E]" />
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "64px 24px",
+              textAlign: "center",
+            }}
+          >
+            <div
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: 18,
+                background: "rgba(201,169,110,0.08)",
+                border: "1px solid rgba(201,169,110,0.2)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: 20,
+              }}
+            >
+              <MagnifyingGlassIcon
+                style={{ width: 28, height: 28, color: "#C9A96E" }}
+              />
             </div>
-            <h3 className="font-['Cormorant_Garamond'] text-gray-700 font-semibold text-xl mb-2">
-              No stays matched your search
+            <h3
+              style={{
+                fontFamily: "Cormorant Garamond, serif",
+                color: "#F5F0E8",
+                fontWeight: 600,
+                fontSize: 22,
+                marginBottom: 8,
+              }}
+            >
+              No stays matched
             </h3>
-            <p className="text-gray-400 text-sm max-w-xs mb-6">
-              Try adjusting your location, dates, or guest count for more
-              results.
+            <p
+              style={{
+                color: "rgba(245,240,232,0.35)",
+                fontSize: 13,
+                maxWidth: 300,
+                lineHeight: 1.7,
+                marginBottom: 24,
+              }}
+            >
+              Try adjusting your location, dates, or guest count.
             </p>
             <button
               onClick={onClose}
-              className="bg-[#C9A96E] text-white font-semibold text-sm px-6 py-3 rounded-xl hover:bg-[#b8935a] transition-all"
+              style={{
+                background: "#C9A96E",
+                color: "#0F0E0C",
+                fontWeight: 700,
+                fontSize: 13,
+                padding: "12px 28px",
+                borderRadius: 12,
+                border: "none",
+                cursor: "pointer",
+              }}
             >
               Clear Search
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))",
+              gap: 20,
+            }}
+          >
             {results.map((hotel, i) => (
               <HotelCard
                 key={hotel.id}
@@ -255,16 +597,18 @@ const Hero = ({
   const [hasSearched, setHasSearched] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const suggestionRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const nights = (() => {
     if (!form.checkIn || !form.checkOut) return 0;
-    const diff =
-      new Date(form.checkOut).getTime() - new Date(form.checkIn).getTime();
-    return Math.max(0, Math.round(diff / 86400000));
+    return Math.max(
+      0,
+      Math.round(
+        (new Date(form.checkOut).getTime() - new Date(form.checkIn).getTime()) /
+          86400000,
+      ),
+    );
   })();
 
-  /* Auto-suggest */
   useEffect(() => {
     if (form.query.length < 1) {
       setSuggestions([]);
@@ -277,7 +621,6 @@ const Hero = ({
     });
   }, [form.query]);
 
-  /* Close suggestions on outside click */
   useEffect(() => {
     const h = (e: MouseEvent) => {
       if (
@@ -293,7 +636,7 @@ const Hero = ({
   const handleSearch = useCallback(async () => {
     setIsSearching(true);
     setHasSearched(true);
-    setSearchResults(null); // show loading skeletons
+    setSearchResults(null);
     try {
       const params: SearchParams = {
         query: form.query.trim() || undefined,
@@ -301,10 +644,8 @@ const Hero = ({
         checkOut: form.checkOut || undefined,
         guests: form.guests ? parseInt(form.guests) : undefined,
       };
-      const results = await searchHotels(params);
-      setSearchResults(results);
-    } catch (e) {
-      console.error("Search failed:", e);
+      setSearchResults(await searchHotels(params));
+    } catch {
       setSearchResults([]);
     } finally {
       setIsSearching(false);
@@ -318,8 +659,7 @@ const Hero = ({
     setSearchResults(null);
     setIsSearching(true);
     try {
-      const results = await searchHotels({ query: chip });
-      setSearchResults(results);
+      setSearchResults(await searchHotels({ query: chip }));
     } catch {
       setSearchResults([]);
     } finally {
@@ -329,16 +669,30 @@ const Hero = ({
 
   const today = new Date().toISOString().split("T")[0];
 
+  /* shared input style */
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    background: "transparent",
+    border: "none",
+    outline: "none",
+    color: "#F5F0E8",
+    fontSize: 13,
+    fontWeight: 500,
+  };
+
   return (
     <>
       <style>{`
-        @keyframes fadeUp { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:translateY(0); } }
-        @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
-        @keyframes shimmer { from { background-position:-400px 0; } to { background-position:400px 0; } }
-        .search-field:focus-within { border-color: rgba(201,169,110,0.6) !important; }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.45; } }
+        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7) sepia(1) saturate(0.5) hue-rotate(5deg); cursor:pointer; opacity:0.5; }
+        input::placeholder { color: rgba(245,240,232,0.25) !important; }
+        input[type="date"] { color-scheme: dark; }
+        ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(201,169,110,0.25); border-radius:99px; }
+        .field-wrap:focus-within { border-color: rgba(201,169,110,0.5) !important; }
       `}</style>
 
-      {/* Results overlay */}
       {hasSearched && (
         <ResultsPanel
           results={searchResults ?? []}
@@ -353,427 +707,927 @@ const Hero = ({
         />
       )}
 
-      <section className="relative min-h-screen w-full font-sans overflow-hidden">
-        {/* Background */}
-        <img
-          src={heroBg}
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/35 to-black/70" />
-        {/* Subtle gold radial glow */}
-        <div
-          className="absolute inset-0"
+      <section
+        style={{
+          background: "#0F0E0C",
+          minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          fontFamily: "sans-serif",
+        }}
+      >
+        {/* ── NAV ── */}
+        <nav
           style={{
-            backgroundImage:
-              "radial-gradient(ellipse 70% 50% at 50% 30%, rgba(201,169,110,0.12) 0%, transparent 70%)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "0 48px",
+            height: 72,
+            borderBottom: "1px solid rgba(245,240,232,0.07)",
           }}
-        />
-
-        <div className="relative z-10 flex flex-col min-h-screen">
-          {/* ── NAV ── */}
-          <nav className="flex items-center justify-between px-5 sm:px-8 md:px-12 lg:px-16 py-5 sm:py-6">
-            {/* Logo */}
-            <div className="flex items-center gap-2 select-none cursor-pointer">
-              <img
-                src={logo}
-                alt="LuxStay Logo"
-                className="w-10 h-10 sm:w-12 sm:h-12"
-              />
-              <span className="font-['Cormorant_Garamond'] text-white text-lg sm:text-xl tracking-wide font-semibold">
-                LuxStay
-              </span>
-            </div>
-
-            {/* Desktop nav */}
-            <div className="hidden md:flex items-center gap-8 text-sm">
-              <a
-                href="#"
-                className="text-white/70 hover:text-[#C9A96E] transition-colors font-medium"
-              >
-                Explore
-              </a>
-              <button
-                type="button"
-                onClick={onLogin}
-                className="text-white/70 hover:text-[#C9A96E] transition-colors font-medium"
-              >
-                Sign In
-              </button>
-              <button
-                type="button"
-                onClick={onSignup}
-                className="bg-[#C9A96E] text-white px-5 py-2.5 rounded-full font-semibold hover:bg-[#b8935a] hover:scale-105 transition-all shadow-lg shadow-[#C9A96E]/30 text-sm"
-              >
-                Get Started
-              </button>
-            </div>
-
-            {/* Mobile nav */}
-            <div className="flex md:hidden items-center gap-2">
-              <button
-                type="button"
-                onClick={onLogin}
-                className="text-white/70 text-sm font-medium px-3 py-1.5"
-              >
-                Sign In
-              </button>
-              <button
-                type="button"
-                onClick={onSignup}
-                className="bg-[#C9A96E] text-white px-4 py-2 rounded-full text-sm font-semibold"
-              >
-                Join
-              </button>
-            </div>
-          </nav>
-
-          {/* ── HERO CONTENT ── */}
+          className="px-5 sm:px-8 md:px-12"
+        >
           <div
-            className="flex flex-col items-center justify-center text-center flex-1 px-4 sm:px-6 md:px-8 pb-8 pt-4 sm:pt-0"
-            style={{ animation: "fadeUp 0.6s ease both" }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              cursor: "pointer",
+            }}
           >
-            {/* Eyebrow */}
-            <div
-              className="flex items-center gap-2 mb-4 sm:mb-5"
-              style={{ animation: "fadeUp 0.5s ease 50ms both" }}
-            >
-              <div className="h-px w-8 bg-[#C9A96E]/60" />
-              <p className="text-[#C9A96E] text-[11px] sm:text-xs font-bold tracking-[0.25em] uppercase">
-                Curated Luxury Escapes
-              </p>
-              <div className="h-px w-8 bg-[#C9A96E]/60" />
-            </div>
-
-            {/* Headline */}
-            <h1
-              className="text-white font-['Cormorant_Garamond'] leading-[1.05] mb-4 sm:mb-5"
+            <img src={logo} alt="LuxStay" style={{ width: 36, height: 36 }} />
+            <span
               style={{
-                fontSize: "clamp(38px, 7vw, 84px)",
-                animation: "fadeUp 0.6s ease 100ms both",
+                fontFamily: "Cormorant Garamond, serif",
+                color: "#F5F0E8",
+                fontSize: 19,
+                fontWeight: 600,
+                letterSpacing: "0.02em",
               }}
             >
-              Find Your <em className="not-italic text-[#C9A96E]">Perfect</em>
-              <br className="hidden sm:block" /> Stay
-            </h1>
+              LuxStay
+            </span>
+          </div>
 
-            <p
-              className="text-white/65 text-sm sm:text-base max-w-sm sm:max-w-md leading-relaxed mb-8 sm:mb-10"
-              style={{ animation: "fadeUp 0.6s ease 150ms both" }}
-            >
-              Handpicked luxury properties designed for those who demand
-              comfort, elegance, and the extraordinary.
-            </p>
-
-            {/* ── SEARCH BAR ── */}
+          {/* Desktop nav */}
+          <div
+            style={{ display: "flex", alignItems: "center", gap: 32 }}
+            className="hidden md:flex"
+          >
+            {["Explore", "For Hosts", "About"].map((label) => (
+              <a
+                key={label}
+                href="#"
+                style={{
+                  color: "rgba(245,240,232,0.5)",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  textDecoration: "none",
+                  letterSpacing: "0.01em",
+                  transition: "color 0.2s",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "#C9A96E")}
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.color = "rgba(245,240,232,0.5)")
+                }
+              >
+                {label}
+              </a>
+            ))}
             <div
-              className="w-full max-w-xs sm:max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl"
-              style={{ animation: "fadeUp 0.6s ease 200ms both" }}
+              style={{
+                width: 1,
+                height: 18,
+                background: "rgba(245,240,232,0.1)",
+              }}
+            />
+            <button
+              type="button"
+              onClick={onLogin}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: "rgba(245,240,232,0.55)",
+                fontSize: 13,
+                fontWeight: 500,
+                transition: "color 0.2s",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "#F5F0E8")}
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.color = "rgba(245,240,232,0.55)")
+              }
             >
-              {/* Desktop: single row */}
-              <div className="hidden sm:flex bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl shadow-black/30 border border-white/20 overflow-visible">
-                {/* Location */}
-                <div
-                  ref={suggestionRef}
-                  className="relative flex-[2] px-5 py-4 border-r border-gray-100 search-field"
+              Sign in
+            </button>
+            <button
+              type="button"
+              onClick={onSignup}
+              style={{
+                background: "#C9A96E",
+                color: "#0F0E0C",
+                border: "none",
+                cursor: "pointer",
+                fontSize: 13,
+                fontWeight: 700,
+                padding: "9px 22px",
+                borderRadius: 99,
+                letterSpacing: "0.03em",
+                transition: "background 0.2s",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = "#DFC08A")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = "#C9A96E")
+              }
+            >
+              List Your Property
+            </button>
+          </div>
+
+          {/* Mobile nav */}
+          <div
+            style={{ display: "flex", alignItems: "center", gap: 10 }}
+            className="flex md:hidden"
+          >
+            <button
+              type="button"
+              onClick={onLogin}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: "rgba(245,240,232,0.6)",
+                fontSize: 13,
+              }}
+            >
+              Sign in
+            </button>
+            <button
+              type="button"
+              onClick={onSignup}
+              style={{
+                background: "#C9A96E",
+                color: "#0F0E0C",
+                border: "none",
+                cursor: "pointer",
+                fontSize: 12,
+                fontWeight: 700,
+                padding: "8px 16px",
+                borderRadius: 99,
+              }}
+            >
+              Join
+            </button>
+          </div>
+        </nav>
+
+        {/* ── HERO CONTENT ── */}
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "64px 24px 80px",
+            maxWidth: 1000,
+            margin: "0 auto",
+            width: "100%",
+          }}
+        >
+          {/* Eyebrow */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 14,
+              marginBottom: 32,
+              animation: "fadeUp 0.5s ease 50ms both",
+            }}
+          >
+            <div
+              style={{
+                height: 1,
+                width: 40,
+                background:
+                  "linear-gradient(to right, transparent, rgba(201,169,110,0.6))",
+              }}
+            />
+            <p
+              style={{
+                color: "#C9A96E",
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: "0.3em",
+                textTransform: "uppercase",
+              }}
+            >
+              Curated Luxury Properties
+            </p>
+            <div
+              style={{
+                height: 1,
+                width: 40,
+                background:
+                  "linear-gradient(to left, transparent, rgba(201,169,110,0.6))",
+              }}
+            />
+          </div>
+
+          {/* Headline — the signature: large serif with restrained color */}
+          <h1
+            style={{
+              fontFamily: "Cormorant Garamond, serif",
+              fontSize: "clamp(42px, 7.5vw, 88px)",
+              fontWeight: 500,
+              lineHeight: 1.06,
+              color: "#F5F0E8",
+              textAlign: "center",
+              marginBottom: 22,
+              letterSpacing: "-0.01em",
+              animation: "fadeUp 0.6s ease 100ms both",
+            }}
+          >
+            Where You Stay
+            <br />
+            <em style={{ fontStyle: "italic", color: "#C9A96E" }}>
+              Defines
+            </em>{" "}
+            the Journey
+          </h1>
+
+          <p
+            style={{
+              color: "rgba(245,240,232,0.45)",
+              fontSize: 15,
+              maxWidth: 440,
+              lineHeight: 1.75,
+              textAlign: "center",
+              marginBottom: 52,
+              animation: "fadeUp 0.6s ease 150ms both",
+            }}
+          >
+            Handpicked estates, villas, and retreats — chosen for guests who
+            expect more than a room.
+          </p>
+
+          {/* ── SEARCH BAR — Desktop ── */}
+          <div
+            style={{
+              width: "100%",
+              animation: "fadeUp 0.6s ease 200ms both",
+            }}
+          >
+            {/* Desktop */}
+            <div
+              className="hidden sm:grid"
+              style={{
+                gridTemplateColumns: "1fr 160px 160px 110px auto",
+                background: "#141210",
+                border: "1px solid rgba(245,240,232,0.1)",
+                borderRadius: 18,
+                overflow: "visible",
+                boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
+                position: "relative",
+                gap: 0,
+              }}
+            >
+              {/* Location */}
+              <div
+                ref={suggestionRef}
+                className="field-wrap"
+                style={{
+                  padding: "18px 22px",
+                  borderRight: "1px solid rgba(245,240,232,0.08)",
+                  position: "relative",
+                  borderRadius: "18px 0 0 18px",
+                  transition: "background 0.2s",
+                }}
+                onFocus={() => {}}
+              >
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: 9,
+                    fontWeight: 700,
+                    letterSpacing: "0.2em",
+                    color: "rgba(245,240,232,0.3)",
+                    textTransform: "uppercase",
+                    marginBottom: 7,
+                  }}
                 >
-                  <label className="block text-[9px] font-bold text-gray-400 uppercase tracking-[0.18em] mb-1.5">
-                    Where to?
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <MapPinIcon className="w-4 h-4 text-[#C9A96E] shrink-0" />
-                    <input
-                      ref={inputRef}
-                      type="text"
-                      value={form.query}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, query: e.target.value }))
-                      }
-                      onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                      onFocus={() =>
-                        suggestions.length > 0 && setShowSuggestions(true)
-                      }
-                      placeholder="City, country, or style…"
-                      className="w-full text-sm font-medium text-gray-800 placeholder:text-gray-400 outline-none bg-transparent"
-                      autoComplete="off"
-                    />
-                    {form.query && (
-                      <button
-                        onClick={() => setForm((f) => ({ ...f, query: "" }))}
-                      >
-                        <XMarkIcon className="w-3.5 h-3.5 text-gray-300 hover:text-gray-500" />
-                      </button>
-                    )}
-                  </div>
-                  {/* Suggestions */}
-                  {showSuggestions && suggestions.length > 0 && (
-                    <div className="absolute top-full left-0 mt-2 w-full bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-30">
-                      {suggestions.map((s) => (
-                        <button
-                          key={s}
-                          onClick={() => {
-                            setForm((f) => ({ ...f, query: s }));
-                            setShowSuggestions(false);
-                          }}
-                          className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-[#C9A96E]/08 flex items-center gap-3 transition-colors border-b border-gray-50 last:border-0"
-                        >
-                          <MapPinIcon className="w-3.5 h-3.5 text-[#C9A96E] shrink-0" />
-                          {s}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Check-in */}
-                <div className="flex-1 px-4 py-4 border-r border-gray-100 search-field">
-                  <label className="block text-[9px] font-bold text-gray-400 uppercase tracking-[0.18em] mb-1.5 items-center gap-1">
-                    <CalendarDaysIcon className="w-3 h-3" /> Check-in
-                  </label>
-                  <input
-                    type="date"
-                    min={today}
-                    value={form.checkIn}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        checkIn: e.target.value,
-                        checkOut:
-                          f.checkOut && f.checkOut <= e.target.value
-                            ? ""
-                            : f.checkOut,
-                      }))
-                    }
-                    className="w-full text-sm font-medium text-gray-800 outline-none bg-transparent cursor-pointer"
+                  Destination
+                </label>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <MapPinIcon
+                    style={{
+                      width: 14,
+                      height: 14,
+                      color: "#C9A96E",
+                      flexShrink: 0,
+                    }}
                   />
-                </div>
-
-                {/* Check-out */}
-                <div className="flex-1 px-4 py-4 border-r border-gray-100 search-field">
-                  <label className="block text-[9px] font-bold text-gray-400 uppercase tracking-[0.18em] mb-1.5 items-center gap-1">
-                    <CalendarDaysIcon className="w-3 h-3" />
-                    Check-out
-                    {nights > 0 && (
-                      <span className="text-[#C9A96E] ml-1 normal-case font-semibold">
-                        {nights}n
-                      </span>
-                    )}
-                  </label>
                   <input
-                    type="date"
-                    min={form.checkIn || today}
-                    value={form.checkOut}
+                    type="text"
+                    value={form.query}
                     onChange={(e) =>
-                      setForm((f) => ({ ...f, checkOut: e.target.value }))
-                    }
-                    className="w-full text-sm font-medium text-gray-800 outline-none bg-transparent cursor-pointer"
-                  />
-                </div>
-
-                {/* Guests */}
-                <div className="w-28 px-4 py-4 border-r border-gray-100 search-field">
-                  <label className="block text-[9px] font-bold text-gray-400 uppercase tracking-[0.18em] mb-1.5 items-center gap-1">
-                    <UserGroupIcon className="w-3 h-3" /> Guests
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="20"
-                    value={form.guests}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, guests: e.target.value }))
+                      setForm((f) => ({ ...f, query: e.target.value }))
                     }
                     onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                    placeholder="Any"
-                    className="w-full text-sm font-medium text-gray-800 placeholder:text-gray-400 outline-none bg-transparent"
+                    onFocus={() =>
+                      suggestions.length > 0 && setShowSuggestions(true)
+                    }
+                    placeholder="City, country or style…"
+                    autoComplete="off"
+                    style={{ ...inputStyle }}
                   />
-                </div>
-
-                {/* Search button */}
-                <div className="px-3 py-3 flex items-center">
-                  <button
-                    onClick={handleSearch}
-                    disabled={isSearching}
-                    className="bg-[#C9A96E] disabled:opacity-70 text-white px-5 py-3.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-[#b8935a] hover:scale-105 active:scale-95 transition-all shadow-lg shadow-[#C9A96E]/40 whitespace-nowrap"
-                  >
-                    {isSearching ? (
-                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    ) : (
-                      <MagnifyingGlassIcon className="w-4 h-4" />
-                    )}
-                    {isSearching ? "Searching…" : "Search"}
-                  </button>
-                </div>
-              </div>
-
-              {/* Mobile: stacked card */}
-              <div className="sm:hidden bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl shadow-black/30 border border-white/20 overflow-hidden">
-                {/* Location row */}
-                <div
-                  ref={suggestionRef}
-                  className="relative px-4 pt-4 pb-3 border-b border-gray-100"
-                >
-                  <label className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">
-                    Where to?
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <MapPinIcon className="w-4 h-4 text-[#C9A96E] shrink-0" />
-                    <input
-                      type="text"
-                      value={form.query}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, query: e.target.value }))
-                      }
-                      onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                      onFocus={() =>
-                        suggestions.length > 0 && setShowSuggestions(true)
-                      }
-                      placeholder="City, country, or style…"
-                      className="flex-1 text-sm font-medium text-gray-800 placeholder:text-gray-400 outline-none bg-transparent"
-                      autoComplete="off"
-                    />
-                    {form.query && (
-                      <button
-                        onClick={() => setForm((f) => ({ ...f, query: "" }))}
-                      >
-                        <XMarkIcon className="w-4 h-4 text-gray-300" />
-                      </button>
-                    )}
-                  </div>
-                  {showSuggestions && suggestions.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-30">
-                      {suggestions.map((s) => (
-                        <button
-                          key={s}
-                          onClick={() => {
-                            setForm((f) => ({ ...f, query: s }));
-                            setShowSuggestions(false);
-                          }}
-                          className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-[#C9A96E]/08 flex items-center gap-3 border-b border-gray-50 last:border-0"
-                        >
-                          <MapPinIcon className="w-3.5 h-3.5 text-[#C9A96E] shrink-0" />
-                          {s}
-                        </button>
-                      ))}
-                    </div>
+                  {form.query && (
+                    <button
+                      onClick={() => setForm((f) => ({ ...f, query: "" }))}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        padding: 0,
+                        lineHeight: 0,
+                      }}
+                    >
+                      <XMarkIcon
+                        style={{
+                          width: 13,
+                          height: 13,
+                          color: "rgba(245,240,232,0.3)",
+                        }}
+                      />
+                    </button>
                   )}
                 </div>
-
-                {/* Date + Guests row */}
-                <div className="grid grid-cols-3 divide-x divide-gray-100">
-                  <div className="px-3 py-3">
-                    <label className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">
-                      Check-in
-                    </label>
-                    <input
-                      type="date"
-                      min={today}
-                      value={form.checkIn}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...f,
-                          checkIn: e.target.value,
-                          checkOut:
-                            f.checkOut && f.checkOut <= e.target.value
-                              ? ""
-                              : f.checkOut,
-                        }))
-                      }
-                      className="w-full text-xs font-medium text-gray-800 outline-none bg-transparent cursor-pointer"
-                    />
-                  </div>
-                  <div className="px-3 py-3">
-                    <label className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">
-                      Check-out
-                      {nights > 0 && (
-                        <span className="text-[#C9A96E] ml-1">·{nights}n</span>
-                      )}
-                    </label>
-                    <input
-                      type="date"
-                      min={form.checkIn || today}
-                      value={form.checkOut}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, checkOut: e.target.value }))
-                      }
-                      className="w-full text-xs font-medium text-gray-800 outline-none bg-transparent cursor-pointer"
-                    />
-                  </div>
-                  <div className="px-3 py-3">
-                    <label className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">
-                      Guests
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="20"
-                      value={form.guests}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, guests: e.target.value }))
-                      }
-                      placeholder="Any"
-                      className="w-full text-xs font-medium text-gray-800 placeholder:text-gray-400 outline-none bg-transparent"
-                    />
-                  </div>
-                </div>
-
-                {/* Search button */}
-                <div className="px-4 pb-4 pt-3 border-t border-gray-100">
-                  <button
-                    onClick={handleSearch}
-                    disabled={isSearching}
-                    className="w-full bg-[#C9A96E] disabled:opacity-70 text-white py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-[#b8935a] active:scale-95 transition-all shadow-lg shadow-[#C9A96E]/30"
+                {showSuggestions && suggestions.length > 0 && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "calc(100% + 10px)",
+                      left: 0,
+                      zIndex: 40,
+                      background: "#1A1814",
+                      border: "1px solid rgba(245,240,232,0.12)",
+                      borderRadius: 14,
+                      overflow: "hidden",
+                      minWidth: 260,
+                      boxShadow: "0 16px 48px rgba(0,0,0,0.6)",
+                    }}
                   >
-                    {isSearching ? (
-                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    ) : (
-                      <MagnifyingGlassIcon className="w-4 h-4" />
-                    )}
-                    {isSearching ? "Searching…" : "Search Luxury Stays"}
-                  </button>
-                </div>
-              </div>
-
-              {/* Quick chips */}
-              <div
-                className="flex items-center gap-2 mt-4 justify-center flex-wrap"
-                style={{ animation: "fadeUp 0.6s ease 300ms both" }}
-              >
-                {["Paris", "Bali", "Maldives", "Safari", "Overwater"].map(
-                  (chip) => (
-                    <button
-                      key={chip}
-                      onClick={() => quickSearch(chip)}
-                      className="bg-white/10 hover:bg-white/20 text-white/80 hover:text-white text-xs px-3.5 py-1.5 rounded-full border border-white/20 transition-all backdrop-blur-sm hover:border-[#C9A96E]/50"
-                    >
-                      {chip}
-                    </button>
-                  ),
+                    {suggestions.map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => {
+                          setForm((f) => ({ ...f, query: s }));
+                          setShowSuggestions(false);
+                        }}
+                        style={{
+                          width: "100%",
+                          textAlign: "left",
+                          padding: "12px 16px",
+                          fontSize: 13,
+                          color: "rgba(245,240,232,0.7)",
+                          background: "none",
+                          border: "none",
+                          borderBottom: "1px solid rgba(245,240,232,0.06)",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          transition: "background 0.15s, color 0.15s",
+                        }}
+                        onMouseEnter={(e) => {
+                          (e.currentTarget as HTMLElement).style.background =
+                            "rgba(201,169,110,0.08)";
+                          (e.currentTarget as HTMLElement).style.color =
+                            "#F5F0E8";
+                        }}
+                        onMouseLeave={(e) => {
+                          (e.currentTarget as HTMLElement).style.background =
+                            "none";
+                          (e.currentTarget as HTMLElement).style.color =
+                            "rgba(245,240,232,0.7)";
+                        }}
+                      >
+                        <MapPinIcon
+                          style={{
+                            width: 13,
+                            height: 13,
+                            color: "#C9A96E",
+                            flexShrink: 0,
+                          }}
+                        />
+                        {s}
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
+
+              {/* Check-in */}
+              <div
+                className="field-wrap"
+                style={{
+                  padding: "18px 18px",
+                  borderRight: "1px solid rgba(245,240,232,0.08)",
+                }}
+              >
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: 9,
+                    fontWeight: 700,
+                    letterSpacing: "0.2em",
+                    color: "rgba(245,240,232,0.3)",
+                    textTransform: "uppercase",
+                    marginBottom: 7,
+                  }}
+                >
+                  Check-in
+                </label>
+                <input
+                  type="date"
+                  min={today}
+                  value={form.checkIn}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      checkIn: e.target.value,
+                      checkOut:
+                        f.checkOut && f.checkOut <= e.target.value
+                          ? ""
+                          : f.checkOut,
+                    }))
+                  }
+                  style={{ ...inputStyle, fontSize: 12 }}
+                />
+              </div>
+
+              {/* Check-out */}
+              <div
+                className="field-wrap"
+                style={{
+                  padding: "18px 18px",
+                  borderRight: "1px solid rgba(245,240,232,0.08)",
+                }}
+              >
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: 9,
+                    fontWeight: 700,
+                    letterSpacing: "0.2em",
+                    color: "rgba(245,240,232,0.3)",
+                    textTransform: "uppercase",
+                    marginBottom: 7,
+                  }}
+                >
+                  Check-out
+                  {nights > 0 && (
+                    <span
+                      style={{
+                        color: "#C9A96E",
+                        marginLeft: 6,
+                        fontWeight: 700,
+                        textTransform: "none",
+                      }}
+                    >
+                      {nights}n
+                    </span>
+                  )}
+                </label>
+                <input
+                  type="date"
+                  min={form.checkIn || today}
+                  value={form.checkOut}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, checkOut: e.target.value }))
+                  }
+                  style={{ ...inputStyle, fontSize: 12 }}
+                />
+              </div>
+
+              {/* Guests */}
+              <div
+                className="field-wrap"
+                style={{
+                  padding: "18px 16px",
+                  borderRight: "1px solid rgba(245,240,232,0.08)",
+                }}
+              >
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: 9,
+                    fontWeight: 700,
+                    letterSpacing: "0.2em",
+                    color: "rgba(245,240,232,0.3)",
+                    textTransform: "uppercase",
+                    marginBottom: 7,
+                  }}
+                >
+                  Guests
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="20"
+                  value={form.guests}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, guests: e.target.value }))
+                  }
+                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                  placeholder="Any"
+                  style={{ ...inputStyle, fontSize: 13 }}
+                />
+              </div>
+
+              {/* Button */}
+              <div
+                style={{
+                  padding: "10px 10px 10px 0",
+                  display: "flex",
+                  alignItems: "center",
+                }}
+              >
+                <button
+                  onClick={handleSearch}
+                  disabled={isSearching}
+                  style={{
+                    background: "#C9A96E",
+                    color: "#0F0E0C",
+                    border: "none",
+                    cursor: isSearching ? "not-allowed" : "pointer",
+                    fontWeight: 700,
+                    fontSize: 13,
+                    padding: "0 26px",
+                    height: "100%",
+                    minHeight: 52,
+                    borderRadius: 12,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    letterSpacing: "0.04em",
+                    transition: "background 0.2s",
+                    opacity: isSearching ? 0.75 : 1,
+                    whiteSpace: "nowrap",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSearching)
+                      (e.currentTarget as HTMLElement).style.background =
+                        "#DFC08A";
+                  }}
+                  onMouseLeave={(e) =>
+                    ((e.currentTarget as HTMLElement).style.background =
+                      "#C9A96E")
+                  }
+                >
+                  {isSearching ? (
+                    <>
+                      <span
+                        style={{
+                          width: 14,
+                          height: 14,
+                          border: "2px solid rgba(0,0,0,0.2)",
+                          borderTopColor: "#0F0E0C",
+                          borderRadius: "50%",
+                          animation: "spin 0.7s linear infinite",
+                          display: "inline-block",
+                        }}
+                      />{" "}
+                      Searching
+                    </>
+                  ) : (
+                    <>
+                      <MagnifyingGlassIcon style={{ width: 15, height: 15 }} />{" "}
+                      Search
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Mobile stacked */}
+            <div
+              className="flex sm:hidden flex-col"
+              style={{
+                background: "#141210",
+                border: "1px solid rgba(245,240,232,0.1)",
+                borderRadius: 18,
+                overflow: "hidden",
+                boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
+              }}
+            >
+              <div
+                ref={suggestionRef}
+                style={{
+                  position: "relative",
+                  padding: "16px 18px",
+                  borderBottom: "1px solid rgba(245,240,232,0.07)",
+                }}
+              >
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: 9,
+                    fontWeight: 700,
+                    letterSpacing: "0.2em",
+                    color: "rgba(245,240,232,0.3)",
+                    textTransform: "uppercase",
+                    marginBottom: 7,
+                  }}
+                >
+                  Destination
+                </label>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <MapPinIcon
+                    style={{
+                      width: 14,
+                      height: 14,
+                      color: "#C9A96E",
+                      flexShrink: 0,
+                    }}
+                  />
+                  <input
+                    type="text"
+                    value={form.query}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, query: e.target.value }))
+                    }
+                    onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                    onFocus={() =>
+                      suggestions.length > 0 && setShowSuggestions(true)
+                    }
+                    placeholder="City, country or style…"
+                    autoComplete="off"
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
+                </div>
+                {showSuggestions && suggestions.length > 0 && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "100%",
+                      left: 0,
+                      right: 0,
+                      zIndex: 40,
+                      background: "#1A1814",
+                      border: "1px solid rgba(245,240,232,0.1)",
+                      borderRadius: "0 0 14px 14px",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {suggestions.map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => {
+                          setForm((f) => ({ ...f, query: s }));
+                          setShowSuggestions(false);
+                        }}
+                        style={{
+                          width: "100%",
+                          textAlign: "left",
+                          padding: "12px 18px",
+                          fontSize: 13,
+                          color: "rgba(245,240,232,0.7)",
+                          background: "none",
+                          border: "none",
+                          borderBottom: "1px solid rgba(245,240,232,0.05)",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                        }}
+                      >
+                        <MapPinIcon
+                          style={{
+                            width: 13,
+                            height: 13,
+                            color: "#C9A96E",
+                            flexShrink: 0,
+                          }}
+                        />
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr 1fr",
+                  borderBottom: "1px solid rgba(245,240,232,0.07)",
+                }}
+              >
+                {[
+                  {
+                    label: "Check-in",
+                    type: "date",
+                    key: "checkIn",
+                    min: today,
+                    placeholder: "",
+                  },
+                  {
+                    label: "Check-out",
+                    type: "date",
+                    key: "checkOut",
+                    min: form.checkIn || today,
+                    placeholder: "",
+                  },
+                  {
+                    label: "Guests",
+                    type: "number",
+                    key: "guests",
+                    min: "1",
+                    placeholder: "Any",
+                  },
+                ].map(({ label, type, key, min, placeholder }, i) => (
+                  <div
+                    key={key}
+                    style={{
+                      padding: "14px 14px",
+                      borderRight:
+                        i < 2 ? "1px solid rgba(245,240,232,0.07)" : "none",
+                    }}
+                  >
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: 8,
+                        fontWeight: 700,
+                        letterSpacing: "0.18em",
+                        color: "rgba(245,240,232,0.3)",
+                        textTransform: "uppercase",
+                        marginBottom: 6,
+                      }}
+                    >
+                      {label}
+                    </label>
+                    <input
+                      type={type}
+                      min={min}
+                      value={form[key as keyof SearchState]}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, [key]: e.target.value }))
+                      }
+                      placeholder={placeholder}
+                      style={{ ...inputStyle, fontSize: 12 }}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ padding: "14px 16px" }}>
+                <button
+                  onClick={handleSearch}
+                  disabled={isSearching}
+                  style={{
+                    width: "100%",
+                    background: "#C9A96E",
+                    color: "#0F0E0C",
+                    border: "none",
+                    cursor: "pointer",
+                    fontWeight: 700,
+                    fontSize: 14,
+                    padding: "14px 0",
+                    borderRadius: 12,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                  }}
+                >
+                  {isSearching ? (
+                    <>
+                      <span
+                        style={{
+                          width: 14,
+                          height: 14,
+                          border: "2px solid rgba(0,0,0,0.2)",
+                          borderTopColor: "#0F0E0C",
+                          borderRadius: "50%",
+                          animation: "spin 0.7s linear infinite",
+                          display: "inline-block",
+                        }}
+                      />{" "}
+                      Searching…
+                    </>
+                  ) : (
+                    <>
+                      <MagnifyingGlassIcon style={{ width: 15, height: 15 }} />{" "}
+                      Search Luxury Stays
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Quick chips */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                marginTop: 20,
+                justifyContent: "center",
+                flexWrap: "wrap",
+                animation: "fadeUp 0.6s ease 320ms both",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 11,
+                  color: "rgba(245,240,232,0.25)",
+                  letterSpacing: "0.1em",
+                }}
+              >
+                Explore
+              </span>
+              {["Paris", "Bali", "Maldives", "Safari", "Overwater"].map(
+                (chip) => (
+                  <button
+                    key={chip}
+                    onClick={() => quickSearch(chip)}
+                    style={{
+                      background: "rgba(245,240,232,0.05)",
+                      color: "rgba(245,240,232,0.55)",
+                      border: "1px solid rgba(245,240,232,0.1)",
+                      fontSize: 12,
+                      padding: "6px 16px",
+                      borderRadius: 99,
+                      cursor: "pointer",
+                      transition: "all 0.2s",
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.borderColor =
+                        "rgba(201,169,110,0.4)";
+                      (e.currentTarget as HTMLElement).style.color = "#C9A96E";
+                      (e.currentTarget as HTMLElement).style.background =
+                        "rgba(201,169,110,0.07)";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.borderColor =
+                        "rgba(245,240,232,0.1)";
+                      (e.currentTarget as HTMLElement).style.color =
+                        "rgba(245,240,232,0.55)";
+                      (e.currentTarget as HTMLElement).style.background =
+                        "rgba(245,240,232,0.05)";
+                    }}
+                  >
+                    {chip}
+                  </button>
+                ),
+              )}
             </div>
           </div>
-
-          {/* ── BOTTOM STATS ── */}
-          <div
-            className="flex items-center justify-center gap-6 sm:gap-10 md:gap-16 pb-6 sm:pb-8 pt-4 text-white/50 text-xs px-4"
-            style={{ animation: "fadeUp 0.6s ease 500ms both" }}
-          >
-            {[
-              { value: "500+", label: "Properties" },
-              { value: "4.9★", label: "Avg Rating" },
-              { value: "24/7", label: "Concierge" },
-              { value: "50+", label: "Countries" },
-            ].map(({ value, label }) => (
-              <div key={label} className="flex flex-col items-center gap-0.5">
-                <span className="text-white font-semibold text-sm sm:text-base">
-                  {value}
-                </span>
-                <span className="text-[10px] sm:text-xs">{label}</span>
-              </div>
-            ))}
-          </div>
         </div>
+
+        {/* ── TRUST STRIP ── */}
+        <div
+          style={{
+            borderTop: "1px solid rgba(245,240,232,0.07)",
+            padding: "24px 48px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 0,
+          }}
+        >
+          {[
+            { value: "500+", label: "Curated Properties" },
+            { value: "4.9★", label: "Average Rating" },
+            { value: "24/7", label: "Concierge Support" },
+            { value: "50+", label: "Countries" },
+          ].map(({ value, label }, i) => (
+            <div key={label} style={{ display: "flex", alignItems: "center" }}>
+              {i > 0 && (
+                <div
+                  style={{
+                    width: 1,
+                    height: 28,
+                    background: "rgba(245,240,232,0.08)",
+                    margin: "0 32px",
+                  }}
+                />
+              )}
+              <div style={{ textAlign: "center" }}>
+                <p
+                  style={{
+                    fontFamily: "Cormorant Garamond, serif",
+                    fontSize: 22,
+                    fontWeight: 600,
+                    color: "#F5F0E8",
+                    lineHeight: 1,
+                  }}
+                >
+                  {value}
+                </p>
+                <p
+                  style={{
+                    fontSize: 10,
+                    color: "rgba(245,240,232,0.3)",
+                    letterSpacing: "0.15em",
+                    textTransform: "uppercase",
+                    marginTop: 5,
+                    fontWeight: 600,
+                  }}
+                >
+                  {label}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </section>
     </>
   );
