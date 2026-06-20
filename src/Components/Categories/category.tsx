@@ -678,17 +678,19 @@ const CategorySection = ({
     >
       {/* ── Scoped styles ── */}
       <style>{`
-        .cs-desktop-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          grid-template-rows: auto auto;
-          gap: 2px;
-          background: #E8E4DC;
-          border: 1px solid #E8E4DC;
-          border-radius: 2px;
-        }
-        .cs-desktop-grid .cs-wide {
-          grid-column: span 2;
+        @media (min-width: 1024px) {
+          .cs-desktop-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: auto auto;
+            gap: 2px;
+            background: #E8E4DC;
+            border: 1px solid #E8E4DC;
+            border-radius: 2px;
+          }
+          .cs-desktop-grid .cs-wide {
+            grid-column: span 2;
+          }
         }
       `}</style>
 
