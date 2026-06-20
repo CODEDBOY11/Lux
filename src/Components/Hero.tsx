@@ -1,10 +1,12 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   MagnifyingGlassIcon,
   MapPinIcon,
   XMarkIcon,
   CalendarDaysIcon,
   UserGroupIcon,
+  Bars3Icon,
+  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import { StarIcon, FireIcon } from "@heroicons/react/24/solid";
 import logo from "../../public/logo.svg";
@@ -29,11 +31,13 @@ const T = {
   border: "#E8E5E0",
   text: "#1A1814",
   sub: "#6B6560",
-  muted: "#A09890",
+  muted: "#6F6862", // darkened from #A09890 for WCAG AA contrast on white
   gold: "#C9A96E",
   goldDim: "rgba(201,169,110,0.12)",
   goldBorder: "rgba(201,169,110,0.28)",
   goldHover: "#B8935A",
+  danger: "#B3463F",
+  dangerDim: "rgba(179,70,63,0.08)",
 };
 
 /* ─── Hotel Card ─────────────────────────────────────── */
@@ -79,6 +83,7 @@ const HotelCard = ({
         <img
           src={hotel.thumbnail}
           alt={hotel.name}
+          loading="lazy"
           style={{
             width: "100%",
             height: "100%",
@@ -140,7 +145,7 @@ const HotelCard = ({
             <FireIcon style={{ width: 9, height: 9 }} /> Featured
           </span>
         )}
-        {hotel.rating > 0 && (
+        {hotel.rating > 0 ? (
           <div
             style={{
               position: "absolute",
@@ -165,6 +170,23 @@ const HotelCard = ({
                 ({hotel.reviewCount})
               </span>
             )}
+          </div>
+        ) : (
+          <div
+            style={{
+              position: "absolute",
+              bottom: 12,
+              left: 12,
+              background: "rgba(255,255,255,.9)",
+              backdropFilter: "blur(8px)",
+              padding: "4px 10px",
+              borderRadius: 99,
+              border: `1px solid ${T.border}`,
+            }}
+          >
+            <span style={{ color: T.muted, fontSize: 10, fontWeight: 600 }}>
+              New listing
+            </span>
           </div>
         )}
       </div>
@@ -262,9 +284,10 @@ const HotelCard = ({
             justifyContent: "space-between",
             borderTop: `1px solid ${T.border}`,
             paddingTop: 14,
+            gap: 10,
           }}
         >
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
               <span
                 style={{
@@ -287,6 +310,7 @@ const HotelCard = ({
           <button
             type="button"
             onClick={() => onBook?.(hotel)}
+            aria-label={`Reserve ${hotel.name}`}
             style={{
               background: T.gold,
               color: T.white,
@@ -299,6 +323,7 @@ const HotelCard = ({
               letterSpacing: ".03em",
               transition: "background .18s, transform .15s",
               boxShadow: "0 4px 14px rgba(201,169,110,.3)",
+              flexShrink: 0,
             }}
             onMouseEnter={(e) => {
               (e.currentTarget as HTMLElement).style.background = T.goldHover;
@@ -323,267 +348,373 @@ const ResultsPanel = ({
   nights,
   query,
   loading,
+  error,
   onClose,
   onBook,
+  onRetry,
 }: {
   results: Hotel[];
   nights: number;
   query: string;
   loading: boolean;
+  error: boolean;
   onClose: () => void;
   onBook?: (h: Hotel) => void;
-}) => (
-  <div
-    style={{
-      position: "fixed",
-      inset: 0,
-      zIndex: 50,
-      display: "flex",
-      alignItems: "flex-end",
-      justifyContent: "center",
-    }}
-  >
+  onRetry: () => void;
+}) => {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Escape-to-close + basic focus handling for accessibility
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    panelRef.current?.focus();
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Search results"
       style={{
-        position: "absolute",
+        position: "fixed",
         inset: 0,
-        background: "rgba(26,24,20,.55)",
-        backdropFilter: "blur(6px)",
-      }}
-      onClick={onClose}
-    />
-    <div
-      style={{
-        position: "relative",
-        zIndex: 10,
-        background: T.surface,
-        border: `1px solid ${T.border}`,
-        width: "100%",
-        maxHeight: "92dvh",
+        zIndex: 50,
         display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        borderRadius: "20px 20px 0 0",
+        alignItems: "flex-end",
+        justifyContent: "center",
       }}
-      className="sm:max-w-2xl md:max-w-4xl lg:max-w-6xl sm:mb-4 sm:rounded-2xl"
     >
-      {/* Drag handle on mobile */}
       <div
         style={{
-          display: "flex",
-          justifyContent: "center",
-          padding: "12px 0 4px",
+          position: "absolute",
+          inset: 0,
+          background: "rgba(26,24,20,.55)",
+          backdropFilter: "blur(6px)",
         }}
+        onClick={onClose}
+      />
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        style={{
+          position: "relative",
+          zIndex: 10,
+          background: T.surface,
+          border: `1px solid ${T.border}`,
+          width: "100%",
+          maxHeight: "92dvh",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          borderRadius: "20px 20px 0 0",
+          outline: "none",
+        }}
+        className="sm:max-w-2xl md:max-w-4xl lg:max-w-6xl sm:mb-4 sm:rounded-2xl"
       >
+        {/* Drag handle on mobile */}
         <div
           style={{
-            width: 36,
-            height: 4,
-            borderRadius: 99,
-            background: T.border,
-          }}
-        />
-      </div>
-
-      {/* Header */}
-      <div
-        style={{
-          padding: "12px 20px 16px",
-          background: T.white,
-          borderBottom: `1px solid ${T.border}`,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexShrink: 0,
-        }}
-      >
-        <div>
-          <p
-            style={{
-              fontSize: 9,
-              fontWeight: 700,
-              letterSpacing: ".22em",
-              color: T.gold,
-              textTransform: "uppercase",
-              marginBottom: 3,
-            }}
-          >
-            Results
-          </p>
-          <h2
-            style={{
-              fontFamily: "Cormorant Garamond, serif",
-              color: T.text,
-              fontWeight: 600,
-              fontSize: 20,
-            }}
-          >
-            {loading
-              ? "Searching…"
-              : results.length > 0
-                ? `${results.length} propert${results.length !== 1 ? "ies" : "y"} found`
-                : "No properties matched"}
-          </h2>
-          {query && (
-            <p style={{ color: T.muted, fontSize: 12, marginTop: 2 }}>
-              for "{query}"
-            </p>
-          )}
-        </div>
-        <button
-          onClick={onClose}
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: "50%",
-            background: T.surface,
-            border: `1px solid ${T.border}`,
-            cursor: "pointer",
             display: "flex",
-            alignItems: "center",
             justifyContent: "center",
-            flexShrink: 0,
+            padding: "12px 0 4px",
           }}
         >
-          <XMarkIcon style={{ width: 15, height: 15, color: T.sub }} />
-        </button>
-      </div>
+          <div
+            style={{
+              width: 36,
+              height: 4,
+              borderRadius: 99,
+              background: T.border,
+            }}
+          />
+        </div>
 
-      {/* Body */}
-      <div style={{ overflowY: "auto", flex: 1, padding: "20px 16px 32px" }}>
-        {loading ? (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-              gap: 16,
-            }}
-          >
-            {[...Array(6)].map((_, i) => (
-              <div
-                key={i}
-                style={{
-                  background: T.white,
-                  borderRadius: 16,
-                  overflow: "hidden",
-                  border: `1px solid ${T.border}`,
-                  animationDelay: `${i * 70}ms`,
-                }}
-                className="animate-pulse"
-              >
-                <div style={{ height: 200, background: T.surface }} />
-                <div
-                  style={{
-                    padding: 20,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 10,
-                  }}
-                >
-                  {[70, 45, 90].map((w) => (
-                    <div
-                      key={w}
-                      style={{
-                        height: 11,
-                        background: T.surface,
-                        borderRadius: 99,
-                        width: `${w}%`,
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : results.length === 0 ? (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              padding: "48px 24px",
-              textAlign: "center",
-            }}
-          >
-            <div
+        {/* Header */}
+        <div
+          style={{
+            padding: "12px 16px 16px",
+            background: T.white,
+            borderBottom: `1px solid ${T.border}`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexShrink: 0,
+            gap: 12,
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <p
               style={{
-                width: 56,
-                height: 56,
-                borderRadius: 14,
-                background: T.goldDim,
-                border: `1px solid ${T.goldBorder}`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                marginBottom: 16,
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: ".22em",
+                color: error ? T.danger : T.gold,
+                textTransform: "uppercase",
+                marginBottom: 3,
               }}
             >
-              <MagnifyingGlassIcon
-                style={{ width: 24, height: 24, color: T.gold }}
-              />
-            </div>
-            <h3
+              {error ? "Something went wrong" : "Results"}
+            </p>
+            <h2
               style={{
                 fontFamily: "Cormorant Garamond, serif",
                 color: T.text,
                 fontWeight: 600,
-                fontSize: 20,
-                marginBottom: 8,
+                fontSize: "clamp(17px, 4vw, 20px)",
               }}
             >
-              No stays matched
-            </h3>
-            <p
-              style={{
-                color: T.sub,
-                fontSize: 13,
-                maxWidth: 280,
-                lineHeight: 1.7,
-                marginBottom: 20,
-              }}
-            >
-              Try a different destination, adjust your dates, or change the
-              guest count.
-            </p>
-            <button
-              onClick={onClose}
-              style={{
-                background: T.gold,
-                color: T.white,
-                border: "none",
-                cursor: "pointer",
-                fontWeight: 700,
-                fontSize: 13,
-                padding: "12px 28px",
-                borderRadius: 10,
-              }}
-            >
-              Clear Search
-            </button>
+              {loading
+                ? "Searching…"
+                : error
+                  ? "Couldn't load results"
+                  : results.length > 0
+                    ? `${results.length} propert${results.length !== 1 ? "ies" : "y"} found`
+                    : "No properties matched"}
+            </h2>
+            {query && !error && (
+              <p
+                style={{
+                  color: T.muted,
+                  fontSize: 12,
+                  marginTop: 2,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                for "{query}"
+              </p>
+            )}
           </div>
-        ) : (
-          <div
+          <button
+            onClick={onClose}
+            aria-label="Close search results"
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-              gap: 16,
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
+              background: T.surface,
+              border: `1px solid ${T.border}`,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
             }}
           >
-            {results.map((h, i) => (
-              <HotelCard
-                key={h.id}
-                hotel={h}
-                nights={nights}
-                onBook={onBook}
-                index={i}
-              />
-            ))}
-          </div>
-        )}
+            <XMarkIcon style={{ width: 15, height: 15, color: T.sub }} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div
+          style={{ overflowY: "auto", flex: 1, padding: "20px 16px 32px" }}
+          aria-live="polite"
+        >
+          {loading ? (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+                gap: 16,
+              }}
+            >
+              {[...Array(6)].map((_, i) => (
+                <div
+                  key={i}
+                  style={{
+                    background: T.white,
+                    borderRadius: 16,
+                    overflow: "hidden",
+                    border: `1px solid ${T.border}`,
+                    animationDelay: `${i * 70}ms`,
+                  }}
+                  className="animate-pulse"
+                >
+                  <div style={{ height: 200, background: T.surface }} />
+                  <div
+                    style={{
+                      padding: 20,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                    }}
+                  >
+                    {[70, 45, 90].map((w) => (
+                      <div
+                        key={w}
+                        style={{
+                          height: 11,
+                          background: T.surface,
+                          borderRadius: 99,
+                          width: `${w}%`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : error ? (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                padding: "48px 24px",
+                textAlign: "center",
+              }}
+            >
+              <div
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 14,
+                  background: T.dangerDim,
+                  border: `1px solid rgba(179,70,63,0.25)`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: 16,
+                }}
+              >
+                <ExclamationTriangleIcon
+                  style={{ width: 24, height: 24, color: T.danger }}
+                />
+              </div>
+              <h3
+                style={{
+                  fontFamily: "Cormorant Garamond, serif",
+                  color: T.text,
+                  fontWeight: 600,
+                  fontSize: 20,
+                  marginBottom: 8,
+                }}
+              >
+                Search didn't go through
+              </h3>
+              <p
+                style={{
+                  color: T.sub,
+                  fontSize: 13,
+                  maxWidth: 280,
+                  lineHeight: 1.7,
+                  marginBottom: 20,
+                }}
+              >
+                That's on us, not your search. Check your connection and try
+                again.
+              </p>
+              <button
+                onClick={onRetry}
+                style={{
+                  background: T.gold,
+                  color: T.white,
+                  border: "none",
+                  cursor: "pointer",
+                  fontWeight: 700,
+                  fontSize: 13,
+                  padding: "12px 28px",
+                  borderRadius: 10,
+                }}
+              >
+                Try Again
+              </button>
+            </div>
+          ) : results.length === 0 ? (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                padding: "48px 24px",
+                textAlign: "center",
+              }}
+            >
+              <div
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 14,
+                  background: T.goldDim,
+                  border: `1px solid ${T.goldBorder}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: 16,
+                }}
+              >
+                <MagnifyingGlassIcon
+                  style={{ width: 24, height: 24, color: T.gold }}
+                />
+              </div>
+              <h3
+                style={{
+                  fontFamily: "Cormorant Garamond, serif",
+                  color: T.text,
+                  fontWeight: 600,
+                  fontSize: 20,
+                  marginBottom: 8,
+                }}
+              >
+                No stays matched
+              </h3>
+              <p
+                style={{
+                  color: T.sub,
+                  fontSize: 13,
+                  maxWidth: 280,
+                  lineHeight: 1.7,
+                  marginBottom: 20,
+                }}
+              >
+                Try a different destination, adjust your dates, or change the
+                guest count.
+              </p>
+              <button
+                onClick={onClose}
+                style={{
+                  background: T.gold,
+                  color: T.white,
+                  border: "none",
+                  cursor: "pointer",
+                  fontWeight: 700,
+                  fontSize: 13,
+                  padding: "12px 28px",
+                  borderRadius: 10,
+                }}
+              >
+                Clear Search
+              </button>
+            </div>
+          ) : (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+                gap: 16,
+              }}
+            >
+              {results.map((h, i) => (
+                <HotelCard
+                  key={h.id}
+                  hotel={h}
+                  nights={nights}
+                  onBook={onBook}
+                  index={i}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 /* ─── Hero ───────────────────────────────────────────── */
 export default function Hero({
@@ -603,14 +734,22 @@ export default function Hero({
   });
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSug, setShowSug] = useState(false);
+  const [activeSugIndex, setActiveSugIndex] = useState(-1);
   const [results, setResults] = useState<Hotel[] | null>(null);
   const [searched, setSearched] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState(false);
   const [audience, setAudience] = useState<"guest" | "host">("guest");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [lastParams, setLastParams] = useState<Partial<SearchParams>>({});
+
   const sugRef = useRef<HTMLDivElement>(null);
   const queryInputRef = useRef<HTMLInputElement>(null);
+  const suggestDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchAbortRef = useRef<AbortController | null>(null);
+  const searchSeqRef = useRef(0);
 
-  const nights = (() => {
+  const nights = useMemo(() => {
     if (!form.checkIn || !form.checkOut) return 0;
     return Math.max(
       0,
@@ -619,18 +758,30 @@ export default function Hero({
           86400000,
       ),
     );
-  })();
+  }, [form.checkIn, form.checkOut]);
 
+  // Debounced suggestions fetch
   useEffect(() => {
+    if (suggestDebounceRef.current) clearTimeout(suggestDebounceRef.current);
+
     if (form.query.length < 1) {
       setSuggestions([]);
       setShowSug(false);
+      setActiveSugIndex(-1);
       return;
     }
-    getLocationSuggestions(form.query).then((s) => {
-      setSuggestions(s);
-      setShowSug(s.length > 0);
-    });
+
+    suggestDebounceRef.current = setTimeout(() => {
+      getLocationSuggestions(form.query).then((s) => {
+        setSuggestions(s);
+        setShowSug(s.length > 0);
+        setActiveSugIndex(-1);
+      });
+    }, 250);
+
+    return () => {
+      if (suggestDebounceRef.current) clearTimeout(suggestDebounceRef.current);
+    };
   }, [form.query]);
 
   useEffect(() => {
@@ -642,30 +793,121 @@ export default function Hero({
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  const doSearch = useCallback(
-    async (override?: Partial<SearchParams>) => {
-      setLoading(true);
-      setSearched(true);
-      setResults(null);
-      try {
-        setResults(
-          await searchHotels({
-            query: form.query.trim() || undefined,
-            checkIn: form.checkIn || undefined,
-            checkOut: form.checkOut || undefined,
-            guests: form.guests ? parseInt(form.guests) : undefined,
-            ...override,
-          }),
-        );
-      } catch {
-        setResults([]);
-      } finally {
+  // Close mobile nav on resize to desktop width
+  useEffect(() => {
+    const onResize = () => {
+      if (window.innerWidth >= 768) setMobileNavOpen(false);
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const runSearch = useCallback(async (params: Partial<SearchParams>) => {
+    // Cancel any in-flight search so stale responses can't overwrite fresh ones
+    searchAbortRef.current?.abort();
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
+    const seq = ++searchSeqRef.current;
+
+    setLoading(true);
+    setSearched(true);
+    setSearchError(false);
+    setResults(null);
+    setLastParams(params);
+
+    try {
+      const data = await searchHotels({
+        ...params,
+        signal: controller.signal,
+      } as SearchParams);
+      if (seq !== searchSeqRef.current) return; // a newer search superseded this one
+      setResults(data);
+    } catch (err) {
+      if (seq !== searchSeqRef.current) return;
+      if ((err as { name?: string })?.name === "AbortError") return;
+      setSearchError(true);
+      setResults([]);
+    } finally {
+      if (seq === searchSeqRef.current) {
         setLoading(false);
         setShowSug(false);
       }
+    }
+  }, []);
+
+  const doSearch = useCallback(
+    (override?: Partial<SearchParams> & { displayQuery?: string }) => {
+      const { displayQuery, ...overrideParams } = override ?? {};
+
+      // Keep the visible input in sync with whatever is actually searched
+      // (fixes chip clicks silently leaving the old query text on screen)
+      if (displayQuery !== undefined) {
+        setForm((f) => ({ ...f, query: displayQuery }));
+      }
+
+      const params: Partial<SearchParams> = {
+        query: (overrideParams.query ?? form.query)?.trim() || undefined,
+        checkIn: form.checkIn || undefined,
+        checkOut: form.checkOut || undefined,
+        guests: form.guests ? parseInt(form.guests, 10) : undefined,
+        ...overrideParams,
+      };
+
+      runSearch(params);
     },
-    [form],
+    [form, runSearch],
   );
+
+  const handleChipClick = (chip: string) => {
+    doSearch({ query: chip, displayQuery: chip });
+  };
+
+  const handleSugSelect = (s: string) => {
+    setForm((f) => ({ ...f, query: s }));
+    setShowSug(false);
+    setActiveSugIndex(-1);
+  };
+
+  const handleQueryKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSug || suggestions.length === 0) {
+      if (e.key === "Enter") doSearch();
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveSugIndex((i) => (i + 1) % suggestions.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveSugIndex((i) => (i <= 0 ? suggestions.length - 1 : i - 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (activeSugIndex >= 0) {
+        const picked = suggestions[activeSugIndex];
+        setForm((f) => ({ ...f, query: picked }));
+        setShowSug(false);
+        setActiveSugIndex(-1);
+        doSearch({ query: picked });
+      } else {
+        setShowSug(false);
+        doSearch();
+      }
+    } else if (e.key === "Escape") {
+      setShowSug(false);
+      setActiveSugIndex(-1);
+    }
+  };
+
+  // Guest count: clamp to a sane range instead of silently accepting anything
+  const handleGuestsChange = (raw: string) => {
+    if (raw === "") {
+      setForm((f) => ({ ...f, guests: "" }));
+      return;
+    }
+    const n = parseInt(raw, 10);
+    if (Number.isNaN(n)) return;
+    const clamped = Math.min(20, Math.max(1, n));
+    setForm((f) => ({ ...f, guests: String(clamped) }));
+  };
 
   const today = new Date().toISOString().split("T")[0];
 
@@ -726,6 +968,10 @@ export default function Hero({
           to   { opacity: 1; transform: translateY(0); }
         }
         @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes slideDown {
+          from { opacity: 0; transform: translateY(-8px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { -webkit-font-smoothing: antialiased; }
         input[type="date"]::-webkit-calendar-picker-indicator { opacity: .4; cursor: pointer; }
@@ -735,6 +981,11 @@ export default function Hero({
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: ${T.border}; border-radius: 99px; }
         .lux-field:focus-within { border-color: ${T.gold} !important; }
+        a, button, input { -webkit-tap-highlight-color: transparent; }
+        button:focus-visible, a:focus-visible, input:focus-visible {
+          outline: 2px solid ${T.gold};
+          outline-offset: 2px;
+        }
         .nav-link {
           color: ${T.sub}; font-size: 13px; font-weight: 500;
           text-decoration: none; transition: color .18s; background: none; border: none; cursor: pointer;
@@ -763,6 +1014,56 @@ export default function Hero({
         }
         .gold-btn:hover { background: ${T.goldHover}; }
         .gold-btn:disabled { opacity: .7; cursor: not-allowed; }
+
+        /* ── Nav: desktop links + mobile menu ── */
+        .desktop-nav-links { display: none; }
+        .nav-auth-desktop { display: none; }
+        .nav-burger { display: flex; }
+        .nav-list-link {
+          color: ${T.sub}; font-size: 13px; font-weight: 500;
+          text-decoration: none; background: none; border: none; cursor: pointer;
+          font-family: inherit; padding: 14px 4px; text-align: left;
+          border-bottom: 1px solid ${T.border}; width: 100%;
+        }
+        @media (min-width: 768px) {
+          .desktop-nav-links { display: flex; }
+          .nav-auth-desktop { display: flex; }
+          .nav-burger { display: none; }
+        }
+
+        /* ── Search panel: stacked on mobile, grid from sm up ── */
+        .search-date-guest-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          grid-template-rows: auto auto;
+        }
+        .search-date-guest-row .field-checkin { border-right: 1px solid ${T.border}; border-bottom: 1px solid ${T.border}; }
+        .search-date-guest-row .field-checkout { border-bottom: 1px solid ${T.border}; }
+        .search-date-guest-row .field-guests { grid-column: 1 / -1; }
+        @media (min-width: 480px) {
+          .search-date-guest-row {
+            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-rows: auto;
+          }
+          .search-date-guest-row .field-checkin { border-bottom: none; }
+          .search-date-guest-row .field-checkout { border-right: 1px solid ${T.border}; border-bottom: none; }
+          .search-date-guest-row .field-guests { grid-column: auto; }
+        }
+
+        .trust-strip-grid {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 12px 0;
+        }
+        @media (min-width: 480px) {
+          .trust-strip-grid { grid-template-columns: repeat(4, 1fr); gap: 0; }
+        }
+        .trust-item { border-right: none; }
+        .trust-item:nth-child(odd) { border-right: 1px solid ${T.border}; }
+        @media (min-width: 480px) {
+          .trust-item:nth-child(odd) { border-right: none; }
+          .trust-item:not(:last-child) { border-right: 1px solid ${T.border}; }
+        }
       `}</style>
 
       {searched && (
@@ -771,11 +1072,15 @@ export default function Hero({
           nights={nights}
           query={form.query}
           loading={loading}
+          error={searchError}
           onClose={() => {
+            searchAbortRef.current?.abort();
             setResults(null);
             setSearched(false);
+            setSearchError(false);
           }}
           onBook={onBook}
+          onRetry={() => runSearch(lastParams)}
         />
       )}
 
@@ -794,7 +1099,7 @@ export default function Hero({
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "0 20px",
+            padding: "0 16px",
             height: 60,
             borderBottom: `1px solid ${T.border}`,
             position: "sticky",
@@ -802,7 +1107,7 @@ export default function Hero({
             background: "rgba(255,255,255,.96)",
             backdropFilter: "blur(12px)",
             zIndex: 30,
-            gap: 12,
+            gap: 8,
           }}
         >
           {/* Logo */}
@@ -813,9 +1118,14 @@ export default function Hero({
               gap: 8,
               cursor: "pointer",
               flexShrink: 0,
+              minWidth: 0,
             }}
           >
-            <img src={logo} alt="LuxStay" style={{ width: 30, height: 30 }} />
+            <img
+              src={logo}
+              alt=""
+              style={{ width: 28, height: 28, flexShrink: 0 }}
+            />
             <span
               style={{
                 fontFamily: "Cormorant Garamond, serif",
@@ -823,22 +1133,22 @@ export default function Hero({
                 fontSize: 17,
                 fontWeight: 600,
                 letterSpacing: ".01em",
+                whiteSpace: "nowrap",
               }}
             >
               LuxStay
             </span>
           </div>
 
-          {/* Desktop links — hidden on mobile */}
+          {/* Desktop links */}
           <div
+            className="desktop-nav-links"
             style={{
-              display: "flex",
               alignItems: "center",
               gap: 24,
               flex: 1,
               justifyContent: "center",
             }}
-            className="hidden md:flex"
           >
             {["Explore", "How it Works", "For Hosts"].map((l) => (
               <a key={l} href="#" className="nav-link">
@@ -847,21 +1157,16 @@ export default function Hero({
             ))}
           </div>
 
-          {/* Auth buttons */}
+          {/* Desktop auth buttons */}
           <div
+            className="nav-auth-desktop"
             style={{
-              display: "flex",
               alignItems: "center",
               gap: 8,
               flexShrink: 0,
             }}
           >
-            <button
-              type="button"
-              onClick={onLogin}
-              className="nav-link"
-              style={{ padding: "0 4px" }}
-            >
+            <button type="button" onClick={onLogin} className="nav-link">
               Sign in
             </button>
             <button
@@ -889,7 +1194,95 @@ export default function Hero({
               List Property
             </button>
           </div>
+
+          {/* Mobile burger */}
+          <button
+            type="button"
+            className="nav-burger"
+            onClick={() => setMobileNavOpen((o) => !o)}
+            aria-label={mobileNavOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileNavOpen}
+            style={{
+              width: 38,
+              height: 38,
+              alignItems: "center",
+              justifyContent: "center",
+              background: "none",
+              border: `1px solid ${T.border}`,
+              borderRadius: 10,
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          >
+            {mobileNavOpen ? (
+              <XMarkIcon style={{ width: 18, height: 18, color: T.text }} />
+            ) : (
+              <Bars3Icon style={{ width: 18, height: 18, color: T.text }} />
+            )}
+          </button>
         </nav>
+
+        {/* Mobile nav drawer */}
+        {mobileNavOpen && (
+          <div
+            style={{
+              position: "sticky",
+              top: 60,
+              zIndex: 29,
+              background: T.white,
+              borderBottom: `1px solid ${T.border}`,
+              padding: "4px 16px 12px",
+              display: "flex",
+              flexDirection: "column",
+              animation: "slideDown .18s ease both",
+              boxShadow: "0 8px 24px rgba(0,0,0,.06)",
+            }}
+            className="md:hidden"
+          >
+            {["Explore", "How it Works", "For Hosts"].map((l) => (
+              <a
+                key={l}
+                href="#"
+                className="nav-list-link"
+                onClick={() => setMobileNavOpen(false)}
+              >
+                {l}
+              </a>
+            ))}
+            <button
+              type="button"
+              className="nav-list-link"
+              onClick={() => {
+                setMobileNavOpen(false);
+                onLogin?.();
+              }}
+            >
+              Sign in
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMobileNavOpen(false);
+                onSignup?.();
+              }}
+              style={{
+                background: T.text,
+                color: T.white,
+                border: "none",
+                cursor: "pointer",
+                fontSize: 13,
+                fontWeight: 600,
+                padding: "12px 16px",
+                borderRadius: 10,
+                letterSpacing: ".02em",
+                fontFamily: "inherit",
+                marginTop: 10,
+              }}
+            >
+              List Property
+            </button>
+          </div>
+        )}
 
         {/* ── HERO BODY ── */}
         <main
@@ -899,7 +1292,7 @@ export default function Hero({
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
-            padding: "40px 20px 48px",
+            padding: "32px 16px 40px",
           }}
         >
           <div style={{ width: "100%", maxWidth: 860 }}>
@@ -912,8 +1305,9 @@ export default function Hero({
                 border: `1px solid ${T.border}`,
                 borderRadius: 99,
                 padding: 4,
-                marginBottom: 28,
+                marginBottom: 24,
                 animation: "fadeUp .4s ease both",
+                maxWidth: "100%",
               }}
             >
               {(["guest", "host"] as const).map((a) => (
@@ -921,6 +1315,7 @@ export default function Hero({
                   key={a}
                   className="audience-btn"
                   onClick={() => setAudience(a)}
+                  aria-pressed={audience === a}
                   style={{
                     background: audience === a ? T.white : "transparent",
                     color: audience === a ? T.text : T.muted,
@@ -972,7 +1367,7 @@ export default function Hero({
             <h1
               style={{
                 fontFamily: "Cormorant Garamond, serif",
-                fontSize: "clamp(38px, 7vw, 76px)",
+                fontSize: "clamp(34px, 9vw, 76px)",
                 fontWeight: 500,
                 lineHeight: 1.08,
                 color: T.text,
@@ -990,7 +1385,7 @@ export default function Hero({
                 fontSize: "clamp(13px, 2.2vw, 15px)",
                 lineHeight: 1.75,
                 maxWidth: 440,
-                marginBottom: 36,
+                marginBottom: 32,
                 animation: "fadeUp .5s ease 120ms both",
               }}
             >
@@ -999,7 +1394,6 @@ export default function Hero({
 
             {/* ── SEARCH PANEL ── */}
             <div style={{ animation: "fadeUp .5s ease 160ms both" }}>
-              {/* Search card — unified for all screen sizes, stacks on mobile */}
               <div
                 style={{
                   background: T.white,
@@ -1010,12 +1404,12 @@ export default function Hero({
                   overflow: "visible",
                 }}
               >
-                {/* Location row — always full width */}
+                {/* Location row */}
                 <div
                   ref={sugRef}
                   className="lux-field"
                   style={{
-                    padding: "14px 18px",
+                    padding: "14px 16px",
                     borderBottom: `1px solid ${T.border}`,
                     borderRadius: "14px 14px 0 0",
                     border: `1.5px solid transparent`,
@@ -1038,21 +1432,27 @@ export default function Hero({
                     <input
                       ref={queryInputRef}
                       type="text"
+                      role="combobox"
+                      aria-expanded={showSug}
+                      aria-autocomplete="list"
+                      aria-controls="destination-suggestions"
+                      aria-label="Destination"
                       value={form.query}
                       onChange={(e) =>
                         setForm((f) => ({ ...f, query: e.target.value }))
                       }
-                      onKeyDown={(e) => e.key === "Enter" && doSearch()}
+                      onKeyDown={handleQueryKeyDown}
                       onFocus={() => suggestions.length > 0 && setShowSug(true)}
                       placeholder="City, country or style…"
                       autoComplete="off"
                       style={{
                         flex: 1,
+                        minWidth: 0,
                         background: "none",
                         border: "none",
                         outline: "none",
                         color: T.text,
-                        fontSize: 14,
+                        fontSize: 16, // 16px avoids iOS Safari auto-zoom on focus
                         fontWeight: 500,
                         fontFamily: "inherit",
                       }}
@@ -1063,11 +1463,12 @@ export default function Hero({
                           setForm((f) => ({ ...f, query: "" }));
                           queryInputRef.current?.focus();
                         }}
+                        aria-label="Clear destination"
                         style={{
                           background: "none",
                           border: "none",
                           cursor: "pointer",
-                          padding: 0,
+                          padding: 4,
                           lineHeight: 0,
                           flexShrink: 0,
                         }}
@@ -1082,6 +1483,8 @@ export default function Hero({
                   {/* Suggestions dropdown */}
                   {showSug && suggestions.length > 0 && (
                     <div
+                      id="destination-suggestions"
+                      role="listbox"
                       style={{
                         position: "absolute",
                         top: "calc(100% + 6px)",
@@ -1093,22 +1496,25 @@ export default function Hero({
                         borderRadius: 14,
                         overflow: "hidden",
                         boxShadow: "0 12px 40px rgba(0,0,0,.12)",
+                        maxHeight: 260,
+                        overflowY: "auto",
                       }}
                     >
-                      {suggestions.map((s) => (
+                      {suggestions.map((s, i) => (
                         <button
                           key={s}
-                          onClick={() => {
-                            setForm((f) => ({ ...f, query: s }));
-                            setShowSug(false);
-                          }}
+                          role="option"
+                          aria-selected={i === activeSugIndex}
+                          onClick={() => handleSugSelect(s)}
+                          onMouseEnter={() => setActiveSugIndex(i)}
                           style={{
                             width: "100%",
                             textAlign: "left",
                             padding: "12px 16px",
                             fontSize: 13,
-                            color: T.sub,
-                            background: "none",
+                            color: i === activeSugIndex ? T.text : T.sub,
+                            background:
+                              i === activeSugIndex ? T.surface : "none",
                             border: "none",
                             borderBottom: `1px solid ${T.border}`,
                             cursor: "pointer",
@@ -1117,18 +1523,6 @@ export default function Hero({
                             gap: 10,
                             transition: "background .14s, color .14s",
                             fontFamily: "inherit",
-                          }}
-                          onMouseEnter={(e) => {
-                            (e.currentTarget as HTMLElement).style.background =
-                              T.surface;
-                            (e.currentTarget as HTMLElement).style.color =
-                              T.text;
-                          }}
-                          onMouseLeave={(e) => {
-                            (e.currentTarget as HTMLElement).style.background =
-                              "none";
-                            (e.currentTarget as HTMLElement).style.color =
-                              T.sub;
                           }}
                         >
                           <MapPinIcon
@@ -1146,20 +1540,15 @@ export default function Hero({
                   )}
                 </div>
 
-                {/* Dates + Guests row */}
+                {/* Dates + Guests — stacks 2x2 on mobile, 1x3 from 480px up */}
                 <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr 1fr",
-                    borderBottom: `1px solid ${T.border}`,
-                  }}
+                  className="search-date-guest-row"
+                  style={{ borderBottom: `1px solid ${T.border}` }}
                 >
-                  {/* Check-in */}
                   <div
-                    className="lux-field"
+                    className="lux-field field-checkin"
                     style={{
                       padding: "13px 16px",
-                      borderRight: `1px solid ${T.border}`,
                       border: `1.5px solid transparent`,
                       transition: "border-color .18s",
                     }}
@@ -1178,6 +1567,7 @@ export default function Hero({
                     </FieldLabel>
                     <input
                       type="date"
+                      aria-label="Check-in date"
                       min={today}
                       value={form.checkIn}
                       onChange={(e) =>
@@ -1195,7 +1585,7 @@ export default function Hero({
                         border: "none",
                         outline: "none",
                         color: form.checkIn ? T.text : T.muted,
-                        fontSize: 12,
+                        fontSize: 13,
                         fontWeight: 500,
                         width: "100%",
                         colorScheme: "light",
@@ -1204,12 +1594,10 @@ export default function Hero({
                     />
                   </div>
 
-                  {/* Check-out */}
                   <div
-                    className="lux-field"
+                    className="lux-field field-checkout"
                     style={{
                       padding: "13px 16px",
-                      borderRight: `1px solid ${T.border}`,
                       border: `1.5px solid transparent`,
                       transition: "border-color .18s",
                     }}
@@ -1240,6 +1628,7 @@ export default function Hero({
                     </FieldLabel>
                     <input
                       type="date"
+                      aria-label="Check-out date"
                       min={form.checkIn || today}
                       value={form.checkOut}
                       onChange={(e) =>
@@ -1250,7 +1639,7 @@ export default function Hero({
                         border: "none",
                         outline: "none",
                         color: form.checkOut ? T.text : T.muted,
-                        fontSize: 12,
+                        fontSize: 13,
                         fontWeight: 500,
                         width: "100%",
                         colorScheme: "light",
@@ -1259,9 +1648,8 @@ export default function Hero({
                     />
                   </div>
 
-                  {/* Guests */}
                   <div
-                    className="lux-field"
+                    className="lux-field field-guests"
                     style={{
                       padding: "13px 16px",
                       border: `1.5px solid transparent`,
@@ -1281,12 +1669,11 @@ export default function Hero({
                     </FieldLabel>
                     <input
                       type="number"
-                      min="1"
-                      max="20"
+                      aria-label="Number of guests"
+                      min={1}
+                      max={20}
                       value={form.guests}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, guests: e.target.value }))
-                      }
+                      onChange={(e) => handleGuestsChange(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && doSearch()}
                       placeholder="Any"
                       style={{
@@ -1294,7 +1681,7 @@ export default function Hero({
                         border: "none",
                         outline: "none",
                         color: T.text,
-                        fontSize: 13,
+                        fontSize: 16, // avoid iOS auto-zoom
                         fontWeight: 500,
                         width: "100%",
                         fontFamily: "inherit",
@@ -1370,7 +1757,7 @@ export default function Hero({
                     <button
                       key={chip}
                       className="chip-btn"
-                      onClick={() => doSearch({ query: chip })}
+                      onClick={() => handleChipClick(chip)}
                     >
                       {chip}
                     </button>
@@ -1383,13 +1770,11 @@ export default function Hero({
 
         {/* ── TRUST STRIP ── */}
         <div
+          className="trust-strip-grid"
           style={{
             borderTop: `1px solid ${T.border}`,
             background: T.surface,
-            padding: "20px 20px",
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: 0,
+            padding: "20px 16px",
           }}
         >
           {[
@@ -1397,14 +1782,11 @@ export default function Hero({
             { v: "4.9★", l: "Avg Rating" },
             { v: "24/7", l: "Support" },
             { v: "50+", l: "Countries" },
-          ].map(({ v, l }, i) => (
+          ].map(({ v, l }) => (
             <div
               key={l}
-              style={{
-                textAlign: "center",
-                padding: "4px 8px",
-                borderRight: i < 3 ? `1px solid ${T.border}` : "none",
-              }}
+              className="trust-item"
+              style={{ textAlign: "center", padding: "4px 8px" }}
             >
               <p
                 style={{
