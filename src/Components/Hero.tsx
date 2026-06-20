@@ -1100,7 +1100,7 @@ export default function Hero({
             alignItems: "center",
             justifyContent: "space-between",
             padding: "0 16px",
-            height: 60,
+            height: 72,
             borderBottom: `1px solid ${T.border}`,
             position: "sticky",
             top: 0,
@@ -1124,7 +1124,7 @@ export default function Hero({
             <img
               src={logo}
               alt=""
-              style={{ width: 38, height: 38, flexShrink: 0 }}
+              style={{ width: 50, height: 50, flexShrink: 0 }}
             />
             <span
               style={{
@@ -1227,7 +1227,7 @@ export default function Hero({
           <div
             style={{
               position: "sticky",
-              top: 60,
+              top: 72,
               zIndex: 29,
               background: T.white,
               borderBottom: `1px solid ${T.border}`,
