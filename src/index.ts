@@ -962,6 +962,13 @@ export const ReviewsDB = {
       .select()
       .single();
     if (error) throw new Error(error.message);
+    await NotificationsDB.create({
+      userId: data.hostId,
+      type: "review",
+      title: `New ${data.rating}★ review`,
+      body: `${data.guestName} left a review: "${data.body.slice(0, 80)}"`,
+      link: "/dashboard?tab=reviews",
+    });
     return toReview(row);
   },
 
@@ -1135,19 +1142,34 @@ export const MessagesDB = {
     const unreadCol =
       data.senderRole === "host" ? "unread_guest" : "unread_host";
 
-    await supabase
+    const { data: conv } = await supabase
       .from("conversations")
       .update({
         last_message: data.body,
         last_at: new Date().toISOString(),
       })
-      .eq("id", data.conversationId);
+      .eq("id", data.conversationId)
+      .select()
+      .single();
 
     // 3. Increment the correct unread counter via RPC
     await supabase.rpc("increment_unread", {
       conv_id: data.conversationId,
       col: unreadCol,
     });
+
+    // 4. Notify the OTHER participant
+    if (conv) {
+      const recipientId =
+        data.senderRole === "host" ? conv.guest_id : conv.host_id;
+      await NotificationsDB.create({
+        userId: recipientId,
+        type: "message",
+        title: `New message from ${data.senderName}`,
+        body: data.body.slice(0, 100),
+        link: "/account?tab=messages",
+      });
+    }
 
     return toMessage(row);
   },
@@ -1609,7 +1631,7 @@ function toWithdrawal(r: any): WithdrawalRequest {
    PLATFORM ADMIN USER ID
    Replace this with your actual admin user id from Supabase.
 ───────────────────────────────────────────────────────────── */
-export const PLATFORM_ADMIN_ID = "ac5dfecb-537c-47a1-9f60-2f2c443268f3";
+export const PLATFORM_ADMIN_ID = "7d597621-1416-4c1a-be9c-582dd68c5270";
 export const PLATFORM_FEE_PCT = 0.1; // 10%
 
 /* ─────────────────────────────────────────────────────────────
@@ -1744,7 +1766,7 @@ export const WalletDB = {
   },
 
   async approveWithdrawal(id: string, adminId: string): Promise<void> {
-    const { error } = await supabase
+    const { data: wr, error } = await supabase
       .from("withdrawal_requests")
       .update({
         status: "approved",
@@ -1752,8 +1774,20 @@ export const WalletDB = {
         reviewed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .eq("id", id);
+      .eq("id", id)
+      .select()
+      .single();
     if (error) throw new Error(error.message);
+
+    if (wr) {
+      await NotificationsDB.create({
+        userId: wr.host_id,
+        type: "withdrawal",
+        title: "Withdrawal approved",
+        body: `₦${Number(wr.amount).toLocaleString()} has been sent to ${wr.bank_name} — ${wr.account_number}.`,
+        link: "/dashboard?tab=earnings",
+      });
+    }
   },
 
   async rejectWithdrawal(
@@ -1771,7 +1805,7 @@ export const WalletDB = {
     });
     if (refundErr) throw new Error(refundErr.message);
 
-    const { error } = await supabase
+    const { data: wr, error } = await supabase
       .from("withdrawal_requests")
       .update({
         status: "rejected",
@@ -1780,7 +1814,141 @@ export const WalletDB = {
         reviewed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .eq("id", id);
+      .eq("id", id)
+      .select()
+      .single();
     if (error) throw new Error(error.message);
+
+    if (wr) {
+      await NotificationsDB.create({
+        userId: wr.host_id,
+        type: "withdrawal",
+        title: "Withdrawal rejected",
+        body: `₦${Number(wr.amount).toLocaleString()} has been refunded to your wallet.`,
+        link: "/dashboard?tab=earnings",
+      });
+    }
+  },
+};
+/* ─────────────────────────────────────────────────────────────
+   NOTIFICATIONS
+───────────────────────────────────────────────────────────── */
+
+export type NotificationType =
+  | "message"
+  | "booking_confirmed"
+  | "payment"
+  | "review"
+  | "withdrawal";
+
+export interface AppNotification {
+  id: string;
+  userId: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  link?: string;
+  read: boolean;
+  createdAt: string;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toNotification(r: any): AppNotification {
+  return {
+    id: r.id,
+    userId: r.user_id,
+    type: r.type,
+    title: r.title,
+    body: r.body ?? "",
+    link: r.link ?? undefined,
+    read: r.read ?? false,
+    createdAt: r.created_at,
+  };
+}
+
+export const NotificationsDB = {
+  /** Create a notification for a user. Call this wherever an event happens
+   *  that the user should be told about (message sent, booking confirmed,
+   *  payment received, review left, withdrawal processed). */
+  async create(data: {
+    userId: string;
+    type: NotificationType;
+    title: string;
+    body?: string;
+    link?: string;
+  }): Promise<void> {
+    const { error } = await supabase.from("notifications").insert({
+      user_id: data.userId,
+      type: data.type,
+      title: data.title,
+      body: data.body ?? "",
+      link: data.link ?? null,
+    });
+    if (error) console.error("NotificationsDB.create:", error.message);
+  },
+
+  /** Most recent notifications for a user, newest first. */
+  async byUser(userId: string, limit = 20): Promise<AppNotification[]> {
+    const { data, error } = await supabase
+      .from("notifications")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) {
+      console.error("NotificationsDB.byUser:", error.message);
+      return [];
+    }
+    return (data ?? []).map(toNotification);
+  },
+
+  /** Count of unread notifications for a user. */
+  async unreadCount(userId: string): Promise<number> {
+    const { count, error } = await supabase
+      .from("notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("read", false);
+    if (error) {
+      console.error("NotificationsDB.unreadCount:", error.message);
+      return 0;
+    }
+    return count ?? 0;
+  },
+
+  async markRead(id: string): Promise<void> {
+    const { error } = await supabase
+      .from("notifications")
+      .update({ read: true })
+      .eq("id", id);
+    if (error) console.error("NotificationsDB.markRead:", error.message);
+  },
+
+  async markAllRead(userId: string): Promise<void> {
+    const { error } = await supabase
+      .from("notifications")
+      .update({ read: true })
+      .eq("user_id", userId)
+      .eq("read", false);
+    if (error) console.error("NotificationsDB.markAllRead:", error.message);
+  },
+
+  /** Realtime subscription — fires whenever a new notification is inserted
+   *  for this user. Use this to bump the bell badge live, without polling. */
+  subscribe(userId: string, onInsert: (n: AppNotification) => void) {
+    return supabase
+      .channel(`notifications:${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${userId}`,
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (payload: any) => onInsert(toNotification(payload.new)),
+      )
+      .subscribe();
   },
 };

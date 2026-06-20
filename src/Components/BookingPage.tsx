@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { MessagesDB, type Conversation } from "../index";
+import { MessagesDB, NotificationsDB, type Conversation } from "../index";
 import SEO from "../seo";
 import { WalletDB } from "../index";
 import {
@@ -1594,6 +1594,22 @@ export default function BookingPage({
               booking.totalAmount,
               booking.listingName,
             );
+            await NotificationsDB.create({
+              userId: booking.hostId,
+              type: "booking_confirmed",
+              title: "New booking confirmed!",
+              body: `${booking.guestName} booked ${booking.listingName} for ${booking.nights} night${booking.nights > 1 ? "s" : ""}.`,
+              link: "/dashboard?tab=bookings",
+            });
+            // Notify the guest (payment confirmation)
+            await NotificationsDB.create({
+              userId: booking.guestId,
+              type: "payment",
+              title: "Payment successful",
+              body: `Your booking at ${booking.listingName} is confirmed. Ref: ${response.reference}`,
+              link: `/listing/${booking.listingId}`,
+            });
+
             setBookingRef(response.reference);
             setCompletedBooking(booking);
             setStep("done");
@@ -1625,7 +1641,7 @@ export default function BookingPage({
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  const BookingModal = () => (
+  const bookingModalJSX = (
     <div
       style={{
         position: "fixed",
@@ -2581,7 +2597,7 @@ export default function BookingPage({
           nextImg={nextImg}
         />
       )}
-      {step !== "idle" && <BookingModal />}
+      {step !== "idle" && bookingModalJSX}
       {chatOpen && (
         <ConciergeChat
           hotel={hotel}

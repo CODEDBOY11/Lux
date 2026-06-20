@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   supabase,
   AuthDB,
@@ -35,6 +36,7 @@ import {
   DocumentTextIcon,
   ChatBubbleLeftRightIcon,
   VideoCameraIcon,
+  ArrowRightOnRectangleIcon,
 } from "@heroicons/react/24/outline";
 import { StarIcon as StarSolid } from "@heroicons/react/24/solid";
 
@@ -1999,6 +2001,16 @@ const NAV = [
 ═══════════════════════════════════════════════════════════ */
 export default function AdminDashboard({ adminId }: { adminId: string }) {
   const [view, setView] = useState<AdminView>("overview");
+  const navigate = useNavigate();
+
+  const handleLogout = useCallback(async () => {
+    try {
+      await supabase.auth.signOut();
+      navigate("/");
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+  }, [navigate]);
 
   return (
     <div className="min-h-screen bg-[#0e0d0b] text-[#f5f0e8] flex overflow-hidden">
@@ -2051,6 +2063,16 @@ export default function AdminDashboard({ adminId }: { adminId: string }) {
           })}
         </nav>
         <div className="px-2 pb-4 pt-2 border-t border-[rgba(245,240,232,0.06)]">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium text-[rgba(245,240,232,0.4)] hover:text-red-400 hover:bg-red-500/8 transition-all mb-2"
+          >
+            <ArrowRightOnRectangleIcon
+              style={{ width: 15, height: 15 }}
+              className="shrink-0"
+            />
+            Log Out
+          </button>
           <p className="text-[9px] text-[rgba(245,240,232,0.2)] text-center">
             Admin ID: {adminId.slice(0, 8)}…
           </p>
