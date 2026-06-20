@@ -75,7 +75,7 @@ const SORT_LABELS: Record<SortKey, string> = {
 /* Icon-based amenity map — replaces emoji */
 const AMENITY_ICONS: Record<
   string,
-  React.ComponentType<React.SVGProps<SVGSVGElement>>
+  React.ComponentType<{ className?: string; style?: React.CSSProperties }>
 > = {
   "Free WiFi": WifiIcon,
   "Private Pool": SunIcon,
@@ -95,8 +95,7 @@ const AMENITY_ICONS: Record<
   Concierge: ShieldCheckIcon,
   Netflix: PlayCircleIcon,
 };
-const DEFAULT_AMENITY_ICON: React.ComponentType<React.SVGProps<SVGSVGElement>> =
-  SparklesIcon;
+const DEFAULT_AMENITY_ICON = SparklesIcon;
 
 /* ─────────────── Skeleton card ─────────────── */
 
@@ -141,6 +140,161 @@ const SkeletonCard = () => (
     </div>
   </div>
 );
+
+/* ─────────────── Auth required prompt ─────────────── */
+
+const AuthPromptModal = ({
+  onClose,
+  onLogin,
+  onSignup,
+}: {
+  onClose: () => void;
+  onLogin?: () => void;
+  onSignup?: () => void;
+}) => {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Sign in required"
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 60,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 16,
+      }}
+    >
+      <div
+        onClick={onClose}
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: "rgba(26,24,20,.55)",
+          backdropFilter: "blur(6px)",
+        }}
+      />
+      <div
+        style={{
+          position: "relative",
+          zIndex: 10,
+          background: T.white,
+          border: `1px solid ${T.border}`,
+          borderRadius: 20,
+          width: "100%",
+          maxWidth: 360,
+          padding: "32px 28px 28px",
+          textAlign: "center",
+          boxShadow: "0 24px 64px rgba(0,0,0,.18)",
+        }}
+      >
+        <div
+          style={{
+            width: 52,
+            height: 52,
+            borderRadius: 14,
+            background: T.goldDim,
+            border: `1px solid ${T.goldBorder}`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            margin: "0 auto 16px",
+          }}
+        >
+          <ShieldCheckIcon style={{ width: 24, height: 24, color: T.gold }} />
+        </div>
+        <h3
+          style={{
+            fontFamily: "Cormorant Garamond, serif",
+            fontWeight: 600,
+            fontSize: 22,
+            color: T.text,
+            marginBottom: 8,
+          }}
+        >
+          Sign in to book
+        </h3>
+        <p
+          style={{
+            color: T.muted,
+            fontSize: 13,
+            lineHeight: 1.6,
+            marginBottom: 24,
+          }}
+        >
+          You'll need an account to reserve a stay. Log in if you already have
+          one, or sign up — it only takes a minute.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <button
+            onClick={() => {
+              onClose();
+              onLogin?.();
+            }}
+            style={{
+              background: T.gold,
+              color: T.white,
+              border: "none",
+              cursor: "pointer",
+              fontWeight: 700,
+              fontSize: 13,
+              padding: "12px 0",
+              borderRadius: 11,
+              fontFamily: "inherit",
+              boxShadow: "0 4px 14px rgba(201,169,110,.3)",
+            }}
+          >
+            Log In
+          </button>
+          <button
+            onClick={() => {
+              onClose();
+              onSignup?.();
+            }}
+            style={{
+              background: T.white,
+              color: T.text,
+              border: `1px solid ${T.border}`,
+              cursor: "pointer",
+              fontWeight: 700,
+              fontSize: 13,
+              padding: "12px 0",
+              borderRadius: 11,
+              fontFamily: "inherit",
+            }}
+          >
+            Sign Up
+          </button>
+        </div>
+        <button
+          onClick={onClose}
+          style={{
+            marginTop: 16,
+            background: "none",
+            border: "none",
+            color: T.muted,
+            fontSize: 12,
+            cursor: "pointer",
+            fontFamily: "inherit",
+            textDecoration: "underline",
+          }}
+        >
+          Maybe later
+        </button>
+      </div>
+    </div>
+  );
+};
 
 /* ─────────────── Property card ─────────────── */
 
@@ -588,13 +742,19 @@ const PropertyCard = ({
 interface FeaturedPropertiesProps {
   onBook?: (hotel: Hotel) => void;
   onViewAll?: () => void;
+  onLogin?: () => void;
+  onSignup?: () => void;
   initialLimit?: number;
+  loadMoreStep?: number;
 }
 
 const FeaturedProperties = ({
   onBook,
   onViewAll,
-  initialLimit = 6,
+  onLogin,
+  onSignup,
+  initialLimit = 4,
+  loadMoreStep = 6,
 }: FeaturedPropertiesProps) => {
   const { user, updateUser } = useAuth();
 
@@ -610,6 +770,7 @@ const FeaturedProperties = ({
   );
   const [limit, setLimit] = useState(initialLimit);
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [authPrompt, setAuthPrompt] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
 
   /* Fetch all listings once */
@@ -687,7 +848,10 @@ const FeaturedProperties = ({
   /* Wishlist toggle — persists to Supabase */
   const handleWishlist = useCallback(
     async (id: string) => {
-      if (!user) return;
+      if (!user) {
+        setAuthPrompt(true);
+        return;
+      }
       setWishlist((prev) => {
         const next = new Set(prev);
         next.has(id) ? next.delete(id) : next.add(id);
@@ -698,6 +862,18 @@ const FeaturedProperties = ({
       await updateUser({ wishlist: Array.from(current) });
     },
     [user, updateUser],
+  );
+
+  /* Book click — requires an account; otherwise prompt sign in / sign up */
+  const handleBookClick = useCallback(
+    (hotel: Hotel) => {
+      if (!user) {
+        setAuthPrompt(true);
+        return;
+      }
+      onBook?.(hotel);
+    },
+    [user, onBook],
   );
 
   /* Categories derived from data */
@@ -749,6 +925,19 @@ const FeaturedProperties = ({
         }
         .fp-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .fp-pills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
+        .fp-sort-menu {
+          right: 0;
+          left: auto;
+          width: min(200px, calc(100vw - 32px));
+        }
+        @media (max-width: 480px) {
+          .fp-sort-menu {
+            right: auto;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(220px, calc(100vw - 32px));
+          }
+        }
         button:focus-visible { outline: 2px solid ${T.gold}; outline-offset: 2px; }
       `}</style>
 
@@ -841,11 +1030,10 @@ const FeaturedProperties = ({
               {showSortMenu && (
                 <div
                   role="listbox"
+                  className="fp-sort-menu"
                   style={{
                     position: "absolute",
-                    right: 0,
                     top: "calc(100% + 8px)",
-                    width: 200,
                     background: T.white,
                     border: `1px solid ${T.border}`,
                     borderRadius: 14,
@@ -1074,7 +1262,7 @@ const FeaturedProperties = ({
                   index={i}
                   wishlisted={wishlist.has(hotel.id)}
                   onWishlist={handleWishlist}
-                  onBook={(h) => onBook?.(h)}
+                  onBook={handleBookClick}
                 />
               ))}
             </div>
@@ -1091,7 +1279,7 @@ const FeaturedProperties = ({
             >
               {hasMore && (
                 <button
-                  onClick={() => setLimit((l) => l + initialLimit)}
+                  onClick={() => setLimit((l) => l + loadMoreStep)}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -1142,6 +1330,7 @@ const FeaturedProperties = ({
             }}
           >
             <span
+              onClick={() => onLogin?.()}
               style={{
                 color: T.gold,
                 cursor: "pointer",
@@ -1155,6 +1344,14 @@ const FeaturedProperties = ({
           </p>
         )}
       </div>
+
+      {authPrompt && (
+        <AuthPromptModal
+          onClose={() => setAuthPrompt(false)}
+          onLogin={onLogin}
+          onSignup={onSignup}
+        />
+      )}
     </section>
   );
 };
