@@ -29,9 +29,10 @@ if (!SUPABASE_URL || !SUPABASE_ANON) {
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
   auth: {
-    persistSession: true, // ← don't save to localStorage at all
-    autoRefreshToken: false, // ← don't try to refresh on reload
+    persistSession: true, // ← persist session in localStorage across refreshes
+    autoRefreshToken: true, // ← automatically refresh tokens on page load
     detectSessionInUrl: true, // ← keep this for OAuth callback
+    flowType: "pkce", // ← use PKCE flow for better security
   },
 });
 

@@ -75,13 +75,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
 
   // Re-fetch the current user directly from Supabase + DB, no local cache.
-  const refreshUser = useCallback(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
+  const refreshUser = useCallback(async () => {
+    try {
+      const { data } = await supabase.auth.getUser();
       if (data.user) {
         const profile = await AuthDB.getById(data.user.id);
-        if (profile) setUser(profile);
+        if (profile) {
+          setUser(profile);
+        } else {
+          console.warn("Could not find user profile in DB");
+          setUser(null);
+        }
+      } else {
+        setUser(null);
       }
-    });
+    } catch (err) {
+      console.error("refreshUser error:", err);
+      setUser(null);
+    }
   }, []);
 
   // ── Helper: load Supabase profile and sync into React state ─────────────
@@ -115,9 +126,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     seedDemoData();
 
     // Safety net — never let the spinner hang forever if Supabase is slow
+    // Increased to 10 seconds to allow for slower DB queries
     const timeout = setTimeout(() => {
       setLoading(false);
-    }, 5000);
+    }, 10000);
 
     // ── Listen to Supabase auth state changes ────────────────────────────
     const {
@@ -125,66 +137,72 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log("🔐 Supabase auth event:", event, session?.user?.email);
 
-      if (session?.user) {
-        const profile = await syncUser(session.user);
+      try {
+        if (session?.user) {
+          const profile = await syncUser(session.user);
 
-        if (profile) {
-          const savedRole = localStorage.getItem(
-            OAUTH_ROLE_KEY,
-          ) as UserRole | null;
+          if (profile) {
+            const savedRole = localStorage.getItem(
+              OAUTH_ROLE_KEY,
+            ) as UserRole | null;
 
-          // Only apply savedRole if this is a genuinely new user
-          // (created in the last 10 seconds) who selected a role on the
-          // login/signup page before being redirected to OAuth.
-          const isNewAccount = profile.createdAt
-            ? Date.now() - new Date(profile.createdAt).getTime() < 10_000
-            : false;
+            // Only apply savedRole if this is a genuinely new user
+            // (created in the last 10 seconds) who selected a role on the
+            // login/signup page before being redirected to OAuth.
+            const isNewAccount = profile.createdAt
+              ? Date.now() - new Date(profile.createdAt).getTime() < 10_000
+              : false;
 
-          if (
-            savedRole &&
-            savedRole !== "guest" &&
-            profile.role === "guest" &&
-            isNewAccount
-          ) {
-            const updated = await AuthDB.update(profile.id, {
-              role: savedRole,
-            });
-            if (updated) {
-              localStorage.removeItem(OAUTH_ROLE_KEY);
-              setUser(updated);
-              clearTimeout(timeout);
-              setLoading(false);
-              navigate(roleToPath(updated.role), { replace: true });
-              return;
-            }
-          }
-
-          // Existing user — always use their role from DB, ignore savedRole
-          localStorage.removeItem(OAUTH_ROLE_KEY);
-          clearTimeout(timeout);
-          setLoading(false);
-
-          if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
-            const currentPath = window.location.pathname;
-            const targetPath = roleToPath(profile.role);
             if (
-              currentPath === "/login" ||
-              currentPath === "/signup" ||
-              currentPath === "/auth/callback"
+              savedRole &&
+              savedRole !== "guest" &&
+              profile.role === "guest" &&
+              isNewAccount
             ) {
-              navigate(targetPath, { replace: true });
+              const updated = await AuthDB.update(profile.id, {
+                role: savedRole,
+              });
+              if (updated) {
+                localStorage.removeItem(OAUTH_ROLE_KEY);
+                setUser(updated);
+                clearTimeout(timeout);
+                setLoading(false);
+                navigate(roleToPath(updated.role), { replace: true });
+                return;
+              }
             }
+
+            // Existing user — always use their role from DB, ignore savedRole
+            localStorage.removeItem(OAUTH_ROLE_KEY);
+            clearTimeout(timeout);
+            setLoading(false);
+
+            if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
+              const currentPath = window.location.pathname;
+              const targetPath = roleToPath(profile.role);
+              if (
+                currentPath === "/login" ||
+                currentPath === "/signup" ||
+                currentPath === "/auth/callback"
+              ) {
+                navigate(targetPath, { replace: true });
+              }
+            }
+            return;
+          } else {
+            console.error("❌ Failed to sync user profile - logging out");
+            await supabase.auth.signOut();
+            setUser(null);
+            clearTimeout(timeout);
+            setLoading(false);
+            return;
           }
-          return;
         } else {
-          console.error("❌ Failed to sync user profile - logging out");
-          await supabase.auth.signOut();
           setUser(null);
           clearTimeout(timeout);
-          setLoading(false);
-          return;
         }
-      } else {
+      } catch (err) {
+        console.error("❌ Auth state change error:", err);
         setUser(null);
         clearTimeout(timeout);
       }
