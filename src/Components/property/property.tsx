@@ -3,6 +3,20 @@ import {
   MapPinIcon,
   HeartIcon,
   ArrowRightIcon,
+  ChevronDownIcon,
+  ExclamationTriangleIcon,
+  HomeModernIcon,
+  WifiIcon,
+  SunIcon,
+  SparklesIcon,
+  PaperAirplaneIcon,
+  CakeIcon,
+  UsersIcon,
+  ShieldCheckIcon,
+  BellIcon,
+  PlayCircleIcon,
+  FireIcon as FlameOutline,
+  BeakerIcon,
 } from "@heroicons/react/24/outline";
 import {
   HeartIcon as HeartSolid,
@@ -21,6 +35,23 @@ type FilterCategory =
   | "resort"
   | "boutique"
   | "penthouse";
+
+/* ─────────────── Design tokens — matched to Hero ─────────────── */
+
+const T = {
+  white: "#FFFFFF",
+  surface: "#F7F6F3",
+  border: "#E8E5E0",
+  text: "#1A1814",
+  sub: "#6B6560",
+  muted: "#6F6862",
+  gold: "#C9A96E",
+  goldDim: "rgba(201,169,110,0.12)",
+  goldBorder: "rgba(201,169,110,0.28)",
+  goldHover: "#B8935A",
+  danger: "#B3463F",
+  dangerDim: "rgba(179,70,63,0.08)",
+};
 
 /* ─────────────── Constants ─────────────── */
 
@@ -41,35 +72,72 @@ const SORT_LABELS: Record<SortKey, string> = {
   newest: "Newest",
 };
 
-const AMENITY_ICONS: Record<string, string> = {
-  "Free WiFi": "📶",
-  "Private Pool": "🏊",
-  "Butler Service": "🛎",
-  "Sea View": "🌊",
-  "Spa Island": "💆",
-  "Airport Transfer": "✈️",
-  "Fine Dining": "🍽",
-  "Overwater Bungalow": "🌅",
-  "Water Sports": "🚤",
-  "Kids Club": "🧒",
-  Pool: "🏊",
-  BBQ: "🍖",
-  "Wine Cellar": "🍷",
-  Butler: "🛎",
-  "Air Conditioning": "❄️",
-  Concierge: "🔔",
-  Netflix: "🎬",
+/* Icon-based amenity map — replaces emoji */
+const AMENITY_ICONS: Record<
+  string,
+  React.ComponentType<React.SVGProps<SVGSVGElement>>
+> = {
+  "Free WiFi": WifiIcon,
+  "Private Pool": SunIcon,
+  "Butler Service": BellIcon,
+  "Sea View": SunIcon,
+  "Spa Island": SparklesIcon,
+  "Airport Transfer": PaperAirplaneIcon,
+  "Fine Dining": CakeIcon,
+  "Overwater Bungalow": SunIcon,
+  "Water Sports": SunIcon,
+  "Kids Club": UsersIcon,
+  Pool: SunIcon,
+  BBQ: FlameOutline,
+  "Wine Cellar": BeakerIcon,
+  Butler: BellIcon,
+  "Air Conditioning": SparklesIcon,
+  Concierge: ShieldCheckIcon,
+  Netflix: PlayCircleIcon,
 };
+const DEFAULT_AMENITY_ICON: React.ComponentType<React.SVGProps<SVGSVGElement>> =
+  SparklesIcon;
 
 /* ─────────────── Skeleton card ─────────────── */
 
 const SkeletonCard = () => (
-  <div className="bg-white rounded-3xl overflow-hidden animate-pulse">
-    <div className="h-64 bg-gray-100" />
-    <div className="p-5 space-y-3">
-      <div className="h-4 bg-gray-100 rounded-full w-2/3" />
-      <div className="h-3 bg-gray-100 rounded-full w-1/2" />
-      <div className="h-3 bg-gray-100 rounded-full w-1/3" />
+  <div
+    className="animate-pulse"
+    style={{
+      background: T.white,
+      borderRadius: 16,
+      overflow: "hidden",
+      border: `1px solid ${T.border}`,
+    }}
+  >
+    <div style={{ aspectRatio: "4 / 3", background: T.surface }} />
+    <div
+      style={{ padding: 14, display: "flex", flexDirection: "column", gap: 8 }}
+    >
+      <div
+        style={{
+          height: 12,
+          background: T.surface,
+          borderRadius: 99,
+          width: "70%",
+        }}
+      />
+      <div
+        style={{
+          height: 10,
+          background: T.surface,
+          borderRadius: 99,
+          width: "45%",
+        }}
+      />
+      <div
+        style={{
+          height: 10,
+          background: T.surface,
+          borderRadius: 99,
+          width: "90%",
+        }}
+      />
     </div>
   </div>
 );
@@ -92,6 +160,7 @@ const PropertyCard = ({
   const cardRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const [hov, setHov] = useState(false);
 
   useEffect(() => {
     const el = cardRef.current;
@@ -114,15 +183,34 @@ const PropertyCard = ({
   return (
     <div
       ref={cardRef}
-      className="group relative bg-white rounded-3xl overflow-hidden shadow-[0_2px_20px_rgba(0,0,0,0.06)] hover:shadow-[0_8px_40px_rgba(0,0,0,0.12)] transition-all duration-500"
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
       style={{
+        position: "relative",
+        background: T.white,
+        borderRadius: 16,
+        overflow: "hidden",
+        border: `1px solid ${hov ? T.goldBorder : T.border}`,
+        boxShadow: hov
+          ? "0 12px 36px rgba(0,0,0,0.10)"
+          : "0 2px 10px rgba(0,0,0,0.05)",
         opacity: visible ? 1 : 0,
-        transform: visible ? "translateY(0)" : "translateY(28px)",
-        transition: `opacity 0.55s ease ${index * 80}ms, transform 0.55s ease ${index * 80}ms, box-shadow 0.3s ease`,
+        transform: visible
+          ? hov
+            ? "translateY(-3px)"
+            : "translateY(0)"
+          : "translateY(24px)",
+        transition: `opacity 0.5s ease ${index * 60}ms, transform 0.3s ease, border-color 0.2s ease, box-shadow 0.3s ease`,
       }}
     >
       {/* ── Image ── */}
-      <div className="relative h-60 overflow-hidden">
+      <div
+        style={{
+          position: "relative",
+          aspectRatio: "4 / 3",
+          overflow: "hidden",
+        }}
+      >
         <img
           src={
             imgError
@@ -130,27 +218,75 @@ const PropertyCard = ({
               : hotel.thumbnail || hotel.images[0]
           }
           alt={hotel.name}
+          loading="lazy"
           onError={() => setImgError(true)}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            transition: "transform .6s",
+            transform: hov ? "scale(1.05)" : "scale(1)",
+          }}
         />
 
         {/* Gradient */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background:
+              "linear-gradient(to top, rgba(26,24,20,.45) 0%, transparent 50%)",
+          }}
+        />
 
         {/* Category badge */}
-        <div className="absolute top-3 left-3">
-          <span className="bg-white/90 backdrop-blur-md text-[#C9A96E] text-[10px] font-bold uppercase tracking-[0.12em] px-3 py-1.5 rounded-full">
-            {hotel.category}
-          </span>
-        </div>
+        <span
+          style={{
+            position: "absolute",
+            top: 8,
+            left: 8,
+            background: "rgba(255,255,255,.92)",
+            backdropFilter: "blur(8px)",
+            color: T.gold,
+            fontSize: 9,
+            fontWeight: 700,
+            letterSpacing: ".1em",
+            textTransform: "uppercase",
+            padding: "3px 8px",
+            borderRadius: 99,
+            maxWidth: "calc(100% - 56px)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {hotel.category}
+        </span>
 
         {/* Featured badge */}
         {hotel.featured && (
-          <div className="absolute top-3 left-[calc(100%-4.5rem)] translate-x-1">
-            <span className="bg-[#C9A96E] text-white text-[10px] font-bold uppercase tracking-[0.1em] px-2.5 py-1.5 rounded-full">
-              Featured
-            </span>
-          </div>
+          <span
+            style={{
+              position: "absolute",
+              top: 8,
+              left: 8,
+              marginTop: 22,
+              background: T.gold,
+              color: T.white,
+              fontSize: 9,
+              fontWeight: 800,
+              letterSpacing: ".08em",
+              textTransform: "uppercase",
+              padding: "3px 8px",
+              borderRadius: 99,
+              display: "flex",
+              alignItems: "center",
+              gap: 3,
+            }}
+          >
+            <FlameOutline style={{ width: 9, height: 9 }} />
+            Featured
+          </span>
         )}
 
         {/* Wishlist */}
@@ -159,24 +295,56 @@ const PropertyCard = ({
             e.stopPropagation();
             onWishlist(hotel.id);
           }}
-          className="absolute top-3 right-3 w-9 h-9 rounded-full bg-white/90 backdrop-blur-md flex items-center justify-center hover:scale-110 transition-transform shadow-sm"
+          aria-label={wishlisted ? "Remove from wishlist" : "Add to wishlist"}
+          aria-pressed={wishlisted}
+          style={{
+            position: "absolute",
+            top: 8,
+            right: 8,
+            width: 30,
+            height: 30,
+            borderRadius: "50%",
+            background: "rgba(255,255,255,.92)",
+            backdropFilter: "blur(8px)",
+            border: "none",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 1px 4px rgba(0,0,0,.08)",
+            transition: "transform .15s",
+            transform: hov ? "scale(1.08)" : "scale(1)",
+          }}
         >
           {wishlisted ? (
-            <HeartSolid className="w-4 h-4 text-rose-500" />
+            <HeartSolid style={{ width: 15, height: 15, color: "#E1574C" }} />
           ) : (
-            <HeartIcon className="w-4 h-4 text-gray-500" />
+            <HeartIcon style={{ width: 15, height: 15, color: T.sub }} />
           )}
         </button>
 
-        {/* Rating chip — bottom left of image */}
+        {/* Rating chip */}
         {hotel.rating > 0 && (
-          <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-black/50 backdrop-blur-md rounded-full px-2.5 py-1">
-            <StarSolid className="w-3 h-3 text-[#C9A96E]" />
-            <span className="text-white text-xs font-semibold">
+          <div
+            style={{
+              position: "absolute",
+              bottom: 8,
+              left: 8,
+              display: "flex",
+              alignItems: "center",
+              gap: 3,
+              background: "rgba(26,24,20,.55)",
+              backdropFilter: "blur(8px)",
+              borderRadius: 99,
+              padding: "3px 8px",
+            }}
+          >
+            <StarSolid style={{ width: 10, height: 10, color: T.gold }} />
+            <span style={{ color: T.white, fontSize: 11, fontWeight: 700 }}>
               {hotel.rating.toFixed(1)}
             </span>
             {hotel.reviewCount > 0 && (
-              <span className="text-white/60 text-[10px]">
+              <span style={{ color: "rgba(255,255,255,.65)", fontSize: 9 }}>
                 ({hotel.reviewCount})
               </span>
             )}
@@ -185,27 +353,66 @@ const PropertyCard = ({
       </div>
 
       {/* ── Content ── */}
-      <div className="p-5">
+      <div style={{ padding: "12px 12px 14px" }}>
         {/* Name + location */}
-        <div className="mb-3">
-          <h3 className="font-['Cormorant_Garamond'] text-lg font-semibold text-gray-900 leading-tight line-clamp-1">
-            {hotel.name}
-          </h3>
-          <div className="flex items-center gap-1 mt-1">
-            <MapPinIcon className="w-3 h-3 text-[#C9A96E] shrink-0" />
-            <p className="text-xs text-gray-400 line-clamp-1">
-              {hotel.location}
-            </p>
-          </div>
+        <h3
+          style={{
+            fontFamily: "Cormorant Garamond, serif",
+            fontWeight: 600,
+            color: T.text,
+            fontSize: 15,
+            lineHeight: 1.25,
+            marginBottom: 4,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {hotel.name}
+        </h3>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            marginBottom: 8,
+          }}
+        >
+          <MapPinIcon
+            style={{ width: 11, height: 11, color: T.gold, flexShrink: 0 }}
+          />
+          <p
+            style={{
+              fontSize: 11,
+              color: T.muted,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              margin: 0,
+            }}
+          >
+            {hotel.location}
+          </p>
         </div>
 
-        {/* Tags */}
+        {/* Tags — hidden on the smallest cards to reduce clutter, shown sm+ */}
         {hotel.tags.length > 0 && (
-          <div className="flex gap-1.5 flex-wrap mb-3">
-            {hotel.tags.slice(0, 3).map((tag) => (
+          <div
+            className="card-tags"
+            style={{ gap: 4, marginBottom: 8, flexWrap: "wrap" }}
+          >
+            {hotel.tags.slice(0, 2).map((tag) => (
               <span
                 key={tag}
-                className="text-[10px] font-medium text-[#C9A96E] bg-[#C9A96E]/8 border border-[#C9A96E]/20 px-2 py-0.5 rounded-full"
+                style={{
+                  fontSize: 9,
+                  fontWeight: 600,
+                  color: T.gold,
+                  background: T.goldDim,
+                  border: `1px solid ${T.goldBorder}`,
+                  padding: "2px 7px",
+                  borderRadius: 99,
+                }}
               >
                 {tag}
               </span>
@@ -213,43 +420,94 @@ const PropertyCard = ({
           </div>
         )}
 
-        {/* Amenities */}
-        <div className="flex items-center gap-3 mb-4">
-          {[
-            {
-              icon: "🛏",
-              val: `${hotel.bedrooms} bed${hotel.bedrooms !== 1 ? "s" : ""}`,
-            },
-            {
-              icon: "🚿",
-              val: `${hotel.bathrooms} bath${hotel.bathrooms !== 1 ? "s" : ""}`,
-            },
-            { icon: "👥", val: `${hotel.maxGuests} guests` },
-          ].map(({ icon, val }) => (
-            <span
-              key={val}
-              className="flex items-center gap-1 text-[11px] text-gray-400"
-            >
-              <span>{icon}</span>
-              {val}
-            </span>
-          ))}
+        {/* Beds / baths / guests — icon row */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            marginBottom: 10,
+            flexWrap: "wrap",
+          }}
+        >
+          <span
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 3,
+              fontSize: 10,
+              color: T.muted,
+            }}
+          >
+            <HomeModernIcon style={{ width: 11, height: 11 }} />
+            {hotel.bedrooms}
+          </span>
+          <span
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 3,
+              fontSize: 10,
+              color: T.muted,
+            }}
+          >
+            <SparklesIcon style={{ width: 11, height: 11 }} />
+            {hotel.bathrooms}
+          </span>
+          <span
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 3,
+              fontSize: 10,
+              color: T.muted,
+            }}
+          >
+            <UsersIcon style={{ width: 11, height: 11 }} />
+            {hotel.maxGuests}
+          </span>
         </div>
 
-        {/* Top amenity icons */}
+        {/* Top amenity icons — hidden on the smallest cards */}
         {topAmenities.length > 0 && (
-          <div className="flex gap-2 mb-4">
-            {topAmenities.map((a) => (
-              <span
-                key={a}
-                title={a}
-                className="w-7 h-7 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center text-sm"
-              >
-                {AMENITY_ICONS[a] || "✦"}
-              </span>
-            ))}
+          <div className="card-amenities" style={{ gap: 5, marginBottom: 10 }}>
+            {topAmenities.map((a) => {
+              const Icon = AMENITY_ICONS[a] || DEFAULT_AMENITY_ICON;
+              return (
+                <span
+                  key={a}
+                  title={a}
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 7,
+                    background: T.surface,
+                    border: `1px solid ${T.border}`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Icon style={{ width: 12, height: 12, color: T.sub }} />
+                </span>
+              );
+            })}
             {hotel.amenities.length > 3 && (
-              <span className="w-7 h-7 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center text-[10px] text-gray-400 font-semibold">
+              <span
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: 7,
+                  background: T.surface,
+                  border: `1px solid ${T.border}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 9,
+                  color: T.muted,
+                  fontWeight: 700,
+                }}
+              >
                 +{hotel.amenities.length - 3}
               </span>
             )}
@@ -257,20 +515,67 @@ const PropertyCard = ({
         )}
 
         {/* Price + CTA */}
-        <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-          <div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-xl font-bold text-gray-900">
-                ₦{hotel.pricePerNight.toLocaleString()}
-              </span>
-              <span className="text-xs text-gray-400 font-normal">/ night</span>
-            </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            paddingTop: 10,
+            borderTop: `1px solid ${T.border}`,
+            gap: 6,
+          }}
+        >
+          <div
+            style={{
+              minWidth: 0,
+              display: "flex",
+              alignItems: "baseline",
+              gap: 2,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "Cormorant Garamond, serif",
+                fontSize: 16,
+                fontWeight: 700,
+                color: T.text,
+                whiteSpace: "nowrap",
+              }}
+            >
+              ₦{hotel.pricePerNight.toLocaleString()}
+            </span>
+            <span
+              style={{ fontSize: 10, color: T.muted, whiteSpace: "nowrap" }}
+            >
+              /night
+            </span>
           </div>
           <button
             onClick={() => onBook(hotel)}
-            className="bg-[#C9A96E] hover:bg-[#b8935a] text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 shadow-md shadow-[#C9A96E]/25"
+            aria-label={`Book ${hotel.name}`}
+            style={{
+              background: T.gold,
+              color: T.white,
+              border: "none",
+              cursor: "pointer",
+              fontSize: 11,
+              fontWeight: 700,
+              padding: "8px 12px",
+              borderRadius: 9,
+              letterSpacing: ".02em",
+              transition: "background .18s, transform .15s",
+              boxShadow: "0 3px 10px rgba(201,169,110,.3)",
+              flexShrink: 0,
+              whiteSpace: "nowrap",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.background = T.goldHover;
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background = T.gold;
+            }}
           >
-            Book Now
+            Book
           </button>
         </div>
       </div>
@@ -410,63 +715,166 @@ const FeaturedProperties = ({
 
   /* ── Render ── */
   return (
-    <section className="bg-[#FAFAF8] py-20 px-5 md:px-10">
-      <div className="max-w-7xl mx-auto">
+    <section style={{ background: T.surface, padding: "56px 16px" }}>
+      <style>{`
+        .fp-grid {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 12px;
+        }
+        @media (min-width: 640px) {
+          .fp-grid { grid-template-columns: repeat(2, 1fr); gap: 18px; }
+        }
+        @media (min-width: 900px) {
+          .fp-grid { grid-template-columns: repeat(3, 1fr); gap: 22px; }
+        }
+        .card-tags, .card-amenities { display: none; }
+        @media (min-width: 420px) {
+          .card-tags, .card-amenities { display: flex; }
+        }
+        .fp-header {
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+          margin-bottom: 28px;
+        }
+        @media (min-width: 768px) {
+          .fp-header {
+            flex-direction: row;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 24px;
+            margin-bottom: 36px;
+          }
+        }
+        .fp-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .fp-pills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
+        button:focus-visible { outline: 2px solid ${T.gold}; outline-offset: 2px; }
+      `}</style>
+
+      <div style={{ maxWidth: 1280, margin: "0 auto" }}>
         {/* ── Header ── */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
+        <div className="fp-header">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#C9A96E] mb-2">
+            <p
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: ".22em",
+                color: T.gold,
+                textTransform: "uppercase",
+                marginBottom: 8,
+              }}
+            >
               Curated for You
             </p>
-            <h2 className="font-['Cormorant_Garamond'] text-4xl md:text-5xl font-semibold text-gray-900 leading-tight">
-              Featured <span className="italic text-[#C9A96E]">Stays</span>
+            <h2
+              style={{
+                fontFamily: "Cormorant Garamond, serif",
+                fontSize: "clamp(30px, 6vw, 44px)",
+                fontWeight: 600,
+                color: T.text,
+                lineHeight: 1.1,
+              }}
+            >
+              Featured{" "}
+              <em style={{ fontStyle: "italic", color: T.gold }}>Stays</em>
             </h2>
-            <div className="w-12 h-px bg-[#C9A96E] mt-3" />
-            <p className="text-gray-400 text-sm mt-2">
+            <div
+              style={{
+                width: 48,
+                height: 1,
+                background: T.gold,
+                marginTop: 12,
+              }}
+            />
+            <p style={{ color: T.muted, fontSize: 13, marginTop: 8 }}>
               {loading
                 ? "Loading properties…"
                 : `${totalFiltered} handpicked luxury space${totalFiltered !== 1 ? "s" : ""}`}
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="fp-controls">
             {/* Sort dropdown */}
-            <div ref={sortRef} className="relative">
+            <div ref={sortRef} style={{ position: "relative" }}>
               <button
                 onClick={() => setShowSortMenu((s) => !s)}
-                className="flex items-center gap-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 px-4 py-2.5 rounded-xl hover:border-[#C9A96E] transition-colors"
+                aria-haspopup="listbox"
+                aria-expanded={showSortMenu}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: T.sub,
+                  background: T.white,
+                  border: `1px solid ${T.border}`,
+                  padding: "10px 14px",
+                  borderRadius: 11,
+                  cursor: "pointer",
+                  transition: "border-color .18s",
+                  fontFamily: "inherit",
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.borderColor = T.goldBorder)
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.borderColor = T.border)
+                }
               >
-                <span className="hidden sm:inline">Sort:</span>
-                <span className="text-[#C9A96E]">{SORT_LABELS[sort]}</span>
-                <svg
-                  className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showSortMenu ? "rotate-180" : ""}`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 9l-7 7-7-7"
-                  />
-                </svg>
+                <span style={{ color: T.gold, fontWeight: 600 }}>
+                  {SORT_LABELS[sort]}
+                </span>
+                <ChevronDownIcon
+                  style={{
+                    width: 13,
+                    height: 13,
+                    color: T.muted,
+                    transition: "transform .18s",
+                    transform: showSortMenu ? "rotate(180deg)" : "none",
+                  }}
+                />
               </button>
 
               {showSortMenu && (
-                <div className="absolute right-0 top-full mt-2 w-52 bg-white border border-gray-100 rounded-2xl shadow-xl z-20 overflow-hidden">
+                <div
+                  role="listbox"
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    top: "calc(100% + 8px)",
+                    width: 200,
+                    background: T.white,
+                    border: `1px solid ${T.border}`,
+                    borderRadius: 14,
+                    boxShadow: "0 12px 36px rgba(0,0,0,.12)",
+                    zIndex: 20,
+                    overflow: "hidden",
+                  }}
+                >
                   {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
                     <button
                       key={key}
+                      role="option"
+                      aria-selected={sort === key}
                       onClick={() => {
                         setSort(key);
                         setShowSortMenu(false);
                       }}
-                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                        sort === key
-                          ? "bg-[#C9A96E]/8 text-[#C9A96E] font-semibold"
-                          : "text-gray-600 hover:bg-gray-50"
-                      }`}
+                      style={{
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "10px 14px",
+                        fontSize: 13,
+                        background: sort === key ? T.goldDim : "none",
+                        color: sort === key ? T.gold : T.sub,
+                        fontWeight: sort === key ? 600 : 400,
+                        border: "none",
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                      }}
                     >
                       {SORT_LABELS[key]}
                     </button>
@@ -478,21 +886,34 @@ const FeaturedProperties = ({
             {/* View all */}
             <button
               onClick={onViewAll}
-              className="flex items-center gap-2 text-sm font-semibold text-[#C9A96E] hover:text-[#b8935a] transition-colors group"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 13,
+                fontWeight: 700,
+                color: T.gold,
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                fontFamily: "inherit",
+                padding: "10px 4px",
+              }}
             >
               View All
-              <ArrowRightIcon className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              <ArrowRightIcon style={{ width: 14, height: 14 }} />
             </button>
           </div>
         </div>
 
         {/* ── Category filter pills ── */}
-        <div className="flex gap-2 flex-wrap mb-8">
+        <div className="fp-pills">
           {availableCategories.map((cat) => {
             const count =
               cat === "all"
                 ? allHotels.length
                 : allHotels.filter((h) => h.category === cat).length;
+            const active = category === cat;
             return (
               <button
                 key={cat}
@@ -500,16 +921,30 @@ const FeaturedProperties = ({
                   setCategory(cat);
                   setLimit(initialLimit);
                 }}
-                className={`text-xs font-semibold px-4 py-2 rounded-full border transition-all duration-200 ${
-                  category === cat
-                    ? "bg-[#C9A96E] border-[#C9A96E] text-white shadow-md shadow-[#C9A96E]/20"
-                    : "border-gray-200 text-gray-500 bg-white hover:border-[#C9A96E] hover:text-[#C9A96E]"
-                }`}
+                aria-pressed={active}
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  padding: "8px 16px",
+                  borderRadius: 99,
+                  border: `1px solid ${active ? T.gold : T.border}`,
+                  background: active ? T.gold : T.white,
+                  color: active ? T.white : T.sub,
+                  cursor: "pointer",
+                  transition: "all .18s",
+                  fontFamily: "inherit",
+                  boxShadow: active
+                    ? "0 4px 14px rgba(201,169,110,.3)"
+                    : "none",
+                }}
               >
                 {CATEGORY_LABELS[cat]}
                 {!loading && count > 0 && (
                   <span
-                    className={`ml-1.5 ${category === cat ? "text-white/70" : "text-gray-300"}`}
+                    style={{
+                      marginLeft: 5,
+                      color: active ? "rgba(255,255,255,.7)" : T.muted,
+                    }}
                   >
                     ({count})
                   </span>
@@ -521,12 +956,46 @@ const FeaturedProperties = ({
 
         {/* ── Error state ── */}
         {error && (
-          <div className="text-center py-16">
-            <p className="text-4xl mb-3">⚠️</p>
-            <p className="text-gray-500 text-sm font-medium mb-4">{error}</p>
+          <div style={{ textAlign: "center", padding: "48px 16px" }}>
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 14,
+                background: T.dangerDim,
+                border: "1px solid rgba(179,70,63,0.25)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 16px",
+              }}
+            >
+              <ExclamationTriangleIcon
+                style={{ width: 24, height: 24, color: T.danger }}
+              />
+            </div>
+            <p
+              style={{
+                color: T.sub,
+                fontSize: 13,
+                fontWeight: 500,
+                marginBottom: 16,
+              }}
+            >
+              {error}
+            </p>
             <button
               onClick={() => window.location.reload()}
-              className="text-sm font-semibold text-[#C9A96E] hover:underline"
+              style={{
+                fontSize: 13,
+                fontWeight: 700,
+                color: T.gold,
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                textDecoration: "underline",
+                fontFamily: "inherit",
+              }}
             >
               Retry
             </button>
@@ -535,7 +1004,7 @@ const FeaturedProperties = ({
 
         {/* ── Loading skeletons ── */}
         {loading && !error && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="fp-grid">
             {Array.from({ length: initialLimit }).map((_, i) => (
               <SkeletonCard key={i} />
             ))}
@@ -544,17 +1013,50 @@ const FeaturedProperties = ({
 
         {/* ── Empty state ── */}
         {!loading && !error && displayed.length === 0 && (
-          <div className="text-center py-20">
-            <p className="text-5xl mb-4">🏡</p>
-            <p className="font-['Cormorant_Garamond'] text-2xl text-gray-700 mb-2">
+          <div style={{ textAlign: "center", padding: "56px 16px" }}>
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 14,
+                background: T.goldDim,
+                border: `1px solid ${T.goldBorder}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 16px",
+              }}
+            >
+              <HomeModernIcon
+                style={{ width: 24, height: 24, color: T.gold }}
+              />
+            </div>
+            <p
+              style={{
+                fontFamily: "Cormorant Garamond, serif",
+                fontSize: 22,
+                fontWeight: 600,
+                color: T.text,
+                marginBottom: 8,
+              }}
+            >
               No properties found
             </p>
-            <p className="text-gray-400 text-sm mb-6">
+            <p style={{ color: T.muted, fontSize: 13, marginBottom: 20 }}>
               Try a different category or check back soon.
             </p>
             <button
               onClick={() => setCategory("all")}
-              className="text-sm font-semibold text-[#C9A96E] hover:underline"
+              style={{
+                fontSize: 13,
+                fontWeight: 700,
+                color: T.gold,
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                textDecoration: "underline",
+                fontFamily: "inherit",
+              }}
             >
               Clear filter
             </button>
@@ -564,7 +1066,7 @@ const FeaturedProperties = ({
         {/* ── Property grid ── */}
         {!loading && !error && displayed.length > 0 && (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="fp-grid">
               {displayed.map((hotel, i) => (
                 <PropertyCard
                   key={hotel.id}
@@ -578,17 +1080,51 @@ const FeaturedProperties = ({
             </div>
 
             {/* ── Load more ── */}
-            <div className="mt-12 flex flex-col items-center gap-3">
+            <div
+              style={{
+                marginTop: 36,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 10,
+              }}
+            >
               {hasMore && (
                 <button
                   onClick={() => setLimit((l) => l + initialLimit)}
-                  className="flex items-center gap-2.5 bg-white border border-gray-200 hover:border-[#C9A96E] text-gray-700 hover:text-[#C9A96E] font-semibold text-sm px-8 py-3.5 rounded-2xl transition-all duration-200 hover:shadow-md group"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    background: T.white,
+                    border: `1px solid ${T.border}`,
+                    color: T.sub,
+                    fontWeight: 700,
+                    fontSize: 13,
+                    padding: "13px 28px",
+                    borderRadius: 14,
+                    cursor: "pointer",
+                    transition:
+                      "border-color .18s, color .18s, box-shadow .18s",
+                    fontFamily: "inherit",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = T.goldBorder;
+                    e.currentTarget.style.color = T.gold;
+                    e.currentTarget.style.boxShadow =
+                      "0 4px 16px rgba(0,0,0,.06)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = T.border;
+                    e.currentTarget.style.color = T.sub;
+                    e.currentTarget.style.boxShadow = "none";
+                  }}
                 >
                   Load more properties
-                  <ArrowRightIcon className="w-4 h-4 rotate-90 group-hover:translate-y-0.5 transition-transform" />
+                  <ChevronDownIcon style={{ width: 14, height: 14 }} />
                 </button>
               )}
-              <p className="text-xs text-gray-300">
+              <p style={{ fontSize: 11, color: T.muted }}>
                 Showing {displayed.length} of {totalFiltered} properties
               </p>
             </div>
@@ -597,8 +1133,22 @@ const FeaturedProperties = ({
 
         {/* ── No auth wishlist nudge ── */}
         {!user && !loading && displayed.length > 0 && (
-          <p className="text-center text-xs text-gray-300 mt-6">
-            <span className="text-[#C9A96E] cursor-pointer hover:underline font-medium">
+          <p
+            style={{
+              textAlign: "center",
+              fontSize: 11,
+              color: T.muted,
+              marginTop: 24,
+            }}
+          >
+            <span
+              style={{
+                color: T.gold,
+                cursor: "pointer",
+                fontWeight: 600,
+                textDecoration: "underline",
+              }}
+            >
               Sign in
             </span>{" "}
             to save your favourite properties
