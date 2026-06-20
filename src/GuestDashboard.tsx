@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import logo from "../public/logo.svg";
 import {
   CalendarDaysIcon,
   HeartIcon,
@@ -95,7 +96,20 @@ const Counter = ({
     </span>
   );
 };
-
+const T = {
+  white: "#FFFFFF",
+  surface: "#F7F6F3",
+  border: "#E8E5E0",
+  text: "#1A1814",
+  sub: "#6B6560",
+  muted: "#6F6862", // darkened from #A09890 for WCAG AA contrast on white
+  gold: "#C9A96E",
+  goldDim: "rgba(201,169,110,0.12)",
+  goldBorder: "rgba(201,169,110,0.28)",
+  goldHover: "#B8935A",
+  danger: "#B3463F",
+  dangerDim: "rgba(179,70,63,0.08)",
+};
 /* ─────────────────────────────────────────────────────────
    STATUS BADGE
 ───────────────────────────────────────────────────────── */
@@ -285,11 +299,36 @@ const Sidebar = ({
       {/* Logo + close */}
       <div className="relative z-10 flex items-center justify-between px-5 pt-6 pb-5 border-b border-white/6">
         <div className="flex items-center gap-2.5">
-          <div className="w-5 h-5 bg-[#C9A96E] rotate-45 rounded-sm" />
-          <span className="font-['Cormorant_Garamond'] text-lg tracking-wide text-[#f5f0e8]">
-            LuxStay
-          </span>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              cursor: "pointer",
+              flexShrink: 0,
+              minWidth: 0,
+            }}
+          >
+            <img
+              src={logo}
+              alt=""
+              style={{ width: 50, height: 50, flexShrink: 0 }}
+            />
+            <span
+              style={{
+                fontFamily: "Cormorant Garamond, serif",
+                color: T.text,
+                fontSize: 22,
+                fontWeight: 700,
+                letterSpacing: "-.01em",
+                whiteSpace: "nowrap",
+              }}
+            >
+              LuxStay
+            </span>
+          </div>
         </div>
+
         {mobile && (
           <button
             onClick={onClose}
