@@ -150,22 +150,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  useEffect(() => {
-    seedDemoData();
-
-    // Safety net — never let the spinner hang forever if Supabase is slow
-    // Longer timeout for OAuth flows which involve DB profile creation/fetch
-    const timeout = setTimeout(() => {
-      console.warn("⏱️ Auth timeout - clearing loading state");
-      setLoading(false);
-    }, 15000);
-
-    // ── Listen to Supabase auth state changes ────────────────────────────
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("🔐 Supabase auth event:", event, session?.user?.email);
-
+  const handleAuthChange = useCallback(
+    async (event: string, session: any) => {
       try {
         if (session?.user) {
           console.log("📝 Session user found, syncing profile...");
@@ -176,10 +162,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const savedRole = localStorage.getItem(
               OAUTH_ROLE_KEY,
             ) as UserRole | null;
-
-            // Only apply savedRole if this is a genuinely new user
-            // (created in the last 10 seconds) who selected a role on the
-            // login/signup page before being redirected to OAuth.
             const isNewAccount = profile.createdAt
               ? Date.now() - new Date(profile.createdAt).getTime() < 10_000
               : false;
@@ -190,38 +172,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               profile.role === "guest" &&
               isNewAccount
             ) {
-              console.log("🔄 Updating role to:", savedRole);
               const updated = await AuthDB.update(profile.id, {
                 role: savedRole,
               });
               if (updated) {
                 localStorage.removeItem(OAUTH_ROLE_KEY);
                 setUser(updated);
-                clearTimeout(timeout);
                 setLoading(false);
-                console.log("🚀 Navigating to:", roleToPath(updated.role));
                 navigate(roleToPath(updated.role), { replace: true });
                 return;
               }
             }
 
-            // Existing user — always use their role from DB, ignore savedRole
             localStorage.removeItem(OAUTH_ROLE_KEY);
-            clearTimeout(timeout);
             setLoading(false);
 
             if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
               const currentPath = window.location.pathname;
               const targetPath = roleToPath(profile.role);
-              console.log(
-                `📍 Current path: ${currentPath}, target: ${targetPath}`,
-              );
               if (
                 currentPath === "/login" ||
                 currentPath === "/signup" ||
+                currentPath === "/host/login" ||
+                currentPath === "/guest/login" ||
+                currentPath === "/admin/login" ||
+                currentPath === "/host/signup" ||
+                currentPath === "/guest/signup" ||
                 currentPath === "/auth/callback"
               ) {
-                console.log("🚀 Navigating to:", targetPath);
                 navigate(targetPath, { replace: true });
               }
             }
@@ -230,28 +208,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.error("❌ Failed to sync user profile - logging out");
             await supabase.auth.signOut();
             setUser(null);
-            clearTimeout(timeout);
             setLoading(false);
             return;
           }
         } else {
           console.log("🚪 No session user");
           setUser(null);
-          clearTimeout(timeout);
         }
       } catch (err) {
         console.error("❌ Auth state change error:", err);
         setUser(null);
-        clearTimeout(timeout);
       }
       setLoading(false);
+    },
+    [syncUser, navigate],
+  );
+
+  useEffect(() => {
+    seedDemoData();
+
+    const timeout = setTimeout(() => {
+      console.warn("⏱️ Auth timeout - clearing loading state");
+      setLoading(false);
+    }, 15000);
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("🔐 Supabase auth event:", event, session?.user?.email);
+      clearTimeout(timeout);
+      setTimeout(() => {
+        handleAuthChange(event, session);
+      }, 0);
     });
 
     return () => {
       subscription.unsubscribe();
       clearTimeout(timeout);
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [handleAuthChange]);
 
   /* ── Email / password login ── */
   const login = useCallback(
