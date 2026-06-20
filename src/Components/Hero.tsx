@@ -3,6 +3,8 @@ import {
   MagnifyingGlassIcon,
   MapPinIcon,
   XMarkIcon,
+  CalendarDaysIcon,
+  UserGroupIcon,
 } from "@heroicons/react/24/outline";
 import { StarIcon, FireIcon } from "@heroicons/react/24/solid";
 import logo from "../../public/logo.svg";
@@ -20,7 +22,7 @@ type SearchState = {
   guests: string;
 };
 
-/* ─── tokens ─────────────────────────────────────────── */
+/* ─── Design tokens ──────────────────────────────────── */
 const T = {
   white: "#FFFFFF",
   surface: "#F7F6F3",
@@ -29,11 +31,12 @@ const T = {
   sub: "#6B6560",
   muted: "#A09890",
   gold: "#C9A96E",
-  goldDim: "rgba(201,169,110,0.15)",
-  goldBorder: "rgba(201,169,110,0.3)",
+  goldDim: "rgba(201,169,110,0.12)",
+  goldBorder: "rgba(201,169,110,0.28)",
+  goldHover: "#B8935A",
 };
 
-/* ─── Hotel Card (light) ─────────────────────────────── */
+/* ─── Hotel Card ─────────────────────────────────────── */
 const HotelCard = ({
   hotel,
   nights,
@@ -65,7 +68,14 @@ const HotelCard = ({
         animation: `fadeUp .45s ease ${index * 55}ms both`,
       }}
     >
-      <div style={{ position: "relative", height: 196, overflow: "hidden" }}>
+      <div
+        style={{
+          position: "relative",
+          height: 200,
+          overflow: "hidden",
+          flexShrink: 0,
+        }}
+      >
         <img
           src={hotel.thumbnail}
           alt={hotel.name}
@@ -86,7 +96,7 @@ const HotelCard = ({
             position: "absolute",
             inset: 0,
             background:
-              "linear-gradient(to top, rgba(26,24,20,.45) 0%, transparent 55%)",
+              "linear-gradient(to top, rgba(26,24,20,.5) 0%, transparent 55%)",
           }}
         />
         <span
@@ -94,7 +104,7 @@ const HotelCard = ({
             position: "absolute",
             top: 12,
             left: 12,
-            background: "rgba(255,255,255,.88)",
+            background: "rgba(255,255,255,.9)",
             backdropFilter: "blur(8px)",
             color: T.text,
             fontSize: 9,
@@ -139,7 +149,7 @@ const HotelCard = ({
               display: "flex",
               alignItems: "center",
               gap: 4,
-              background: "rgba(255,255,255,.88)",
+              background: "rgba(255,255,255,.9)",
               backdropFilter: "blur(8px)",
               padding: "4px 10px",
               borderRadius: 99,
@@ -172,7 +182,7 @@ const HotelCard = ({
             fontFamily: "Cormorant Garamond, serif",
             fontWeight: 600,
             color: T.text,
-            fontSize: 17,
+            fontSize: 18,
             lineHeight: 1.25,
             marginBottom: 5,
             overflow: "hidden",
@@ -208,7 +218,7 @@ const HotelCard = ({
         <p
           style={{
             color: T.sub,
-            fontSize: 12.5,
+            fontSize: 13,
             lineHeight: 1.65,
             marginBottom: 14,
             flex: 1,
@@ -259,7 +269,7 @@ const HotelCard = ({
               <span
                 style={{
                   fontFamily: "Cormorant Garamond, serif",
-                  fontSize: 21,
+                  fontSize: 22,
                   fontWeight: 700,
                   color: T.text,
                 }}
@@ -288,10 +298,10 @@ const HotelCard = ({
               borderRadius: 10,
               letterSpacing: ".03em",
               transition: "background .18s, transform .15s",
-              boxShadow: "0 4px 14px rgba(201,169,110,.35)",
+              boxShadow: "0 4px 14px rgba(201,169,110,.3)",
             }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.background = "#B8935A";
+              (e.currentTarget as HTMLElement).style.background = T.goldHover;
               (e.currentTarget as HTMLElement).style.transform = "scale(1.04)";
             }}
             onMouseLeave={(e) => {
@@ -332,7 +342,6 @@ const ResultsPanel = ({
       alignItems: "flex-end",
       justifyContent: "center",
     }}
-    className="sm:items-center sm:p-4 md:p-6"
   >
     <div
       style={{
@@ -347,20 +356,39 @@ const ResultsPanel = ({
       style={{
         position: "relative",
         zIndex: 10,
-        background: "#F7F6F3",
+        background: T.surface,
         border: `1px solid ${T.border}`,
         width: "100%",
         maxHeight: "92dvh",
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
+        borderRadius: "20px 20px 0 0",
       }}
-      className="sm:max-w-2xl md:max-w-4xl lg:max-w-6xl sm:rounded-2xl rounded-t-2xl"
+      className="sm:max-w-2xl md:max-w-4xl lg:max-w-6xl sm:mb-4 sm:rounded-2xl"
     >
-      {/* header */}
+      {/* Drag handle on mobile */}
       <div
         style={{
-          padding: "20px 28px",
+          display: "flex",
+          justifyContent: "center",
+          padding: "12px 0 4px",
+        }}
+      >
+        <div
+          style={{
+            width: 36,
+            height: 4,
+            borderRadius: 99,
+            background: T.border,
+          }}
+        />
+      </div>
+
+      {/* Header */}
+      <div
+        style={{
+          padding: "12px 20px 16px",
           background: T.white,
           borderBottom: `1px solid ${T.border}`,
           display: "flex",
@@ -377,7 +405,7 @@ const ResultsPanel = ({
               letterSpacing: ".22em",
               color: T.gold,
               textTransform: "uppercase",
-              marginBottom: 4,
+              marginBottom: 3,
             }}
           >
             Results
@@ -387,7 +415,7 @@ const ResultsPanel = ({
               fontFamily: "Cormorant Garamond, serif",
               color: T.text,
               fontWeight: 600,
-              fontSize: 22,
+              fontSize: 20,
             }}
           >
             {loading
@@ -397,7 +425,7 @@ const ResultsPanel = ({
                 : "No properties matched"}
           </h2>
           {query && (
-            <p style={{ color: T.muted, fontSize: 13, marginTop: 2 }}>
+            <p style={{ color: T.muted, fontSize: 12, marginTop: 2 }}>
               for "{query}"
             </p>
           )}
@@ -414,19 +442,21 @@ const ResultsPanel = ({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            flexShrink: 0,
           }}
         >
           <XMarkIcon style={{ width: 15, height: 15, color: T.sub }} />
         </button>
       </div>
 
-      <div style={{ overflowY: "auto", flex: 1, padding: "24px 28px 32px" }}>
+      {/* Body */}
+      <div style={{ overflowY: "auto", flex: 1, padding: "20px 16px 32px" }}>
         {loading ? (
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))",
-              gap: 18,
+              gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+              gap: 16,
             }}
           >
             {[...Array(6)].map((_, i) => (
@@ -441,7 +471,7 @@ const ResultsPanel = ({
                 }}
                 className="animate-pulse"
               >
-                <div style={{ height: 196, background: T.surface }} />
+                <div style={{ height: 200, background: T.surface }} />
                 <div
                   style={{
                     padding: 20,
@@ -471,25 +501,25 @@ const ResultsPanel = ({
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              padding: "64px 24px",
+              padding: "48px 24px",
               textAlign: "center",
             }}
           >
             <div
               style={{
-                width: 60,
-                height: 60,
-                borderRadius: 16,
+                width: 56,
+                height: 56,
+                borderRadius: 14,
                 background: T.goldDim,
                 border: `1px solid ${T.goldBorder}`,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                marginBottom: 18,
+                marginBottom: 16,
               }}
             >
               <MagnifyingGlassIcon
-                style={{ width: 26, height: 26, color: T.gold }}
+                style={{ width: 24, height: 24, color: T.gold }}
               />
             </div>
             <h3
@@ -497,7 +527,7 @@ const ResultsPanel = ({
                 fontFamily: "Cormorant Garamond, serif",
                 color: T.text,
                 fontWeight: 600,
-                fontSize: 21,
+                fontSize: 20,
                 marginBottom: 8,
               }}
             >
@@ -507,9 +537,9 @@ const ResultsPanel = ({
               style={{
                 color: T.sub,
                 fontSize: 13,
-                maxWidth: 290,
+                maxWidth: 280,
                 lineHeight: 1.7,
-                marginBottom: 22,
+                marginBottom: 20,
               }}
             >
               Try a different destination, adjust your dates, or change the
@@ -535,8 +565,8 @@ const ResultsPanel = ({
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))",
-              gap: 18,
+              gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+              gap: 16,
             }}
           >
             {results.map((h, i) => (
@@ -556,7 +586,7 @@ const ResultsPanel = ({
 );
 
 /* ─── Hero ───────────────────────────────────────────── */
-const Hero = ({
+export default function Hero({
   onBook,
   onLogin,
   onSignup,
@@ -564,7 +594,7 @@ const Hero = ({
   onBook?: (h: Hotel) => void;
   onLogin?: () => void;
   onSignup?: () => void;
-}) => {
+}) {
   const [form, setForm] = useState<SearchState>({
     query: "",
     checkIn: "",
@@ -578,6 +608,7 @@ const Hero = ({
   const [loading, setLoading] = useState(false);
   const [audience, setAudience] = useState<"guest" | "host">("guest");
   const sugRef = useRef<HTMLDivElement>(null);
+  const queryInputRef = useRef<HTMLInputElement>(null);
 
   const nights = (() => {
     if (!form.checkIn || !form.checkOut) return 0;
@@ -638,8 +669,7 @@ const Hero = ({
 
   const today = new Date().toISOString().split("T")[0];
 
-  /* shared field label */
-  const Label = ({ children }: { children: React.ReactNode }) => (
+  const FieldLabel = ({ children }: { children: React.ReactNode }) => (
     <p
       style={{
         fontSize: 9,
@@ -648,52 +678,91 @@ const Hero = ({
         color: T.muted,
         textTransform: "uppercase",
         marginBottom: 5,
+        lineHeight: 1,
       }}
     >
       {children}
     </p>
   );
 
-  const guestCopy = {
-    eyebrow: "For Guests",
-    headline: (
-      <>
-        Every Stay,
-        <br />
-        <em style={{ fontStyle: "italic", color: T.gold }}>Carefully</em> Chosen
-      </>
-    ),
-    sub: "Browse properties verified for quality — from city penthouses to island retreats. Book with confidence.",
-    cta: "Explore Stays",
-  };
-  const hostCopy = {
-    eyebrow: "For Hosts",
-    headline: (
-      <>
-        Your Property,
-        <br />
-        <em style={{ fontStyle: "italic", color: T.gold }}>Properly</em>{" "}
-        Presented
-      </>
-    ),
-    sub: "List with a platform that values your property as much as you do. Reach guests who appreciate quality.",
-    cta: "List a Property",
-  };
-  const copy = audience === "guest" ? guestCopy : hostCopy;
+  const copy =
+    audience === "guest"
+      ? {
+          eyebrow: "For Guests",
+          headline: (
+            <>
+              Every Stay,
+              <br />
+              <em style={{ fontStyle: "italic", color: T.gold }}>
+                Carefully
+              </em>{" "}
+              Chosen
+            </>
+          ),
+          sub: "Browse properties verified for quality — from city penthouses to island retreats.",
+          cta: "Explore Stays",
+        }
+      : {
+          eyebrow: "For Hosts",
+          headline: (
+            <>
+              Your Property,
+              <br />
+              <em style={{ fontStyle: "italic", color: T.gold }}>
+                Properly
+              </em>{" "}
+              Presented
+            </>
+          ),
+          sub: "List with a platform that values your property as much as you do. Reach guests who appreciate quality.",
+          cta: "List a Property",
+        };
 
   return (
     <>
       <style>{`
-        @keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
-        @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
-        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&display=swap');
-        * { box-sizing: border-box; }
-        input[type="date"]::-webkit-calendar-picker-indicator { opacity:.4; cursor:pointer; }
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(14px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { -webkit-font-smoothing: antialiased; }
+        input[type="date"]::-webkit-calendar-picker-indicator { opacity: .4; cursor: pointer; }
         input::placeholder { color: ${T.muted} !important; }
-        ::-webkit-scrollbar { width:4px; }
-        ::-webkit-scrollbar-thumb { background:${T.border}; border-radius:99px; }
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: ${T.border}; border-radius: 99px; }
         .lux-field:focus-within { border-color: ${T.gold} !important; }
-        .audience-pill { transition: background .2s, color .2s, border-color .2s; }
+        .nav-link {
+          color: ${T.sub}; font-size: 13px; font-weight: 500;
+          text-decoration: none; transition: color .18s; background: none; border: none; cursor: pointer;
+        }
+        .nav-link:hover { color: ${T.text}; }
+        .chip-btn {
+          background: ${T.surface}; color: ${T.sub};
+          border: 1px solid ${T.border}; font-size: 12px;
+          padding: 6px 14px; border-radius: 99px; cursor: pointer;
+          transition: all .18s; white-space: nowrap; font-family: inherit;
+        }
+        .chip-btn:hover {
+          border-color: ${T.goldBorder}; color: ${T.gold}; background: ${T.goldDim};
+        }
+        .audience-btn {
+          border-radius: 99px; padding: 8px 20px; font-size: 12px;
+          font-weight: 600; cursor: pointer; letter-spacing: .02em;
+          transition: background .2s, color .2s, border-color .2s, box-shadow .2s;
+          font-family: inherit; white-space: nowrap;
+        }
+        .gold-btn {
+          background: ${T.gold}; color: #fff; border: none; cursor: pointer;
+          font-weight: 700; letter-spacing: .03em; transition: background .18s;
+          font-family: inherit; display: flex; align-items: center; gap: 7px;
+          box-shadow: 0 4px 16px rgba(201,169,110,.35);
+        }
+        .gold-btn:hover { background: ${T.goldHover}; }
+        .gold-btn:disabled { opacity: .7; cursor: not-allowed; }
       `}</style>
 
       {searched && (
@@ -713,10 +782,10 @@ const Hero = ({
       <div
         style={{
           background: T.white,
-          minHeight: "100vh",
+          minHeight: "100dvh",
           display: "flex",
           flexDirection: "column",
-          fontFamily: "'Inter', 'Helvetica Neue', sans-serif",
+          fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
         }}
       >
         {/* ── NAV ── */}
@@ -725,32 +794,33 @@ const Hero = ({
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "0 52px",
-            height: 68,
+            padding: "0 20px",
+            height: 60,
             borderBottom: `1px solid ${T.border}`,
             position: "sticky",
             top: 0,
             background: "rgba(255,255,255,.96)",
             backdropFilter: "blur(12px)",
             zIndex: 30,
+            gap: 12,
           }}
-          className="px-5 sm:px-10 md:px-[52px]"
         >
           {/* Logo */}
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 9,
+              gap: 8,
               cursor: "pointer",
+              flexShrink: 0,
             }}
           >
-            <img src={logo} alt="LuxStay" style={{ width: 32, height: 32 }} />
+            <img src={logo} alt="LuxStay" style={{ width: 30, height: 30 }} />
             <span
               style={{
                 fontFamily: "Cormorant Garamond, serif",
                 color: T.text,
-                fontSize: 18,
+                fontSize: 17,
                 fontWeight: 600,
                 letterSpacing: ".01em",
               }}
@@ -759,85 +829,38 @@ const Hero = ({
             </span>
           </div>
 
-          {/* Desktop links */}
+          {/* Desktop links — hidden on mobile */}
           <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 24,
+              flex: 1,
+              justifyContent: "center",
+            }}
             className="hidden md:flex"
-            style={{ display: "flex", alignItems: "center", gap: 28 }}
           >
             {["Explore", "How it Works", "For Hosts"].map((l) => (
-              <a
-                key={l}
-                href="#"
-                style={{
-                  color: T.sub,
-                  fontSize: 13,
-                  fontWeight: 500,
-                  textDecoration: "none",
-                  transition: "color .18s",
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = T.text)}
-                onMouseLeave={(e) => (e.currentTarget.style.color = T.sub)}
-              >
+              <a key={l} href="#" className="nav-link">
                 {l}
               </a>
             ))}
-            <div style={{ width: 1, height: 16, background: T.border }} />
-            <button
-              type="button"
-              onClick={onLogin}
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                color: T.sub,
-                fontSize: 13,
-                fontWeight: 500,
-                transition: "color .18s",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = T.text)}
-              onMouseLeave={(e) => (e.currentTarget.style.color = T.sub)}
-            >
-              Sign in
-            </button>
-            <button
-              type="button"
-              onClick={onSignup}
-              style={{
-                background: T.text,
-                color: T.white,
-                border: "none",
-                cursor: "pointer",
-                fontSize: 13,
-                fontWeight: 600,
-                padding: "9px 22px",
-                borderRadius: 99,
-                letterSpacing: ".02em",
-                transition: "background .18s",
-              }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.background = "#2D2924")
-              }
-              onMouseLeave={(e) => (e.currentTarget.style.background = T.text)}
-            >
-              List a Property
-            </button>
           </div>
 
-          {/* Mobile */}
+          {/* Auth buttons */}
           <div
-            className="flex md:hidden"
-            style={{ display: "flex", alignItems: "center", gap: 8 }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexShrink: 0,
+            }}
           >
             <button
               type="button"
               onClick={onLogin}
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                color: T.sub,
-                fontSize: 13,
-              }}
+              className="nav-link"
+              style={{ padding: "0 4px" }}
             >
               Sign in
             </button>
@@ -853,9 +876,17 @@ const Hero = ({
                 fontWeight: 600,
                 padding: "8px 16px",
                 borderRadius: 99,
+                letterSpacing: ".02em",
+                transition: "background .18s",
+                whiteSpace: "nowrap",
+                fontFamily: "inherit",
               }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = "#2D2924")
+              }
+              onMouseLeave={(e) => (e.currentTarget.style.background = T.text)}
             >
-              Join
+              List Property
             </button>
           </div>
         </nav>
@@ -868,10 +899,10 @@ const Hero = ({
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
-            padding: "64px 24px 80px",
+            padding: "40px 20px 48px",
           }}
         >
-          <div style={{ width: "100%", maxWidth: 840 }}>
+          <div style={{ width: "100%", maxWidth: 860 }}>
             {/* Audience toggle */}
             <div
               style={{
@@ -881,14 +912,14 @@ const Hero = ({
                 border: `1px solid ${T.border}`,
                 borderRadius: 99,
                 padding: 4,
-                marginBottom: 36,
+                marginBottom: 28,
                 animation: "fadeUp .4s ease both",
               }}
             >
               {(["guest", "host"] as const).map((a) => (
                 <button
                   key={a}
-                  className="audience-pill"
+                  className="audience-btn"
                   onClick={() => setAudience(a)}
                   style={{
                     background: audience === a ? T.white : "transparent",
@@ -897,14 +928,8 @@ const Hero = ({
                       audience === a
                         ? `1px solid ${T.border}`
                         : "1px solid transparent",
-                    borderRadius: 99,
-                    padding: "7px 20px",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: "pointer",
                     boxShadow:
                       audience === a ? "0 1px 4px rgba(0,0,0,.08)" : "none",
-                    letterSpacing: ".02em",
                   }}
                 >
                   {a === "guest" ? "I'm a Guest" : "I'm a Host"}
@@ -918,11 +943,18 @@ const Hero = ({
                 display: "flex",
                 alignItems: "center",
                 gap: 12,
-                marginBottom: 20,
+                marginBottom: 16,
                 animation: "fadeUp .45s ease 40ms both",
               }}
             >
-              <div style={{ width: 28, height: 1, background: T.gold }} />
+              <div
+                style={{
+                  width: 24,
+                  height: 1,
+                  background: T.gold,
+                  flexShrink: 0,
+                }}
+              />
               <p
                 style={{
                   fontSize: 10,
@@ -936,15 +968,15 @@ const Hero = ({
               </p>
             </div>
 
-            {/* Headline — left-aligned, large Cormorant */}
+            {/* Headline */}
             <h1
               style={{
                 fontFamily: "Cormorant Garamond, serif",
-                fontSize: "clamp(44px, 7vw, 80px)",
+                fontSize: "clamp(38px, 7vw, 76px)",
                 fontWeight: 500,
                 lineHeight: 1.08,
                 color: T.text,
-                marginBottom: 20,
+                marginBottom: 16,
                 letterSpacing: "-.01em",
                 animation: "fadeUp .5s ease 80ms both",
               }}
@@ -955,10 +987,10 @@ const Hero = ({
             <p
               style={{
                 color: T.sub,
-                fontSize: 15,
+                fontSize: "clamp(13px, 2.2vw, 15px)",
                 lineHeight: 1.75,
-                maxWidth: 480,
-                marginBottom: 48,
+                maxWidth: 440,
+                marginBottom: 36,
                 animation: "fadeUp .5s ease 120ms both",
               }}
             >
@@ -967,48 +999,44 @@ const Hero = ({
 
             {/* ── SEARCH PANEL ── */}
             <div style={{ animation: "fadeUp .5s ease 160ms both" }}>
-              {/* Desktop */}
+              {/* Search card — unified for all screen sizes, stacks on mobile */}
               <div
-                className="hidden sm:flex"
                 style={{
-                  display: "flex",
-                  alignItems: "stretch",
                   background: T.white,
                   border: `1.5px solid ${T.border}`,
                   borderRadius: 16,
                   boxShadow:
                     "0 4px 24px rgba(0,0,0,.07), 0 1px 3px rgba(0,0,0,.04)",
                   overflow: "visible",
-                  position: "relative",
                 }}
               >
-                {/* Location */}
+                {/* Location row — always full width */}
                 <div
                   ref={sugRef}
                   className="lux-field"
                   style={{
-                    flex: "2 1 0",
-                    padding: "16px 20px",
-                    borderRight: `1px solid ${T.border}`,
-                    borderRadius: "14px 0 0 14px",
+                    padding: "14px 18px",
+                    borderBottom: `1px solid ${T.border}`,
+                    borderRadius: "14px 14px 0 0",
                     border: `1.5px solid transparent`,
                     transition: "border-color .18s",
                     position: "relative",
                   }}
                 >
-                  <Label>Destination</Label>
+                  <FieldLabel>Destination</FieldLabel>
                   <div
-                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                    style={{ display: "flex", alignItems: "center", gap: 10 }}
                   >
                     <MapPinIcon
                       style={{
-                        width: 14,
-                        height: 14,
+                        width: 15,
+                        height: 15,
                         color: T.gold,
                         flexShrink: 0,
                       }}
                     />
                     <input
+                      ref={queryInputRef}
                       type="text"
                       value={form.query}
                       onChange={(e) =>
@@ -1024,39 +1052,46 @@ const Hero = ({
                         border: "none",
                         outline: "none",
                         color: T.text,
-                        fontSize: 13,
+                        fontSize: 14,
                         fontWeight: 500,
+                        fontFamily: "inherit",
                       }}
                     />
                     {form.query && (
                       <button
-                        onClick={() => setForm((f) => ({ ...f, query: "" }))}
+                        onClick={() => {
+                          setForm((f) => ({ ...f, query: "" }));
+                          queryInputRef.current?.focus();
+                        }}
                         style={{
                           background: "none",
                           border: "none",
                           cursor: "pointer",
                           padding: 0,
                           lineHeight: 0,
+                          flexShrink: 0,
                         }}
                       >
                         <XMarkIcon
-                          style={{ width: 13, height: 13, color: T.muted }}
+                          style={{ width: 14, height: 14, color: T.muted }}
                         />
                       </button>
                     )}
                   </div>
+
+                  {/* Suggestions dropdown */}
                   {showSug && suggestions.length > 0 && (
                     <div
                       style={{
                         position: "absolute",
-                        top: "calc(100% + 8px)",
-                        left: -1,
+                        top: "calc(100% + 6px)",
+                        left: 0,
+                        right: 0,
                         zIndex: 40,
                         background: T.white,
                         border: `1px solid ${T.border}`,
                         borderRadius: 14,
                         overflow: "hidden",
-                        minWidth: 260,
                         boxShadow: "0 12px 40px rgba(0,0,0,.12)",
                       }}
                     >
@@ -1070,7 +1105,7 @@ const Hero = ({
                           style={{
                             width: "100%",
                             textAlign: "left",
-                            padding: "11px 16px",
+                            padding: "12px 16px",
                             fontSize: 13,
                             color: T.sub,
                             background: "none",
@@ -1081,6 +1116,7 @@ const Hero = ({
                             alignItems: "center",
                             gap: 10,
                             transition: "background .14s, color .14s",
+                            fontFamily: "inherit",
                           }}
                           onMouseEnter={(e) => {
                             (e.currentTarget as HTMLElement).style.background =
@@ -1110,308 +1146,201 @@ const Hero = ({
                   )}
                 </div>
 
-                {/* Check-in */}
+                {/* Dates + Guests row */}
                 <div
-                  className="lux-field"
                   style={{
-                    flex: "1 1 0",
-                    padding: "16px 16px",
-                    borderRight: `1px solid ${T.border}`,
-                    border: `1.5px solid transparent`,
-                    transition: "border-color .18s",
-                  }}
-                >
-                  <Label>Check-in</Label>
-                  <input
-                    type="date"
-                    min={today}
-                    value={form.checkIn}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        checkIn: e.target.value,
-                        checkOut:
-                          f.checkOut && f.checkOut <= e.target.value
-                            ? ""
-                            : f.checkOut,
-                      }))
-                    }
-                    style={{
-                      background: "none",
-                      border: "none",
-                      outline: "none",
-                      color: form.checkIn ? T.text : T.muted,
-                      fontSize: 12,
-                      fontWeight: 500,
-                      width: "100%",
-                      colorScheme: "light",
-                    }}
-                  />
-                </div>
-
-                {/* Check-out */}
-                <div
-                  className="lux-field"
-                  style={{
-                    flex: "1 1 0",
-                    padding: "16px 16px",
-                    borderRight: `1px solid ${T.border}`,
-                    border: `1.5px solid transparent`,
-                    transition: "border-color .18s",
-                  }}
-                >
-                  <Label>
-                    Check-out
-                    {nights > 0 && (
-                      <span
-                        style={{
-                          color: T.gold,
-                          marginLeft: 6,
-                          fontWeight: 700,
-                          textTransform: "none",
-                          letterSpacing: 0,
-                        }}
-                      >
-                        {nights}n
-                      </span>
-                    )}
-                  </Label>
-                  <input
-                    type="date"
-                    min={form.checkIn || today}
-                    value={form.checkOut}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, checkOut: e.target.value }))
-                    }
-                    style={{
-                      background: "none",
-                      border: "none",
-                      outline: "none",
-                      color: form.checkOut ? T.text : T.muted,
-                      fontSize: 12,
-                      fontWeight: 500,
-                      width: "100%",
-                      colorScheme: "light",
-                    }}
-                  />
-                </div>
-
-                {/* Guests */}
-                <div
-                  className="lux-field"
-                  style={{
-                    width: 100,
-                    padding: "16px 16px",
-                    borderRight: `1px solid ${T.border}`,
-                    border: `1.5px solid transparent`,
-                    transition: "border-color .18s",
-                  }}
-                >
-                  <Label>Guests</Label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="20"
-                    value={form.guests}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, guests: e.target.value }))
-                    }
-                    onKeyDown={(e) => e.key === "Enter" && doSearch()}
-                    placeholder="Any"
-                    style={{
-                      background: "none",
-                      border: "none",
-                      outline: "none",
-                      color: T.text,
-                      fontSize: 13,
-                      fontWeight: 500,
-                      width: "100%",
-                    }}
-                  />
-                </div>
-
-                {/* CTA */}
-                <div style={{ padding: "8px" }}>
-                  <button
-                    onClick={() => doSearch()}
-                    disabled={loading}
-                    style={{
-                      background: T.gold,
-                      color: T.white,
-                      border: "none",
-                      cursor: loading ? "not-allowed" : "pointer",
-                      opacity: loading ? 0.7 : 1,
-                      fontWeight: 700,
-                      fontSize: 13,
-                      height: "100%",
-                      padding: "0 24px",
-                      borderRadius: 10,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 7,
-                      letterSpacing: ".03em",
-                      whiteSpace: "nowrap",
-                      boxShadow: "0 4px 16px rgba(201,169,110,.4)",
-                      transition: "background .18s",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!loading)
-                        (e.currentTarget as HTMLElement).style.background =
-                          "#B8935A";
-                    }}
-                    onMouseLeave={(e) =>
-                      ((e.currentTarget as HTMLElement).style.background =
-                        T.gold)
-                    }
-                  >
-                    {loading ? (
-                      <span
-                        style={{
-                          width: 14,
-                          height: 14,
-                          border: "2px solid rgba(255,255,255,.3)",
-                          borderTopColor: T.white,
-                          borderRadius: "50%",
-                          display: "inline-block",
-                        }}
-                        className="animate-spin"
-                      />
-                    ) : (
-                      <MagnifyingGlassIcon style={{ width: 15, height: 15 }} />
-                    )}
-                    {loading ? "Searching" : "Search"}
-                  </button>
-                </div>
-              </div>
-
-              {/* Mobile stacked */}
-              <div
-                className="flex sm:hidden flex-col"
-                style={{
-                  background: T.white,
-                  border: `1.5px solid ${T.border}`,
-                  borderRadius: 16,
-                  overflow: "hidden",
-                  boxShadow: "0 4px 24px rgba(0,0,0,.07)",
-                }}
-              >
-                <div
-                  ref={sugRef}
-                  style={{
-                    position: "relative",
-                    padding: "14px 18px",
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr 1fr",
                     borderBottom: `1px solid ${T.border}`,
                   }}
                 >
-                  <Label>Destination</Label>
+                  {/* Check-in */}
                   <div
-                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                    className="lux-field"
+                    style={{
+                      padding: "13px 16px",
+                      borderRight: `1px solid ${T.border}`,
+                      border: `1.5px solid transparent`,
+                      transition: "border-color .18s",
+                    }}
                   >
-                    <MapPinIcon
+                    <FieldLabel>
+                      <span
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                        }}
+                      >
+                        <CalendarDaysIcon style={{ width: 9, height: 9 }} />{" "}
+                        Check-in
+                      </span>
+                    </FieldLabel>
+                    <input
+                      type="date"
+                      min={today}
+                      value={form.checkIn}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          checkIn: e.target.value,
+                          checkOut:
+                            f.checkOut && f.checkOut <= e.target.value
+                              ? ""
+                              : f.checkOut,
+                        }))
+                      }
                       style={{
-                        width: 14,
-                        height: 14,
-                        color: T.gold,
-                        flexShrink: 0,
+                        background: "none",
+                        border: "none",
+                        outline: "none",
+                        color: form.checkIn ? T.text : T.muted,
+                        fontSize: 12,
+                        fontWeight: 500,
+                        width: "100%",
+                        colorScheme: "light",
+                        fontFamily: "inherit",
                       }}
                     />
+                  </div>
+
+                  {/* Check-out */}
+                  <div
+                    className="lux-field"
+                    style={{
+                      padding: "13px 16px",
+                      borderRight: `1px solid ${T.border}`,
+                      border: `1.5px solid transparent`,
+                      transition: "border-color .18s",
+                    }}
+                  >
+                    <FieldLabel>
+                      <span
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                        }}
+                      >
+                        <CalendarDaysIcon style={{ width: 9, height: 9 }} />
+                        Check-out
+                        {nights > 0 && (
+                          <span
+                            style={{
+                              color: T.gold,
+                              fontWeight: 700,
+                              letterSpacing: 0,
+                              textTransform: "none",
+                            }}
+                          >
+                            &nbsp;·&nbsp;{nights}n
+                          </span>
+                        )}
+                      </span>
+                    </FieldLabel>
                     <input
-                      type="text"
-                      value={form.query}
+                      type="date"
+                      min={form.checkIn || today}
+                      value={form.checkOut}
                       onChange={(e) =>
-                        setForm((f) => ({ ...f, query: e.target.value }))
+                        setForm((f) => ({ ...f, checkOut: e.target.value }))
+                      }
+                      style={{
+                        background: "none",
+                        border: "none",
+                        outline: "none",
+                        color: form.checkOut ? T.text : T.muted,
+                        fontSize: 12,
+                        fontWeight: 500,
+                        width: "100%",
+                        colorScheme: "light",
+                        fontFamily: "inherit",
+                      }}
+                    />
+                  </div>
+
+                  {/* Guests */}
+                  <div
+                    className="lux-field"
+                    style={{
+                      padding: "13px 16px",
+                      border: `1.5px solid transparent`,
+                      transition: "border-color .18s",
+                    }}
+                  >
+                    <FieldLabel>
+                      <span
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                        }}
+                      >
+                        <UserGroupIcon style={{ width: 9, height: 9 }} /> Guests
+                      </span>
+                    </FieldLabel>
+                    <input
+                      type="number"
+                      min="1"
+                      max="20"
+                      value={form.guests}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, guests: e.target.value }))
                       }
                       onKeyDown={(e) => e.key === "Enter" && doSearch()}
-                      placeholder="City, country or style…"
-                      autoComplete="off"
+                      placeholder="Any"
                       style={{
-                        flex: 1,
                         background: "none",
                         border: "none",
                         outline: "none",
                         color: T.text,
                         fontSize: 13,
+                        fontWeight: 500,
+                        width: "100%",
+                        fontFamily: "inherit",
                       }}
                     />
                   </div>
                 </div>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr 80px",
-                    borderBottom: `1px solid ${T.border}`,
-                  }}
-                >
-                  {[
-                    {
-                      label: "Check-in",
-                      type: "date",
-                      key: "checkIn",
-                      min: today,
-                    },
-                    {
-                      label: "Check-out",
-                      type: "date",
-                      key: "checkOut",
-                      min: form.checkIn || today,
-                    },
-                    {
-                      label: "Guests",
-                      type: "number",
-                      key: "guests",
-                      min: "1",
-                    },
-                  ].map(({ label, type, key, min }, i) => (
-                    <div
-                      key={key}
-                      style={{
-                        padding: "12px 14px",
-                        borderRight: i < 2 ? `1px solid ${T.border}` : "none",
-                      }}
-                    >
-                      <Label>{label}</Label>
-                      <input
-                        type={type}
-                        min={min}
-                        value={form[key as keyof SearchState]}
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, [key]: e.target.value }))
-                        }
-                        placeholder="Any"
-                        style={{
-                          background: "none",
-                          border: "none",
-                          outline: "none",
-                          color: T.text,
-                          fontSize: 12,
-                          width: "100%",
-                        }}
-                      />
-                    </div>
-                  ))}
-                </div>
+
+                {/* Search button row */}
                 <div style={{ padding: "12px 14px" }}>
                   <button
                     onClick={() => doSearch()}
                     disabled={loading}
+                    className="gold-btn"
                     style={{
                       width: "100%",
-                      background: T.gold,
-                      color: T.white,
-                      border: "none",
-                      cursor: "pointer",
-                      fontWeight: 700,
                       fontSize: 14,
-                      padding: "13px 0",
-                      borderRadius: 10,
-                      display: "flex",
-                      alignItems: "center",
+                      fontWeight: 700,
+                      padding: "14px 0",
+                      borderRadius: 11,
                       justifyContent: "center",
-                      gap: 8,
                     }}
                   >
-                    <MagnifyingGlassIcon style={{ width: 15, height: 15 }} />
-                    {loading ? "Searching…" : "Search Stays"}
+                    {loading ? (
+                      <>
+                        <span
+                          style={{
+                            width: 15,
+                            height: 15,
+                            border: "2px solid rgba(255,255,255,.3)",
+                            borderTopColor: "#fff",
+                            borderRadius: "50%",
+                            display: "inline-block",
+                            animation: "spin .7s linear infinite",
+                          }}
+                        />
+                        Searching…
+                      </>
+                    ) : (
+                      <>
+                        <MagnifyingGlassIcon
+                          style={{ width: 16, height: 16 }}
+                        />
+                        Search Luxury Stays
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -1422,7 +1351,7 @@ const Hero = ({
                   display: "flex",
                   alignItems: "center",
                   gap: 8,
-                  marginTop: 18,
+                  marginTop: 16,
                   flexWrap: "wrap",
                 }}
               >
@@ -1431,6 +1360,7 @@ const Hero = ({
                     fontSize: 11,
                     color: T.muted,
                     letterSpacing: ".08em",
+                    flexShrink: 0,
                   }}
                 >
                   Popular:
@@ -1439,31 +1369,8 @@ const Hero = ({
                   (chip) => (
                     <button
                       key={chip}
+                      className="chip-btn"
                       onClick={() => doSearch({ query: chip })}
-                      style={{
-                        background: T.surface,
-                        color: T.sub,
-                        border: `1px solid ${T.border}`,
-                        fontSize: 12,
-                        padding: "5px 14px",
-                        borderRadius: 99,
-                        cursor: "pointer",
-                        transition: "all .18s",
-                      }}
-                      onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLElement).style.borderColor =
-                          T.goldBorder;
-                        (e.currentTarget as HTMLElement).style.color = T.gold;
-                        (e.currentTarget as HTMLElement).style.background =
-                          T.goldDim;
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLElement).style.borderColor =
-                          T.border;
-                        (e.currentTarget as HTMLElement).style.color = T.sub;
-                        (e.currentTarget as HTMLElement).style.background =
-                          T.surface;
-                      }}
                     >
                       {chip}
                     </button>
@@ -1478,65 +1385,54 @@ const Hero = ({
         <div
           style={{
             borderTop: `1px solid ${T.border}`,
-            padding: "22px 52px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 0,
             background: T.surface,
+            padding: "20px 20px",
+            display: "grid",
+            gridTemplateColumns: "repeat(4, 1fr)",
+            gap: 0,
           }}
-          className="px-5 sm:px-10 md:px-[52px] flex-wrap gap-y-4"
         >
           {[
-            { v: "500+", l: "Verified Properties" },
-            { v: "4.9★", l: "Average Rating" },
-            { v: "24/7", l: "Guest & Host Support" },
+            { v: "500+", l: "Properties" },
+            { v: "4.9★", l: "Avg Rating" },
+            { v: "24/7", l: "Support" },
             { v: "50+", l: "Countries" },
           ].map(({ v, l }, i) => (
-            <div key={l} style={{ display: "flex", alignItems: "center" }}>
-              {i > 0 && (
-                <div
-                  style={{
-                    width: 1,
-                    height: 24,
-                    background: T.border,
-                    margin: "0 36px",
-                  }}
-                  className="hidden sm:block"
-                />
-              )}
-              <div style={{ textAlign: "center" }}>
-                <p
-                  style={{
-                    fontFamily: "Cormorant Garamond, serif",
-                    fontSize: 22,
-                    fontWeight: 600,
-                    color: T.text,
-                    lineHeight: 1,
-                  }}
-                >
-                  {v}
-                </p>
-                <p
-                  style={{
-                    fontSize: 10,
-                    color: T.muted,
-                    letterSpacing: ".16em",
-                    textTransform: "uppercase",
-                    marginTop: 5,
-                    fontWeight: 600,
-                  }}
-                >
-                  {l}
-                </p>
-              </div>
+            <div
+              key={l}
+              style={{
+                textAlign: "center",
+                padding: "4px 8px",
+                borderRight: i < 3 ? `1px solid ${T.border}` : "none",
+              }}
+            >
+              <p
+                style={{
+                  fontFamily: "Cormorant Garamond, serif",
+                  fontSize: "clamp(18px, 4vw, 22px)",
+                  fontWeight: 600,
+                  color: T.text,
+                  lineHeight: 1,
+                }}
+              >
+                {v}
+              </p>
+              <p
+                style={{
+                  fontSize: "clamp(8px, 2vw, 10px)",
+                  color: T.muted,
+                  letterSpacing: ".14em",
+                  textTransform: "uppercase",
+                  marginTop: 4,
+                  fontWeight: 600,
+                }}
+              >
+                {l}
+              </p>
             </div>
           ))}
         </div>
       </div>
-      <style>{`@keyframes spin { to { transform:rotate(360deg); } }`}</style>
     </>
   );
-};
-
-export default Hero;
+}
