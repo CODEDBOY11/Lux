@@ -20,9 +20,20 @@ type SearchState = {
   guests: string;
 };
 
-/* ─────────────────────────────────────────────────────────
-   Hotel Card — refined dark card
-───────────────────────────────────────────────────────── */
+/* ─── tokens ─────────────────────────────────────────── */
+const T = {
+  white: "#FFFFFF",
+  surface: "#F7F6F3",
+  border: "#E8E5E0",
+  text: "#1A1814",
+  sub: "#6B6560",
+  muted: "#A09890",
+  gold: "#C9A96E",
+  goldDim: "rgba(201,169,110,0.15)",
+  goldBorder: "rgba(201,169,110,0.3)",
+};
+
+/* ─── Hotel Card (light) ─────────────────────────────── */
 const HotelCard = ({
   hotel,
   nights,
@@ -31,278 +42,272 @@ const HotelCard = ({
 }: {
   hotel: Hotel;
   nights: number;
-  onBook?: (hotel: Hotel) => void;
+  onBook?: (h: Hotel) => void;
   index?: number;
-}) => (
-  <div
-    style={{
-      animation: `fadeUp 0.5s ease ${index * 60}ms both`,
-      background: "#1A1814",
-      border: "1px solid rgba(245,240,232,0.08)",
-      borderRadius: 20,
-      overflow: "hidden",
-      display: "flex",
-      flexDirection: "column",
-      transition: "border-color 0.25s, transform 0.25s",
-    }}
-    onMouseEnter={(e) => {
-      (e.currentTarget as HTMLElement).style.borderColor =
-        "rgba(201,169,110,0.35)";
-      (e.currentTarget as HTMLElement).style.transform = "translateY(-3px)";
-    }}
-    onMouseLeave={(e) => {
-      (e.currentTarget as HTMLElement).style.borderColor =
-        "rgba(245,240,232,0.08)";
-      (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
-    }}
-  >
-    <div style={{ position: "relative", height: 210, overflow: "hidden" }}>
-      <img
-        src={hotel.thumbnail}
-        alt={hotel.name}
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          transition: "transform 0.6s",
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
-        onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
-        onError={(e) => {
-          (e.target as HTMLImageElement).src =
-            "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400";
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          background:
-            "linear-gradient(to top, rgba(15,14,12,0.7) 0%, transparent 50%)",
-        }}
-      />
-      <span
-        style={{
-          position: "absolute",
-          top: 14,
-          left: 14,
-          background: "rgba(15,14,12,0.75)",
-          backdropFilter: "blur(10px)",
-          color: "#C9A96E",
-          fontSize: 9,
-          fontWeight: 700,
-          letterSpacing: "0.22em",
-          textTransform: "uppercase",
-          padding: "5px 12px",
-          borderRadius: 99,
-          border: "1px solid rgba(201,169,110,0.25)",
-        }}
-      >
-        {hotel.category}
-      </span>
-      {hotel.featured && (
-        <span
+}) => {
+  const [hov, setHov] = useState(false);
+  return (
+    <div
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        background: T.white,
+        border: `1px solid ${hov ? T.goldBorder : T.border}`,
+        borderRadius: 16,
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+        transition: "border-color .22s, box-shadow .22s, transform .22s",
+        boxShadow: hov
+          ? "0 12px 40px rgba(0,0,0,0.10)"
+          : "0 2px 8px rgba(0,0,0,0.04)",
+        transform: hov ? "translateY(-2px)" : "none",
+        animation: `fadeUp .45s ease ${index * 55}ms both`,
+      }}
+    >
+      <div style={{ position: "relative", height: 196, overflow: "hidden" }}>
+        <img
+          src={hotel.thumbnail}
+          alt={hotel.name}
           style={{
-            position: "absolute",
-            top: 14,
-            right: 14,
-            background: "#C9A96E",
-            color: "#0F0E0C",
-            fontSize: 9,
-            fontWeight: 900,
-            letterSpacing: "0.15em",
-            textTransform: "uppercase",
-            padding: "5px 12px",
-            borderRadius: 99,
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            transition: "transform .6s",
+            transform: hov ? "scale(1.04)" : "scale(1)",
           }}
-        >
-          <FireIcon style={{ width: 10, height: 10 }} /> Featured
-        </span>
-      )}
-      {hotel.rating > 0 && (
+          onError={(e) => {
+            (e.target as HTMLImageElement).src =
+              "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400";
+          }}
+        />
         <div
           style={{
             position: "absolute",
-            bottom: 14,
-            left: 14,
-            display: "flex",
-            alignItems: "center",
-            gap: 5,
-            background: "rgba(15,14,12,0.75)",
-            backdropFilter: "blur(8px)",
-            padding: "5px 10px",
-            borderRadius: 99,
+            inset: 0,
+            background:
+              "linear-gradient(to top, rgba(26,24,20,.45) 0%, transparent 55%)",
           }}
-        >
-          <StarIcon style={{ width: 11, height: 11, color: "#C9A96E" }} />
-          <span style={{ color: "#F5F0E8", fontSize: 12, fontWeight: 700 }}>
-            {hotel.rating}
-          </span>
-          {hotel.reviewCount > 0 && (
-            <span style={{ color: "rgba(245,240,232,0.4)", fontSize: 10 }}>
-              ({hotel.reviewCount})
-            </span>
-          )}
-        </div>
-      )}
-    </div>
-
-    <div
-      style={{
-        padding: "20px 22px 22px",
-        display: "flex",
-        flexDirection: "column",
-        flex: 1,
-      }}
-    >
-      <h3
-        style={{
-          fontFamily: "Cormorant Garamond, serif",
-          fontWeight: 600,
-          color: "#F5F0E8",
-          fontSize: 18,
-          lineHeight: 1.2,
-          marginBottom: 6,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {hotel.name}
-      </h3>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 5,
-          marginBottom: 12,
-        }}
-      >
-        <MapPinIcon
-          style={{ width: 13, height: 13, color: "#C9A96E", flexShrink: 0 }}
         />
         <span
           style={{
-            color: "rgba(245,240,232,0.4)",
-            fontSize: 12,
+            position: "absolute",
+            top: 12,
+            left: 12,
+            background: "rgba(255,255,255,.88)",
+            backdropFilter: "blur(8px)",
+            color: T.text,
+            fontSize: 9,
+            fontWeight: 700,
+            letterSpacing: ".18em",
+            textTransform: "uppercase",
+            padding: "4px 11px",
+            borderRadius: 99,
+            border: `1px solid ${T.border}`,
+          }}
+        >
+          {hotel.category}
+        </span>
+        {hotel.featured && (
+          <span
+            style={{
+              position: "absolute",
+              top: 12,
+              right: 12,
+              background: T.gold,
+              color: T.white,
+              fontSize: 9,
+              fontWeight: 800,
+              letterSpacing: ".14em",
+              textTransform: "uppercase",
+              padding: "4px 11px",
+              borderRadius: 99,
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+            }}
+          >
+            <FireIcon style={{ width: 9, height: 9 }} /> Featured
+          </span>
+        )}
+        {hotel.rating > 0 && (
+          <div
+            style={{
+              position: "absolute",
+              bottom: 12,
+              left: 12,
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              background: "rgba(255,255,255,.88)",
+              backdropFilter: "blur(8px)",
+              padding: "4px 10px",
+              borderRadius: 99,
+              border: `1px solid ${T.border}`,
+            }}
+          >
+            <StarIcon style={{ width: 10, height: 10, color: T.gold }} />
+            <span style={{ color: T.text, fontSize: 11, fontWeight: 700 }}>
+              {hotel.rating}
+            </span>
+            {hotel.reviewCount > 0 && (
+              <span style={{ color: T.muted, fontSize: 10 }}>
+                ({hotel.reviewCount})
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div
+        style={{
+          padding: "18px 20px 20px",
+          display: "flex",
+          flexDirection: "column",
+          flex: 1,
+        }}
+      >
+        <h3
+          style={{
+            fontFamily: "Cormorant Garamond, serif",
+            fontWeight: 600,
+            color: T.text,
+            fontSize: 17,
+            lineHeight: 1.25,
+            marginBottom: 5,
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
           }}
         >
-          {hotel.location}
-        </span>
-      </div>
-      <p
-        style={{
-          color: "rgba(245,240,232,0.45)",
-          fontSize: 12.5,
-          lineHeight: 1.7,
-          marginBottom: 14,
-          flex: 1,
-          display: "-webkit-box",
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: "vertical",
-          overflow: "hidden",
-        }}
-      >
-        {hotel.shortDescription}
-      </p>
-      <div
-        style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 18 }}
-      >
-        {hotel.tags.slice(0, 3).map((tag) => (
-          <span
-            key={tag}
-            style={{
-              fontSize: 10,
-              fontWeight: 600,
-              color: "#C9A96E",
-              background: "rgba(201,169,110,0.1)",
-              border: "1px solid rgba(201,169,110,0.2)",
-              padding: "3px 10px",
-              borderRadius: 99,
-            }}
-          >
-            {tag}
-          </span>
-        ))}
-      </div>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          borderTop: "1px solid rgba(245,240,232,0.07)",
-          paddingTop: 14,
-        }}
-      >
-        <div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-            <span
-              style={{
-                fontFamily: "Cormorant Garamond, serif",
-                fontSize: 22,
-                fontWeight: 700,
-                color: "#F5F0E8",
-              }}
-            >
-              ₦{hotel.pricePerNight.toLocaleString()}
-            </span>
-            <span style={{ color: "rgba(245,240,232,0.35)", fontSize: 11 }}>
-              / night
-            </span>
-          </div>
-          {nights > 0 && (
-            <p
-              style={{
-                fontSize: 11,
-                color: "rgba(245,240,232,0.3)",
-                marginTop: 2,
-              }}
-            >
-              ₦{(hotel.pricePerNight * nights).toLocaleString()} · {nights}n
-              total
-            </p>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={() => onBook?.(hotel)}
+          {hotel.name}
+        </h3>
+        <div
           style={{
-            background: "#C9A96E",
-            color: "#0F0E0C",
-            fontSize: 12,
-            fontWeight: 700,
-            padding: "10px 20px",
-            borderRadius: 12,
-            border: "none",
-            cursor: "pointer",
-            letterSpacing: "0.04em",
-            transition: "background 0.2s, transform 0.15s",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.background = "#DFC08A";
-            (e.currentTarget as HTMLElement).style.transform = "scale(1.04)";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.background = "#C9A96E";
-            (e.currentTarget as HTMLElement).style.transform = "scale(1)";
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            marginBottom: 10,
           }}
         >
-          Reserve
-        </button>
+          <MapPinIcon
+            style={{ width: 12, height: 12, color: T.gold, flexShrink: 0 }}
+          />
+          <span
+            style={{
+              color: T.muted,
+              fontSize: 12,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {hotel.location}
+          </span>
+        </div>
+        <p
+          style={{
+            color: T.sub,
+            fontSize: 12.5,
+            lineHeight: 1.65,
+            marginBottom: 14,
+            flex: 1,
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
+          {hotel.shortDescription}
+        </p>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 5,
+            marginBottom: 16,
+          }}
+        >
+          {hotel.tags.slice(0, 3).map((tag) => (
+            <span
+              key={tag}
+              style={{
+                fontSize: 10,
+                fontWeight: 600,
+                color: T.gold,
+                background: T.goldDim,
+                border: `1px solid ${T.goldBorder}`,
+                padding: "3px 10px",
+                borderRadius: 99,
+              }}
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            borderTop: `1px solid ${T.border}`,
+            paddingTop: 14,
+          }}
+        >
+          <div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
+              <span
+                style={{
+                  fontFamily: "Cormorant Garamond, serif",
+                  fontSize: 21,
+                  fontWeight: 700,
+                  color: T.text,
+                }}
+              >
+                ₦{hotel.pricePerNight.toLocaleString()}
+              </span>
+              <span style={{ color: T.muted, fontSize: 11 }}>/ night</span>
+            </div>
+            {nights > 0 && (
+              <p style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>
+                ₦{(hotel.pricePerNight * nights).toLocaleString()} · {nights}n
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => onBook?.(hotel)}
+            style={{
+              background: T.gold,
+              color: T.white,
+              border: "none",
+              cursor: "pointer",
+              fontSize: 12,
+              fontWeight: 700,
+              padding: "10px 20px",
+              borderRadius: 10,
+              letterSpacing: ".03em",
+              transition: "background .18s, transform .15s",
+              boxShadow: "0 4px 14px rgba(201,169,110,.35)",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.background = "#B8935A";
+              (e.currentTarget as HTMLElement).style.transform = "scale(1.04)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background = T.gold;
+              (e.currentTarget as HTMLElement).style.transform = "scale(1)";
+            }}
+          >
+            Reserve
+          </button>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
-/* ─────────────────────────────────────────────────────────
-   Results Panel
-───────────────────────────────────────────────────────── */
+/* ─── Results Panel ──────────────────────────────────── */
 const ResultsPanel = ({
   results,
   nights,
@@ -316,7 +321,7 @@ const ResultsPanel = ({
   query: string;
   loading: boolean;
   onClose: () => void;
-  onBook?: (hotel: Hotel) => void;
+  onBook?: (h: Hotel) => void;
 }) => (
   <div
     style={{
@@ -333,8 +338,8 @@ const ResultsPanel = ({
       style={{
         position: "absolute",
         inset: 0,
-        background: "rgba(0,0,0,0.75)",
-        backdropFilter: "blur(8px)",
+        background: "rgba(26,24,20,.55)",
+        backdropFilter: "blur(6px)",
       }}
       onClick={onClose}
     />
@@ -342,22 +347,22 @@ const ResultsPanel = ({
       style={{
         position: "relative",
         zIndex: 10,
-        background: "#0F0E0C",
-        border: "1px solid rgba(245,240,232,0.1)",
+        background: "#F7F6F3",
+        border: `1px solid ${T.border}`,
         width: "100%",
         maxHeight: "92dvh",
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
       }}
-      className="sm:max-w-2xl md:max-w-4xl lg:max-w-6xl sm:rounded-3xl rounded-t-3xl"
+      className="sm:max-w-2xl md:max-w-4xl lg:max-w-6xl sm:rounded-2xl rounded-t-2xl"
     >
-      {/* Header */}
+      {/* header */}
       <div
         style={{
-          padding: "22px 28px",
-          background: "#141210",
-          borderBottom: "1px solid rgba(245,240,232,0.08)",
+          padding: "20px 28px",
+          background: T.white,
+          borderBottom: `1px solid ${T.border}`,
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -367,20 +372,20 @@ const ResultsPanel = ({
         <div>
           <p
             style={{
-              fontSize: 10,
+              fontSize: 9,
               fontWeight: 700,
-              letterSpacing: "0.2em",
-              color: "#C9A96E",
+              letterSpacing: ".22em",
+              color: T.gold,
               textTransform: "uppercase",
               marginBottom: 4,
             }}
           >
-            Search Results
+            Results
           </p>
           <h2
             style={{
               fontFamily: "Cormorant Garamond, serif",
-              color: "#F5F0E8",
+              color: T.text,
               fontWeight: 600,
               fontSize: 22,
             }}
@@ -392,61 +397,51 @@ const ResultsPanel = ({
                 : "No properties matched"}
           </h2>
           {query && (
-            <p
-              style={{
-                color: "rgba(245,240,232,0.35)",
-                fontSize: 13,
-                marginTop: 2,
-              }}
-            >
-              for &ldquo;{query}&rdquo;
+            <p style={{ color: T.muted, fontSize: 13, marginTop: 2 }}>
+              for "{query}"
             </p>
           )}
         </div>
         <button
           onClick={onClose}
           style={{
-            width: 38,
-            height: 38,
+            width: 36,
+            height: 36,
             borderRadius: "50%",
-            background: "rgba(245,240,232,0.07)",
-            border: "1px solid rgba(245,240,232,0.1)",
-            color: "#F5F0E8",
+            background: T.surface,
+            border: `1px solid ${T.border}`,
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <XMarkIcon style={{ width: 16, height: 16 }} />
+          <XMarkIcon style={{ width: 15, height: 15, color: T.sub }} />
         </button>
       </div>
 
-      {/* Body */}
       <div style={{ overflowY: "auto", flex: 1, padding: "24px 28px 32px" }}>
         {loading ? (
           <div
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))",
-              gap: 20,
+              gap: 18,
             }}
           >
             {[...Array(6)].map((_, i) => (
               <div
                 key={i}
                 style={{
-                  background: "#1A1814",
-                  borderRadius: 20,
+                  background: T.white,
+                  borderRadius: 16,
                   overflow: "hidden",
-                  border: "1px solid rgba(245,240,232,0.06)",
-                  animation: "pulse 1.4s ease infinite",
-                  animationDelay: `${i * 80}ms`,
+                  border: `1px solid ${T.border}`,
+                  animationDelay: `${i * 70}ms`,
                 }}
+                className="animate-pulse"
               >
-                <div
-                  style={{ height: 210, background: "rgba(245,240,232,0.04)" }}
-                />
+                <div style={{ height: 196, background: T.surface }} />
                 <div
                   style={{
                     padding: 20,
@@ -455,30 +450,17 @@ const ResultsPanel = ({
                     gap: 10,
                   }}
                 >
-                  <div
-                    style={{
-                      height: 14,
-                      background: "rgba(245,240,232,0.06)",
-                      borderRadius: 99,
-                      width: "70%",
-                    }}
-                  />
-                  <div
-                    style={{
-                      height: 10,
-                      background: "rgba(245,240,232,0.04)",
-                      borderRadius: 99,
-                      width: "45%",
-                    }}
-                  />
-                  <div
-                    style={{
-                      height: 10,
-                      background: "rgba(245,240,232,0.04)",
-                      borderRadius: 99,
-                      width: "90%",
-                    }}
-                  />
+                  {[70, 45, 90].map((w) => (
+                    <div
+                      key={w}
+                      style={{
+                        height: 11,
+                        background: T.surface,
+                        borderRadius: 99,
+                        width: `${w}%`,
+                      }}
+                    />
+                  ))}
                 </div>
               </div>
             ))}
@@ -489,34 +471,33 @@ const ResultsPanel = ({
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              justifyContent: "center",
               padding: "64px 24px",
               textAlign: "center",
             }}
           >
             <div
               style={{
-                width: 64,
-                height: 64,
-                borderRadius: 18,
-                background: "rgba(201,169,110,0.08)",
-                border: "1px solid rgba(201,169,110,0.2)",
+                width: 60,
+                height: 60,
+                borderRadius: 16,
+                background: T.goldDim,
+                border: `1px solid ${T.goldBorder}`,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                marginBottom: 20,
+                marginBottom: 18,
               }}
             >
               <MagnifyingGlassIcon
-                style={{ width: 28, height: 28, color: "#C9A96E" }}
+                style={{ width: 26, height: 26, color: T.gold }}
               />
             </div>
             <h3
               style={{
                 fontFamily: "Cormorant Garamond, serif",
-                color: "#F5F0E8",
+                color: T.text,
                 fontWeight: 600,
-                fontSize: 22,
+                fontSize: 21,
                 marginBottom: 8,
               }}
             >
@@ -524,26 +505,27 @@ const ResultsPanel = ({
             </h3>
             <p
               style={{
-                color: "rgba(245,240,232,0.35)",
+                color: T.sub,
                 fontSize: 13,
-                maxWidth: 300,
+                maxWidth: 290,
                 lineHeight: 1.7,
-                marginBottom: 24,
+                marginBottom: 22,
               }}
             >
-              Try adjusting your location, dates, or guest count.
+              Try a different destination, adjust your dates, or change the
+              guest count.
             </p>
             <button
               onClick={onClose}
               style={{
-                background: "#C9A96E",
-                color: "#0F0E0C",
+                background: T.gold,
+                color: T.white,
+                border: "none",
+                cursor: "pointer",
                 fontWeight: 700,
                 fontSize: 13,
                 padding: "12px 28px",
-                borderRadius: 12,
-                border: "none",
-                cursor: "pointer",
+                borderRadius: 10,
               }}
             >
               Clear Search
@@ -554,13 +536,13 @@ const ResultsPanel = ({
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))",
-              gap: 20,
+              gap: 18,
             }}
           >
-            {results.map((hotel, i) => (
+            {results.map((h, i) => (
               <HotelCard
-                key={hotel.id}
-                hotel={hotel}
+                key={h.id}
+                hotel={h}
                 nights={nights}
                 onBook={onBook}
                 index={i}
@@ -573,15 +555,13 @@ const ResultsPanel = ({
   </div>
 );
 
-/* ─────────────────────────────────────────────────────────
-   HERO
-───────────────────────────────────────────────────────── */
+/* ─── Hero ───────────────────────────────────────────── */
 const Hero = ({
   onBook,
   onLogin,
   onSignup,
 }: {
-  onBook?: (hotel: Hotel) => void;
+  onBook?: (h: Hotel) => void;
   onLogin?: () => void;
   onSignup?: () => void;
 }) => {
@@ -592,11 +572,12 @@ const Hero = ({
     guests: "",
   });
   const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [searchResults, setSearchResults] = useState<Hotel[] | null>(null);
-  const [hasSearched, setHasSearched] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
-  const suggestionRef = useRef<HTMLDivElement>(null);
+  const [showSug, setShowSug] = useState(false);
+  const [results, setResults] = useState<Hotel[] | null>(null);
+  const [searched, setSearched] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [audience, setAudience] = useState<"guest" | "host">("guest");
+  const sugRef = useRef<HTMLDivElement>(null);
 
   const nights = (() => {
     if (!form.checkIn || !form.checkOut) return 0;
@@ -612,108 +593,130 @@ const Hero = ({
   useEffect(() => {
     if (form.query.length < 1) {
       setSuggestions([]);
-      setShowSuggestions(false);
+      setShowSug(false);
       return;
     }
     getLocationSuggestions(form.query).then((s) => {
       setSuggestions(s);
-      setShowSuggestions(s.length > 0);
+      setShowSug(s.length > 0);
     });
   }, [form.query]);
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
-      if (
-        suggestionRef.current &&
-        !suggestionRef.current.contains(e.target as Node)
-      )
-        setShowSuggestions(false);
+      if (sugRef.current && !sugRef.current.contains(e.target as Node))
+        setShowSug(false);
     };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  const handleSearch = useCallback(async () => {
-    setIsSearching(true);
-    setHasSearched(true);
-    setSearchResults(null);
-    try {
-      const params: SearchParams = {
-        query: form.query.trim() || undefined,
-        checkIn: form.checkIn || undefined,
-        checkOut: form.checkOut || undefined,
-        guests: form.guests ? parseInt(form.guests) : undefined,
-      };
-      setSearchResults(await searchHotels(params));
-    } catch {
-      setSearchResults([]);
-    } finally {
-      setIsSearching(false);
-      setShowSuggestions(false);
-    }
-  }, [form]);
-
-  const quickSearch = async (chip: string) => {
-    setForm((f) => ({ ...f, query: chip }));
-    setHasSearched(true);
-    setSearchResults(null);
-    setIsSearching(true);
-    try {
-      setSearchResults(await searchHotels({ query: chip }));
-    } catch {
-      setSearchResults([]);
-    } finally {
-      setIsSearching(false);
-    }
-  };
+  const doSearch = useCallback(
+    async (override?: Partial<SearchParams>) => {
+      setLoading(true);
+      setSearched(true);
+      setResults(null);
+      try {
+        setResults(
+          await searchHotels({
+            query: form.query.trim() || undefined,
+            checkIn: form.checkIn || undefined,
+            checkOut: form.checkOut || undefined,
+            guests: form.guests ? parseInt(form.guests) : undefined,
+            ...override,
+          }),
+        );
+      } catch {
+        setResults([]);
+      } finally {
+        setLoading(false);
+        setShowSug(false);
+      }
+    },
+    [form],
+  );
 
   const today = new Date().toISOString().split("T")[0];
 
-  /* shared input style */
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    background: "transparent",
-    border: "none",
-    outline: "none",
-    color: "#F5F0E8",
-    fontSize: 13,
-    fontWeight: 500,
+  /* shared field label */
+  const Label = ({ children }: { children: React.ReactNode }) => (
+    <p
+      style={{
+        fontSize: 9,
+        fontWeight: 700,
+        letterSpacing: ".2em",
+        color: T.muted,
+        textTransform: "uppercase",
+        marginBottom: 5,
+      }}
+    >
+      {children}
+    </p>
+  );
+
+  const guestCopy = {
+    eyebrow: "For Guests",
+    headline: (
+      <>
+        Every Stay,
+        <br />
+        <em style={{ fontStyle: "italic", color: T.gold }}>Carefully</em> Chosen
+      </>
+    ),
+    sub: "Browse properties verified for quality — from city penthouses to island retreats. Book with confidence.",
+    cta: "Explore Stays",
   };
+  const hostCopy = {
+    eyebrow: "For Hosts",
+    headline: (
+      <>
+        Your Property,
+        <br />
+        <em style={{ fontStyle: "italic", color: T.gold }}>Properly</em>{" "}
+        Presented
+      </>
+    ),
+    sub: "List with a platform that values your property as much as you do. Reach guests who appreciate quality.",
+    cta: "List a Property",
+  };
+  const copy = audience === "guest" ? guestCopy : hostCopy;
 
   return (
     <>
       <style>{`
-        @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
-        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.45; } }
-        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7) sepia(1) saturate(0.5) hue-rotate(5deg); cursor:pointer; opacity:0.5; }
-        input::placeholder { color: rgba(245,240,232,0.25) !important; }
-        input[type="date"] { color-scheme: dark; }
-        ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(201,169,110,0.25); border-radius:99px; }
-        .field-wrap:focus-within { border-color: rgba(201,169,110,0.5) !important; }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&display=swap');
+        * { box-sizing: border-box; }
+        input[type="date"]::-webkit-calendar-picker-indicator { opacity:.4; cursor:pointer; }
+        input::placeholder { color: ${T.muted} !important; }
+        ::-webkit-scrollbar { width:4px; }
+        ::-webkit-scrollbar-thumb { background:${T.border}; border-radius:99px; }
+        .lux-field:focus-within { border-color: ${T.gold} !important; }
+        .audience-pill { transition: background .2s, color .2s, border-color .2s; }
       `}</style>
 
-      {hasSearched && (
+      {searched && (
         <ResultsPanel
-          results={searchResults ?? []}
+          results={results ?? []}
           nights={nights}
           query={form.query}
-          loading={isSearching}
+          loading={loading}
           onClose={() => {
-            setSearchResults(null);
-            setHasSearched(false);
+            setResults(null);
+            setSearched(false);
           }}
           onBook={onBook}
         />
       )}
 
-      <section
+      <div
         style={{
-          background: "#0F0E0C",
+          background: T.white,
           minHeight: "100vh",
           display: "flex",
           flexDirection: "column",
-          fontFamily: "sans-serif",
+          fontFamily: "'Inter', 'Helvetica Neue', sans-serif",
         }}
       >
         {/* ── NAV ── */}
@@ -722,66 +725,63 @@ const Hero = ({
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "0 48px",
-            height: 72,
-            borderBottom: "1px solid rgba(245,240,232,0.07)",
+            padding: "0 52px",
+            height: 68,
+            borderBottom: `1px solid ${T.border}`,
+            position: "sticky",
+            top: 0,
+            background: "rgba(255,255,255,.96)",
+            backdropFilter: "blur(12px)",
+            zIndex: 30,
           }}
-          className="px-5 sm:px-8 md:px-12"
+          className="px-5 sm:px-10 md:px-[52px]"
         >
+          {/* Logo */}
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 10,
+              gap: 9,
               cursor: "pointer",
             }}
           >
-            <img src={logo} alt="LuxStay" style={{ width: 36, height: 36 }} />
+            <img src={logo} alt="LuxStay" style={{ width: 32, height: 32 }} />
             <span
               style={{
                 fontFamily: "Cormorant Garamond, serif",
-                color: "#F5F0E8",
-                fontSize: 19,
+                color: T.text,
+                fontSize: 18,
                 fontWeight: 600,
-                letterSpacing: "0.02em",
+                letterSpacing: ".01em",
               }}
             >
               LuxStay
             </span>
           </div>
 
-          {/* Desktop nav */}
+          {/* Desktop links */}
           <div
-            style={{ display: "flex", alignItems: "center", gap: 32 }}
             className="hidden md:flex"
+            style={{ display: "flex", alignItems: "center", gap: 28 }}
           >
-            {["Explore", "For Hosts", "About"].map((label) => (
+            {["Explore", "How it Works", "For Hosts"].map((l) => (
               <a
-                key={label}
+                key={l}
                 href="#"
                 style={{
-                  color: "rgba(245,240,232,0.5)",
+                  color: T.sub,
                   fontSize: 13,
                   fontWeight: 500,
                   textDecoration: "none",
-                  letterSpacing: "0.01em",
-                  transition: "color 0.2s",
+                  transition: "color .18s",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = "#C9A96E")}
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.color = "rgba(245,240,232,0.5)")
-                }
+                onMouseEnter={(e) => (e.currentTarget.style.color = T.text)}
+                onMouseLeave={(e) => (e.currentTarget.style.color = T.sub)}
               >
-                {label}
+                {l}
               </a>
             ))}
-            <div
-              style={{
-                width: 1,
-                height: 18,
-                background: "rgba(245,240,232,0.1)",
-              }}
-            />
+            <div style={{ width: 1, height: 16, background: T.border }} />
             <button
               type="button"
               onClick={onLogin}
@@ -789,15 +789,13 @@ const Hero = ({
                 background: "none",
                 border: "none",
                 cursor: "pointer",
-                color: "rgba(245,240,232,0.55)",
+                color: T.sub,
                 fontSize: 13,
                 fontWeight: 500,
-                transition: "color 0.2s",
+                transition: "color .18s",
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "#F5F0E8")}
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.color = "rgba(245,240,232,0.55)")
-              }
+              onMouseEnter={(e) => (e.currentTarget.style.color = T.text)}
+              onMouseLeave={(e) => (e.currentTarget.style.color = T.sub)}
             >
               Sign in
             </button>
@@ -805,32 +803,30 @@ const Hero = ({
               type="button"
               onClick={onSignup}
               style={{
-                background: "#C9A96E",
-                color: "#0F0E0C",
+                background: T.text,
+                color: T.white,
                 border: "none",
                 cursor: "pointer",
                 fontSize: 13,
-                fontWeight: 700,
+                fontWeight: 600,
                 padding: "9px 22px",
                 borderRadius: 99,
-                letterSpacing: "0.03em",
-                transition: "background 0.2s",
+                letterSpacing: ".02em",
+                transition: "background .18s",
               }}
               onMouseEnter={(e) =>
-                (e.currentTarget.style.background = "#DFC08A")
+                (e.currentTarget.style.background = "#2D2924")
               }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.background = "#C9A96E")
-              }
+              onMouseLeave={(e) => (e.currentTarget.style.background = T.text)}
             >
-              List Your Property
+              List a Property
             </button>
           </div>
 
-          {/* Mobile nav */}
+          {/* Mobile */}
           <div
-            style={{ display: "flex", alignItems: "center", gap: 10 }}
             className="flex md:hidden"
+            style={{ display: "flex", alignItems: "center", gap: 8 }}
           >
             <button
               type="button"
@@ -839,7 +835,7 @@ const Hero = ({
                 background: "none",
                 border: "none",
                 cursor: "pointer",
-                color: "rgba(245,240,232,0.6)",
+                color: T.sub,
                 fontSize: 13,
               }}
             >
@@ -849,12 +845,12 @@ const Hero = ({
               type="button"
               onClick={onSignup}
               style={{
-                background: "#C9A96E",
-                color: "#0F0E0C",
+                background: T.text,
+                color: T.white,
                 border: "none",
                 cursor: "pointer",
                 fontSize: 12,
-                fontWeight: 700,
+                fontWeight: 600,
                 padding: "8px 16px",
                 borderRadius: 99,
               }}
@@ -864,8 +860,8 @@ const Hero = ({
           </div>
         </nav>
 
-        {/* ── HERO CONTENT ── */}
-        <div
+        {/* ── HERO BODY ── */}
+        <main
           style={{
             flex: 1,
             display: "flex",
@@ -873,729 +869,640 @@ const Hero = ({
             alignItems: "center",
             justifyContent: "center",
             padding: "64px 24px 80px",
-            maxWidth: 1000,
-            margin: "0 auto",
-            width: "100%",
           }}
         >
-          {/* Eyebrow */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 14,
-              marginBottom: 32,
-              animation: "fadeUp 0.5s ease 50ms both",
-            }}
-          >
+          <div style={{ width: "100%", maxWidth: 840 }}>
+            {/* Audience toggle */}
             <div
               style={{
-                height: 1,
-                width: 40,
-                background:
-                  "linear-gradient(to right, transparent, rgba(201,169,110,0.6))",
-              }}
-            />
-            <p
-              style={{
-                color: "#C9A96E",
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: "0.3em",
-                textTransform: "uppercase",
+                display: "inline-flex",
+                alignItems: "center",
+                background: T.surface,
+                border: `1px solid ${T.border}`,
+                borderRadius: 99,
+                padding: 4,
+                marginBottom: 36,
+                animation: "fadeUp .4s ease both",
               }}
             >
-              Curated Luxury Properties
-            </p>
-            <div
-              style={{
-                height: 1,
-                width: 40,
-                background:
-                  "linear-gradient(to left, transparent, rgba(201,169,110,0.6))",
-              }}
-            />
-          </div>
-
-          {/* Headline — the signature: large serif with restrained color */}
-          <h1
-            style={{
-              fontFamily: "Cormorant Garamond, serif",
-              fontSize: "clamp(42px, 7.5vw, 88px)",
-              fontWeight: 500,
-              lineHeight: 1.06,
-              color: "#F5F0E8",
-              textAlign: "center",
-              marginBottom: 22,
-              letterSpacing: "-0.01em",
-              animation: "fadeUp 0.6s ease 100ms both",
-            }}
-          >
-            Where You Stay
-            <br />
-            <em style={{ fontStyle: "italic", color: "#C9A96E" }}>
-              Defines
-            </em>{" "}
-            the Journey
-          </h1>
-
-          <p
-            style={{
-              color: "rgba(245,240,232,0.45)",
-              fontSize: 15,
-              maxWidth: 440,
-              lineHeight: 1.75,
-              textAlign: "center",
-              marginBottom: 52,
-              animation: "fadeUp 0.6s ease 150ms both",
-            }}
-          >
-            Handpicked estates, villas, and retreats — chosen for guests who
-            expect more than a room.
-          </p>
-
-          {/* ── SEARCH BAR — Desktop ── */}
-          <div
-            style={{
-              width: "100%",
-              animation: "fadeUp 0.6s ease 200ms both",
-            }}
-          >
-            {/* Desktop */}
-            <div
-              className="hidden sm:grid"
-              style={{
-                gridTemplateColumns: "1fr 160px 160px 110px auto",
-                background: "#141210",
-                border: "1px solid rgba(245,240,232,0.1)",
-                borderRadius: 18,
-                overflow: "visible",
-                boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
-                position: "relative",
-                gap: 0,
-              }}
-            >
-              {/* Location */}
-              <div
-                ref={suggestionRef}
-                className="field-wrap"
-                style={{
-                  padding: "18px 22px",
-                  borderRight: "1px solid rgba(245,240,232,0.08)",
-                  position: "relative",
-                  borderRadius: "18px 0 0 18px",
-                  transition: "background 0.2s",
-                }}
-                onFocus={() => {}}
-              >
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: 9,
-                    fontWeight: 700,
-                    letterSpacing: "0.2em",
-                    color: "rgba(245,240,232,0.3)",
-                    textTransform: "uppercase",
-                    marginBottom: 7,
-                  }}
-                >
-                  Destination
-                </label>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <MapPinIcon
-                    style={{
-                      width: 14,
-                      height: 14,
-                      color: "#C9A96E",
-                      flexShrink: 0,
-                    }}
-                  />
-                  <input
-                    type="text"
-                    value={form.query}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, query: e.target.value }))
-                    }
-                    onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                    onFocus={() =>
-                      suggestions.length > 0 && setShowSuggestions(true)
-                    }
-                    placeholder="City, country or style…"
-                    autoComplete="off"
-                    style={{ ...inputStyle }}
-                  />
-                  {form.query && (
-                    <button
-                      onClick={() => setForm((f) => ({ ...f, query: "" }))}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        padding: 0,
-                        lineHeight: 0,
-                      }}
-                    >
-                      <XMarkIcon
-                        style={{
-                          width: 13,
-                          height: 13,
-                          color: "rgba(245,240,232,0.3)",
-                        }}
-                      />
-                    </button>
-                  )}
-                </div>
-                {showSuggestions && suggestions.length > 0 && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "calc(100% + 10px)",
-                      left: 0,
-                      zIndex: 40,
-                      background: "#1A1814",
-                      border: "1px solid rgba(245,240,232,0.12)",
-                      borderRadius: 14,
-                      overflow: "hidden",
-                      minWidth: 260,
-                      boxShadow: "0 16px 48px rgba(0,0,0,0.6)",
-                    }}
-                  >
-                    {suggestions.map((s) => (
-                      <button
-                        key={s}
-                        onClick={() => {
-                          setForm((f) => ({ ...f, query: s }));
-                          setShowSuggestions(false);
-                        }}
-                        style={{
-                          width: "100%",
-                          textAlign: "left",
-                          padding: "12px 16px",
-                          fontSize: 13,
-                          color: "rgba(245,240,232,0.7)",
-                          background: "none",
-                          border: "none",
-                          borderBottom: "1px solid rgba(245,240,232,0.06)",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                          transition: "background 0.15s, color 0.15s",
-                        }}
-                        onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLElement).style.background =
-                            "rgba(201,169,110,0.08)";
-                          (e.currentTarget as HTMLElement).style.color =
-                            "#F5F0E8";
-                        }}
-                        onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLElement).style.background =
-                            "none";
-                          (e.currentTarget as HTMLElement).style.color =
-                            "rgba(245,240,232,0.7)";
-                        }}
-                      >
-                        <MapPinIcon
-                          style={{
-                            width: 13,
-                            height: 13,
-                            color: "#C9A96E",
-                            flexShrink: 0,
-                          }}
-                        />
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Check-in */}
-              <div
-                className="field-wrap"
-                style={{
-                  padding: "18px 18px",
-                  borderRight: "1px solid rgba(245,240,232,0.08)",
-                }}
-              >
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: 9,
-                    fontWeight: 700,
-                    letterSpacing: "0.2em",
-                    color: "rgba(245,240,232,0.3)",
-                    textTransform: "uppercase",
-                    marginBottom: 7,
-                  }}
-                >
-                  Check-in
-                </label>
-                <input
-                  type="date"
-                  min={today}
-                  value={form.checkIn}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      checkIn: e.target.value,
-                      checkOut:
-                        f.checkOut && f.checkOut <= e.target.value
-                          ? ""
-                          : f.checkOut,
-                    }))
-                  }
-                  style={{ ...inputStyle, fontSize: 12 }}
-                />
-              </div>
-
-              {/* Check-out */}
-              <div
-                className="field-wrap"
-                style={{
-                  padding: "18px 18px",
-                  borderRight: "1px solid rgba(245,240,232,0.08)",
-                }}
-              >
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: 9,
-                    fontWeight: 700,
-                    letterSpacing: "0.2em",
-                    color: "rgba(245,240,232,0.3)",
-                    textTransform: "uppercase",
-                    marginBottom: 7,
-                  }}
-                >
-                  Check-out
-                  {nights > 0 && (
-                    <span
-                      style={{
-                        color: "#C9A96E",
-                        marginLeft: 6,
-                        fontWeight: 700,
-                        textTransform: "none",
-                      }}
-                    >
-                      {nights}n
-                    </span>
-                  )}
-                </label>
-                <input
-                  type="date"
-                  min={form.checkIn || today}
-                  value={form.checkOut}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, checkOut: e.target.value }))
-                  }
-                  style={{ ...inputStyle, fontSize: 12 }}
-                />
-              </div>
-
-              {/* Guests */}
-              <div
-                className="field-wrap"
-                style={{
-                  padding: "18px 16px",
-                  borderRight: "1px solid rgba(245,240,232,0.08)",
-                }}
-              >
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: 9,
-                    fontWeight: 700,
-                    letterSpacing: "0.2em",
-                    color: "rgba(245,240,232,0.3)",
-                    textTransform: "uppercase",
-                    marginBottom: 7,
-                  }}
-                >
-                  Guests
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="20"
-                  value={form.guests}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, guests: e.target.value }))
-                  }
-                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                  placeholder="Any"
-                  style={{ ...inputStyle, fontSize: 13 }}
-                />
-              </div>
-
-              {/* Button */}
-              <div
-                style={{
-                  padding: "10px 10px 10px 0",
-                  display: "flex",
-                  alignItems: "center",
-                }}
-              >
+              {(["guest", "host"] as const).map((a) => (
                 <button
-                  onClick={handleSearch}
-                  disabled={isSearching}
+                  key={a}
+                  className="audience-pill"
+                  onClick={() => setAudience(a)}
                   style={{
-                    background: "#C9A96E",
-                    color: "#0F0E0C",
-                    border: "none",
-                    cursor: isSearching ? "not-allowed" : "pointer",
-                    fontWeight: 700,
-                    fontSize: 13,
-                    padding: "0 26px",
-                    height: "100%",
-                    minHeight: 52,
-                    borderRadius: 12,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    letterSpacing: "0.04em",
-                    transition: "background 0.2s",
-                    opacity: isSearching ? 0.75 : 1,
-                    whiteSpace: "nowrap",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isSearching)
-                      (e.currentTarget as HTMLElement).style.background =
-                        "#DFC08A";
-                  }}
-                  onMouseLeave={(e) =>
-                    ((e.currentTarget as HTMLElement).style.background =
-                      "#C9A96E")
-                  }
-                >
-                  {isSearching ? (
-                    <>
-                      <span
-                        style={{
-                          width: 14,
-                          height: 14,
-                          border: "2px solid rgba(0,0,0,0.2)",
-                          borderTopColor: "#0F0E0C",
-                          borderRadius: "50%",
-                          animation: "spin 0.7s linear infinite",
-                          display: "inline-block",
-                        }}
-                      />{" "}
-                      Searching
-                    </>
-                  ) : (
-                    <>
-                      <MagnifyingGlassIcon style={{ width: 15, height: 15 }} />{" "}
-                      Search
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* Mobile stacked */}
-            <div
-              className="flex sm:hidden flex-col"
-              style={{
-                background: "#141210",
-                border: "1px solid rgba(245,240,232,0.1)",
-                borderRadius: 18,
-                overflow: "hidden",
-                boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
-              }}
-            >
-              <div
-                ref={suggestionRef}
-                style={{
-                  position: "relative",
-                  padding: "16px 18px",
-                  borderBottom: "1px solid rgba(245,240,232,0.07)",
-                }}
-              >
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: 9,
-                    fontWeight: 700,
-                    letterSpacing: "0.2em",
-                    color: "rgba(245,240,232,0.3)",
-                    textTransform: "uppercase",
-                    marginBottom: 7,
-                  }}
-                >
-                  Destination
-                </label>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <MapPinIcon
-                    style={{
-                      width: 14,
-                      height: 14,
-                      color: "#C9A96E",
-                      flexShrink: 0,
-                    }}
-                  />
-                  <input
-                    type="text"
-                    value={form.query}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, query: e.target.value }))
-                    }
-                    onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                    onFocus={() =>
-                      suggestions.length > 0 && setShowSuggestions(true)
-                    }
-                    placeholder="City, country or style…"
-                    autoComplete="off"
-                    style={{ ...inputStyle, flex: 1 }}
-                  />
-                </div>
-                {showSuggestions && suggestions.length > 0 && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "100%",
-                      left: 0,
-                      right: 0,
-                      zIndex: 40,
-                      background: "#1A1814",
-                      border: "1px solid rgba(245,240,232,0.1)",
-                      borderRadius: "0 0 14px 14px",
-                      overflow: "hidden",
-                    }}
-                  >
-                    {suggestions.map((s) => (
-                      <button
-                        key={s}
-                        onClick={() => {
-                          setForm((f) => ({ ...f, query: s }));
-                          setShowSuggestions(false);
-                        }}
-                        style={{
-                          width: "100%",
-                          textAlign: "left",
-                          padding: "12px 18px",
-                          fontSize: 13,
-                          color: "rgba(245,240,232,0.7)",
-                          background: "none",
-                          border: "none",
-                          borderBottom: "1px solid rgba(245,240,232,0.05)",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                        }}
-                      >
-                        <MapPinIcon
-                          style={{
-                            width: 13,
-                            height: 13,
-                            color: "#C9A96E",
-                            flexShrink: 0,
-                          }}
-                        />
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr 1fr",
-                  borderBottom: "1px solid rgba(245,240,232,0.07)",
-                }}
-              >
-                {[
-                  {
-                    label: "Check-in",
-                    type: "date",
-                    key: "checkIn",
-                    min: today,
-                    placeholder: "",
-                  },
-                  {
-                    label: "Check-out",
-                    type: "date",
-                    key: "checkOut",
-                    min: form.checkIn || today,
-                    placeholder: "",
-                  },
-                  {
-                    label: "Guests",
-                    type: "number",
-                    key: "guests",
-                    min: "1",
-                    placeholder: "Any",
-                  },
-                ].map(({ label, type, key, min, placeholder }, i) => (
-                  <div
-                    key={key}
-                    style={{
-                      padding: "14px 14px",
-                      borderRight:
-                        i < 2 ? "1px solid rgba(245,240,232,0.07)" : "none",
-                    }}
-                  >
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: 8,
-                        fontWeight: 700,
-                        letterSpacing: "0.18em",
-                        color: "rgba(245,240,232,0.3)",
-                        textTransform: "uppercase",
-                        marginBottom: 6,
-                      }}
-                    >
-                      {label}
-                    </label>
-                    <input
-                      type={type}
-                      min={min}
-                      value={form[key as keyof SearchState]}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, [key]: e.target.value }))
-                      }
-                      placeholder={placeholder}
-                      style={{ ...inputStyle, fontSize: 12 }}
-                    />
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ padding: "14px 16px" }}>
-                <button
-                  onClick={handleSearch}
-                  disabled={isSearching}
-                  style={{
-                    width: "100%",
-                    background: "#C9A96E",
-                    color: "#0F0E0C",
-                    border: "none",
+                    background: audience === a ? T.white : "transparent",
+                    color: audience === a ? T.text : T.muted,
+                    border:
+                      audience === a
+                        ? `1px solid ${T.border}`
+                        : "1px solid transparent",
+                    borderRadius: 99,
+                    padding: "7px 20px",
+                    fontSize: 12,
+                    fontWeight: 600,
                     cursor: "pointer",
-                    fontWeight: 700,
-                    fontSize: 14,
-                    padding: "14px 0",
-                    borderRadius: 12,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 8,
+                    boxShadow:
+                      audience === a ? "0 1px 4px rgba(0,0,0,.08)" : "none",
+                    letterSpacing: ".02em",
                   }}
                 >
-                  {isSearching ? (
-                    <>
-                      <span
-                        style={{
-                          width: 14,
-                          height: 14,
-                          border: "2px solid rgba(0,0,0,0.2)",
-                          borderTopColor: "#0F0E0C",
-                          borderRadius: "50%",
-                          animation: "spin 0.7s linear infinite",
-                          display: "inline-block",
-                        }}
-                      />{" "}
-                      Searching…
-                    </>
-                  ) : (
-                    <>
-                      <MagnifyingGlassIcon style={{ width: 15, height: 15 }} />{" "}
-                      Search Luxury Stays
-                    </>
-                  )}
+                  {a === "guest" ? "I'm a Guest" : "I'm a Host"}
                 </button>
-              </div>
+              ))}
             </div>
 
-            {/* Quick chips */}
+            {/* Eyebrow */}
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 8,
-                marginTop: 20,
-                justifyContent: "center",
-                flexWrap: "wrap",
-                animation: "fadeUp 0.6s ease 320ms both",
+                gap: 12,
+                marginBottom: 20,
+                animation: "fadeUp .45s ease 40ms both",
               }}
             >
-              <span
+              <div style={{ width: 28, height: 1, background: T.gold }} />
+              <p
                 style={{
-                  fontSize: 11,
-                  color: "rgba(245,240,232,0.25)",
-                  letterSpacing: "0.1em",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: ".28em",
+                  color: T.gold,
+                  textTransform: "uppercase",
                 }}
               >
-                Explore
-              </span>
-              {["Paris", "Bali", "Maldives", "Safari", "Overwater"].map(
-                (chip) => (
-                  <button
-                    key={chip}
-                    onClick={() => quickSearch(chip)}
+                {copy.eyebrow}
+              </p>
+            </div>
+
+            {/* Headline — left-aligned, large Cormorant */}
+            <h1
+              style={{
+                fontFamily: "Cormorant Garamond, serif",
+                fontSize: "clamp(44px, 7vw, 80px)",
+                fontWeight: 500,
+                lineHeight: 1.08,
+                color: T.text,
+                marginBottom: 20,
+                letterSpacing: "-.01em",
+                animation: "fadeUp .5s ease 80ms both",
+              }}
+            >
+              {copy.headline}
+            </h1>
+
+            <p
+              style={{
+                color: T.sub,
+                fontSize: 15,
+                lineHeight: 1.75,
+                maxWidth: 480,
+                marginBottom: 48,
+                animation: "fadeUp .5s ease 120ms both",
+              }}
+            >
+              {copy.sub}
+            </p>
+
+            {/* ── SEARCH PANEL ── */}
+            <div style={{ animation: "fadeUp .5s ease 160ms both" }}>
+              {/* Desktop */}
+              <div
+                className="hidden sm:flex"
+                style={{
+                  display: "flex",
+                  alignItems: "stretch",
+                  background: T.white,
+                  border: `1.5px solid ${T.border}`,
+                  borderRadius: 16,
+                  boxShadow:
+                    "0 4px 24px rgba(0,0,0,.07), 0 1px 3px rgba(0,0,0,.04)",
+                  overflow: "visible",
+                  position: "relative",
+                }}
+              >
+                {/* Location */}
+                <div
+                  ref={sugRef}
+                  className="lux-field"
+                  style={{
+                    flex: "2 1 0",
+                    padding: "16px 20px",
+                    borderRight: `1px solid ${T.border}`,
+                    borderRadius: "14px 0 0 14px",
+                    border: `1.5px solid transparent`,
+                    transition: "border-color .18s",
+                    position: "relative",
+                  }}
+                >
+                  <Label>Destination</Label>
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
+                    <MapPinIcon
+                      style={{
+                        width: 14,
+                        height: 14,
+                        color: T.gold,
+                        flexShrink: 0,
+                      }}
+                    />
+                    <input
+                      type="text"
+                      value={form.query}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, query: e.target.value }))
+                      }
+                      onKeyDown={(e) => e.key === "Enter" && doSearch()}
+                      onFocus={() => suggestions.length > 0 && setShowSug(true)}
+                      placeholder="City, country or style…"
+                      autoComplete="off"
+                      style={{
+                        flex: 1,
+                        background: "none",
+                        border: "none",
+                        outline: "none",
+                        color: T.text,
+                        fontSize: 13,
+                        fontWeight: 500,
+                      }}
+                    />
+                    {form.query && (
+                      <button
+                        onClick={() => setForm((f) => ({ ...f, query: "" }))}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          padding: 0,
+                          lineHeight: 0,
+                        }}
+                      >
+                        <XMarkIcon
+                          style={{ width: 13, height: 13, color: T.muted }}
+                        />
+                      </button>
+                    )}
+                  </div>
+                  {showSug && suggestions.length > 0 && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "calc(100% + 8px)",
+                        left: -1,
+                        zIndex: 40,
+                        background: T.white,
+                        border: `1px solid ${T.border}`,
+                        borderRadius: 14,
+                        overflow: "hidden",
+                        minWidth: 260,
+                        boxShadow: "0 12px 40px rgba(0,0,0,.12)",
+                      }}
+                    >
+                      {suggestions.map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => {
+                            setForm((f) => ({ ...f, query: s }));
+                            setShowSug(false);
+                          }}
+                          style={{
+                            width: "100%",
+                            textAlign: "left",
+                            padding: "11px 16px",
+                            fontSize: 13,
+                            color: T.sub,
+                            background: "none",
+                            border: "none",
+                            borderBottom: `1px solid ${T.border}`,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            transition: "background .14s, color .14s",
+                          }}
+                          onMouseEnter={(e) => {
+                            (e.currentTarget as HTMLElement).style.background =
+                              T.surface;
+                            (e.currentTarget as HTMLElement).style.color =
+                              T.text;
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.currentTarget as HTMLElement).style.background =
+                              "none";
+                            (e.currentTarget as HTMLElement).style.color =
+                              T.sub;
+                          }}
+                        >
+                          <MapPinIcon
+                            style={{
+                              width: 13,
+                              height: 13,
+                              color: T.gold,
+                              flexShrink: 0,
+                            }}
+                          />
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Check-in */}
+                <div
+                  className="lux-field"
+                  style={{
+                    flex: "1 1 0",
+                    padding: "16px 16px",
+                    borderRight: `1px solid ${T.border}`,
+                    border: `1.5px solid transparent`,
+                    transition: "border-color .18s",
+                  }}
+                >
+                  <Label>Check-in</Label>
+                  <input
+                    type="date"
+                    min={today}
+                    value={form.checkIn}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        checkIn: e.target.value,
+                        checkOut:
+                          f.checkOut && f.checkOut <= e.target.value
+                            ? ""
+                            : f.checkOut,
+                      }))
+                    }
                     style={{
-                      background: "rgba(245,240,232,0.05)",
-                      color: "rgba(245,240,232,0.55)",
-                      border: "1px solid rgba(245,240,232,0.1)",
+                      background: "none",
+                      border: "none",
+                      outline: "none",
+                      color: form.checkIn ? T.text : T.muted,
                       fontSize: 12,
-                      padding: "6px 16px",
-                      borderRadius: 99,
-                      cursor: "pointer",
-                      transition: "all 0.2s",
+                      fontWeight: 500,
+                      width: "100%",
+                      colorScheme: "light",
+                    }}
+                  />
+                </div>
+
+                {/* Check-out */}
+                <div
+                  className="lux-field"
+                  style={{
+                    flex: "1 1 0",
+                    padding: "16px 16px",
+                    borderRight: `1px solid ${T.border}`,
+                    border: `1.5px solid transparent`,
+                    transition: "border-color .18s",
+                  }}
+                >
+                  <Label>
+                    Check-out
+                    {nights > 0 && (
+                      <span
+                        style={{
+                          color: T.gold,
+                          marginLeft: 6,
+                          fontWeight: 700,
+                          textTransform: "none",
+                          letterSpacing: 0,
+                        }}
+                      >
+                        {nights}n
+                      </span>
+                    )}
+                  </Label>
+                  <input
+                    type="date"
+                    min={form.checkIn || today}
+                    value={form.checkOut}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, checkOut: e.target.value }))
+                    }
+                    style={{
+                      background: "none",
+                      border: "none",
+                      outline: "none",
+                      color: form.checkOut ? T.text : T.muted,
+                      fontSize: 12,
+                      fontWeight: 500,
+                      width: "100%",
+                      colorScheme: "light",
+                    }}
+                  />
+                </div>
+
+                {/* Guests */}
+                <div
+                  className="lux-field"
+                  style={{
+                    width: 100,
+                    padding: "16px 16px",
+                    borderRight: `1px solid ${T.border}`,
+                    border: `1.5px solid transparent`,
+                    transition: "border-color .18s",
+                  }}
+                >
+                  <Label>Guests</Label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    value={form.guests}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, guests: e.target.value }))
+                    }
+                    onKeyDown={(e) => e.key === "Enter" && doSearch()}
+                    placeholder="Any"
+                    style={{
+                      background: "none",
+                      border: "none",
+                      outline: "none",
+                      color: T.text,
+                      fontSize: 13,
+                      fontWeight: 500,
+                      width: "100%",
+                    }}
+                  />
+                </div>
+
+                {/* CTA */}
+                <div style={{ padding: "8px" }}>
+                  <button
+                    onClick={() => doSearch()}
+                    disabled={loading}
+                    style={{
+                      background: T.gold,
+                      color: T.white,
+                      border: "none",
+                      cursor: loading ? "not-allowed" : "pointer",
+                      opacity: loading ? 0.7 : 1,
+                      fontWeight: 700,
+                      fontSize: 13,
+                      height: "100%",
+                      padding: "0 24px",
+                      borderRadius: 10,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 7,
+                      letterSpacing: ".03em",
+                      whiteSpace: "nowrap",
+                      boxShadow: "0 4px 16px rgba(201,169,110,.4)",
+                      transition: "background .18s",
                     }}
                     onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLElement).style.borderColor =
-                        "rgba(201,169,110,0.4)";
-                      (e.currentTarget as HTMLElement).style.color = "#C9A96E";
-                      (e.currentTarget as HTMLElement).style.background =
-                        "rgba(201,169,110,0.07)";
+                      if (!loading)
+                        (e.currentTarget as HTMLElement).style.background =
+                          "#B8935A";
                     }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLElement).style.borderColor =
-                        "rgba(245,240,232,0.1)";
-                      (e.currentTarget as HTMLElement).style.color =
-                        "rgba(245,240,232,0.55)";
-                      (e.currentTarget as HTMLElement).style.background =
-                        "rgba(245,240,232,0.05)";
+                    onMouseLeave={(e) =>
+                      ((e.currentTarget as HTMLElement).style.background =
+                        T.gold)
+                    }
+                  >
+                    {loading ? (
+                      <span
+                        style={{
+                          width: 14,
+                          height: 14,
+                          border: "2px solid rgba(255,255,255,.3)",
+                          borderTopColor: T.white,
+                          borderRadius: "50%",
+                          display: "inline-block",
+                        }}
+                        className="animate-spin"
+                      />
+                    ) : (
+                      <MagnifyingGlassIcon style={{ width: 15, height: 15 }} />
+                    )}
+                    {loading ? "Searching" : "Search"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Mobile stacked */}
+              <div
+                className="flex sm:hidden flex-col"
+                style={{
+                  background: T.white,
+                  border: `1.5px solid ${T.border}`,
+                  borderRadius: 16,
+                  overflow: "hidden",
+                  boxShadow: "0 4px 24px rgba(0,0,0,.07)",
+                }}
+              >
+                <div
+                  ref={sugRef}
+                  style={{
+                    position: "relative",
+                    padding: "14px 18px",
+                    borderBottom: `1px solid ${T.border}`,
+                  }}
+                >
+                  <Label>Destination</Label>
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
+                    <MapPinIcon
+                      style={{
+                        width: 14,
+                        height: 14,
+                        color: T.gold,
+                        flexShrink: 0,
+                      }}
+                    />
+                    <input
+                      type="text"
+                      value={form.query}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, query: e.target.value }))
+                      }
+                      onKeyDown={(e) => e.key === "Enter" && doSearch()}
+                      placeholder="City, country or style…"
+                      autoComplete="off"
+                      style={{
+                        flex: 1,
+                        background: "none",
+                        border: "none",
+                        outline: "none",
+                        color: T.text,
+                        fontSize: 13,
+                      }}
+                    />
+                  </div>
+                </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr 80px",
+                    borderBottom: `1px solid ${T.border}`,
+                  }}
+                >
+                  {[
+                    {
+                      label: "Check-in",
+                      type: "date",
+                      key: "checkIn",
+                      min: today,
+                    },
+                    {
+                      label: "Check-out",
+                      type: "date",
+                      key: "checkOut",
+                      min: form.checkIn || today,
+                    },
+                    {
+                      label: "Guests",
+                      type: "number",
+                      key: "guests",
+                      min: "1",
+                    },
+                  ].map(({ label, type, key, min }, i) => (
+                    <div
+                      key={key}
+                      style={{
+                        padding: "12px 14px",
+                        borderRight: i < 2 ? `1px solid ${T.border}` : "none",
+                      }}
+                    >
+                      <Label>{label}</Label>
+                      <input
+                        type={type}
+                        min={min}
+                        value={form[key as keyof SearchState]}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, [key]: e.target.value }))
+                        }
+                        placeholder="Any"
+                        style={{
+                          background: "none",
+                          border: "none",
+                          outline: "none",
+                          color: T.text,
+                          fontSize: 12,
+                          width: "100%",
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div style={{ padding: "12px 14px" }}>
+                  <button
+                    onClick={() => doSearch()}
+                    disabled={loading}
+                    style={{
+                      width: "100%",
+                      background: T.gold,
+                      color: T.white,
+                      border: "none",
+                      cursor: "pointer",
+                      fontWeight: 700,
+                      fontSize: 14,
+                      padding: "13px 0",
+                      borderRadius: 10,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 8,
                     }}
                   >
-                    {chip}
+                    <MagnifyingGlassIcon style={{ width: 15, height: 15 }} />
+                    {loading ? "Searching…" : "Search Stays"}
                   </button>
-                ),
-              )}
+                </div>
+              </div>
+
+              {/* Quick chips */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  marginTop: 18,
+                  flexWrap: "wrap",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: T.muted,
+                    letterSpacing: ".08em",
+                  }}
+                >
+                  Popular:
+                </span>
+                {["Paris", "Bali", "Maldives", "Safari", "Overwater"].map(
+                  (chip) => (
+                    <button
+                      key={chip}
+                      onClick={() => doSearch({ query: chip })}
+                      style={{
+                        background: T.surface,
+                        color: T.sub,
+                        border: `1px solid ${T.border}`,
+                        fontSize: 12,
+                        padding: "5px 14px",
+                        borderRadius: 99,
+                        cursor: "pointer",
+                        transition: "all .18s",
+                      }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLElement).style.borderColor =
+                          T.goldBorder;
+                        (e.currentTarget as HTMLElement).style.color = T.gold;
+                        (e.currentTarget as HTMLElement).style.background =
+                          T.goldDim;
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLElement).style.borderColor =
+                          T.border;
+                        (e.currentTarget as HTMLElement).style.color = T.sub;
+                        (e.currentTarget as HTMLElement).style.background =
+                          T.surface;
+                      }}
+                    >
+                      {chip}
+                    </button>
+                  ),
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        </main>
 
         {/* ── TRUST STRIP ── */}
         <div
           style={{
-            borderTop: "1px solid rgba(245,240,232,0.07)",
-            padding: "24px 48px",
+            borderTop: `1px solid ${T.border}`,
+            padding: "22px 52px",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             gap: 0,
+            background: T.surface,
           }}
+          className="px-5 sm:px-10 md:px-[52px] flex-wrap gap-y-4"
         >
           {[
-            { value: "500+", label: "Curated Properties" },
-            { value: "4.9★", label: "Average Rating" },
-            { value: "24/7", label: "Concierge Support" },
-            { value: "50+", label: "Countries" },
-          ].map(({ value, label }, i) => (
-            <div key={label} style={{ display: "flex", alignItems: "center" }}>
+            { v: "500+", l: "Verified Properties" },
+            { v: "4.9★", l: "Average Rating" },
+            { v: "24/7", l: "Guest & Host Support" },
+            { v: "50+", l: "Countries" },
+          ].map(({ v, l }, i) => (
+            <div key={l} style={{ display: "flex", alignItems: "center" }}>
               {i > 0 && (
                 <div
                   style={{
                     width: 1,
-                    height: 28,
-                    background: "rgba(245,240,232,0.08)",
-                    margin: "0 32px",
+                    height: 24,
+                    background: T.border,
+                    margin: "0 36px",
                   }}
+                  className="hidden sm:block"
                 />
               )}
               <div style={{ textAlign: "center" }}>
@@ -1604,31 +1511,30 @@ const Hero = ({
                     fontFamily: "Cormorant Garamond, serif",
                     fontSize: 22,
                     fontWeight: 600,
-                    color: "#F5F0E8",
+                    color: T.text,
                     lineHeight: 1,
                   }}
                 >
-                  {value}
+                  {v}
                 </p>
                 <p
                   style={{
                     fontSize: 10,
-                    color: "rgba(245,240,232,0.3)",
-                    letterSpacing: "0.15em",
+                    color: T.muted,
+                    letterSpacing: ".16em",
                     textTransform: "uppercase",
                     marginTop: 5,
                     fontWeight: 600,
                   }}
                 >
-                  {label}
+                  {l}
                 </p>
               </div>
             </div>
           ))}
         </div>
-
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </section>
+      </div>
+      <style>{`@keyframes spin { to { transform:rotate(360deg); } }`}</style>
     </>
   );
 };

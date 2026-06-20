@@ -14,6 +14,7 @@
     "@emotion/react": "^11.14.0",
     "@heroicons/react": "^2.2.0",
     "@supabase/supabase-js": "^2.105.1",
+    "@vercel/analytics": "^2.0.1",
     "bootstrap": "^5.3.8",
     "browser-image-compression": "^2.0.2",
     "firebase": "^12.12.1",
