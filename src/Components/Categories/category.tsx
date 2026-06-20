@@ -52,7 +52,7 @@ const CATEGORY_META: Record<CategoryKey, CategoryMeta> = {
   },
 };
 
-/* ─────────────── Derived per-category stats from DB ─────────────── */
+/* ─────────────── DB hook ─────────────── */
 
 interface CategoryStats {
   key: CategoryKey;
@@ -124,10 +124,18 @@ function useCategoryStats(): CategoryStats[] {
   return stats;
 }
 
-/* ─────────────── Card overlay gradient ─────────────── */
+/* ─────────────── Helpers ─────────────── */
 
 const CARD_GRADIENT =
-  "linear-gradient(to top, rgba(15,13,10,0.88) 0%, rgba(15,13,10,0.22) 55%, transparent 100%)";
+  "linear-gradient(to top, rgba(15,13,10,0.90) 0%, rgba(15,13,10,0.25) 55%, transparent 100%)";
+
+const CARD_ORDER: CategoryKey[] = [
+  "villa",
+  "resort",
+  "penthouse",
+  "apartment",
+  "boutique",
+];
 
 /* ─────────────── Card ─────────────── */
 
@@ -143,7 +151,6 @@ function CategoryCard({ stats, index, isActive, isWide, onClick }: CardProps) {
   const { meta, count, minPrice, avgPrice, topRating, coverImage } = stats;
   const cardRef = useRef<HTMLButtonElement>(null);
 
-  // Scroll-in fade
   useEffect(() => {
     const el = cardRef.current;
     if (!el) return;
@@ -155,7 +162,7 @@ function CategoryCard({ stats, index, isActive, isWide, onClick }: CardProps) {
           obs.disconnect();
         }
       },
-      { threshold: 0.12 },
+      { threshold: 0.1 },
     );
     obs.observe(el);
     return () => obs.disconnect();
@@ -170,47 +177,45 @@ function CategoryCard({ stats, index, isActive, isWide, onClick }: CardProps) {
       aria-pressed={isActive}
       style={{
         opacity: 0,
-        transform: "translateY(24px)",
-        transition: `opacity 0.55s ease ${index * 90}ms, transform 0.55s ease ${index * 90}ms`,
+        transform: "translateY(20px)",
+        transition: `opacity 0.5s ease ${index * 80}ms, transform 0.5s ease ${index * 80}ms`,
+        // Ring when active
+        outline: isActive ? "2px solid rgba(184,150,74,0.7)" : "none",
+        outlineOffset: "-2px",
       }}
-      className={[
-        "group relative overflow-hidden cursor-pointer text-left w-full focus:outline-none",
-        "focus-visible:ring-2 focus-visible:ring-[#B8964A] focus-visible:ring-offset-2",
-        isActive ? "ring-2 ring-[#B8964A]/60" : "",
-      ]
-        .filter(Boolean)
-        .join(" ")}
+      className="group relative overflow-hidden cursor-pointer text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B8964A]"
     >
-      {/* Image */}
+      {/* Image wrapper — tall on mobile, proportional on desktop */}
       <div
-        className={[
-          "relative overflow-hidden",
-          isWide
-            ? "aspect-[16/9] sm:aspect-[21/9]"
-            : "aspect-[4/3] sm:aspect-[5/4]",
-        ].join(" ")}
+        className="relative overflow-hidden"
+        style={{
+          // Mobile: fixed height so cards don't become tiny slivers in a 2-col grid.
+          // Desktop (via the parent grid col-span): aspect ratio takes over.
+          height: "clamp(200px, 45vw, 9999px)",
+          aspectRatio: isWide ? "21 / 9" : "4 / 3",
+        }}
       >
         <img
           src={coverImage}
           alt={meta.label}
           loading="lazy"
-          className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.05]"
+          className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.05]"
           style={{ filter: "brightness(0.82) saturate(0.92)" }}
           onError={(e) => {
             (e.target as HTMLImageElement).src = meta.fallbackImage;
           }}
         />
 
-        {/* Gradient overlay */}
+        {/* Gradient */}
         <div
-          className="absolute inset-0 transition-opacity duration-300 group-hover:opacity-[1.15]"
+          className="absolute inset-0"
           style={{ background: CARD_GRADIENT }}
         />
 
-        {/* Tag */}
-        <div className="absolute top-4 left-4">
+        {/* Tag badge — top left */}
+        <div className="absolute top-3 left-3 sm:top-4 sm:left-4">
           <span
-            className="text-[9px] font-medium uppercase tracking-[0.18em] px-2.5 py-1 rounded-sm"
+            className="text-[9px] font-medium uppercase tracking-[0.16em] px-2 py-1 rounded-sm"
             style={{
               background: "rgba(212,170,102,0.15)",
               border: "1px solid rgba(212,170,102,0.4)",
@@ -222,11 +227,11 @@ function CategoryCard({ stats, index, isActive, isWide, onClick }: CardProps) {
           </span>
         </div>
 
-        {/* Property count */}
+        {/* Property count — top right */}
         {count > 0 && (
-          <div className="absolute top-4 right-4">
+          <div className="absolute top-3 right-3 sm:top-4 sm:right-4">
             <span
-              className="text-[10px] font-light text-white/50 px-2 py-1 rounded-sm"
+              className="text-[10px] font-light text-white/50"
               style={{ backdropFilter: "blur(4px)" }}
             >
               {count} {count === 1 ? "property" : "properties"}
@@ -234,63 +239,59 @@ function CategoryCard({ stats, index, isActive, isWide, onClick }: CardProps) {
           </div>
         )}
 
-        {/* Arrow button — appears on hover */}
-        <div
-          className="absolute top-4 right-4 w-8 h-8 rounded-full border border-white/25 flex items-center justify-center text-white/60 opacity-0 group-hover:opacity-100 transition-all duration-300 group-hover:border-[#D4AA66]/50 group-hover:text-[#D4AA66]"
-          style={count > 0 ? { top: "3rem" } : {}}
-          aria-hidden
-        >
-          <ArrowRightIcon
-            className={[
-              "w-3.5 h-3.5 transition-transform duration-300",
-              isActive ? "rotate-90" : "group-hover:translate-x-0.5",
-            ].join(" ")}
-          />
-        </div>
-
         {/* Bottom content */}
-        <div className="absolute inset-x-0 bottom-0 p-5 sm:p-6">
-          {/* Title + tagline */}
+        <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5">
           <h3
-            className="font-['Cormorant_Garamond'] font-light text-white leading-tight mb-1"
-            style={{ fontSize: isWide ? "clamp(22px,3vw,32px)" : "22px" }}
+            className="font-['Cormorant_Garamond'] font-light text-white leading-tight mb-0.5"
+            style={{ fontSize: isWide ? "clamp(20px, 3vw, 30px)" : "20px" }}
           >
             {meta.label}
           </h3>
-          <p className="text-white/50 text-[11px] font-light tracking-wide">
+          <p className="text-white/50 text-[11px] font-light leading-snug">
             {meta.tagline}
           </p>
 
-          {/* Price + rating */}
+          {/* Price + rating row */}
           {displayPrice > 0 && (
-            <div className="flex items-center gap-5 mt-4 pt-3.5 border-t border-white/10">
+            <div className="flex items-center gap-4 mt-3 pt-3 border-t border-white/10">
               <div>
-                <p className="text-[9px] text-white/35 uppercase tracking-[0.12em] mb-0.5">
+                <p className="text-[9px] text-white/35 uppercase tracking-[0.1em] mb-0.5">
                   From
                 </p>
-                <p className="font-['Cormorant_Garamond'] text-lg font-light text-[#D4AA66]">
+                <p className="font-['Cormorant_Garamond'] text-base font-light text-[#D4AA66]">
                   ₦{displayPrice.toLocaleString()}
-                  <span className="text-white/30 text-[10px] font-sans ml-0.5">
+                  <span className="font-sans text-[10px] text-white/30 ml-0.5">
                     /night
                   </span>
                 </p>
               </div>
               {topRating > 0 && (
                 <div>
-                  <p className="text-[9px] text-white/35 uppercase tracking-[0.12em] mb-0.5">
-                    Best rating
+                  <p className="text-[9px] text-white/35 uppercase tracking-[0.1em] mb-0.5">
+                    Rating
                   </p>
-                  <p className="flex items-center gap-1 font-['Cormorant_Garamond'] text-lg font-light text-white">
+                  <p className="flex items-center gap-1 font-['Cormorant_Garamond'] text-base font-light text-white">
                     <StarSolid className="w-3 h-3 text-[#D4AA66]" />
                     {topRating.toFixed(1)}
                   </p>
                 </div>
               )}
+              {/* Arrow — always visible on mobile (no hover), fades in on desktop */}
+              <div className="ml-auto">
+                <div
+                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-white/20 sm:opacity-0 sm:group-hover:opacity-100 flex items-center justify-center transition-all duration-300 group-hover:border-[#D4AA66]/50"
+                  aria-hidden
+                >
+                  <ArrowRightIcon
+                    className={`w-3 h-3 text-white/60 group-hover:text-[#D4AA66] transition-all duration-300 ${isActive ? "rotate-90" : ""}`}
+                  />
+                </div>
+              </div>
             </div>
           )}
 
           {count === 0 && (
-            <p className="mt-3 text-white/25 text-[11px] tracking-wide font-light">
+            <p className="mt-2 text-white/25 text-[11px] font-light">
               Coming soon
             </p>
           )}
@@ -300,7 +301,7 @@ function CategoryCard({ stats, index, isActive, isWide, onClick }: CardProps) {
   );
 }
 
-/* ─────────────── Detail / listing panel ─────────────── */
+/* ─────────────── Detail panel ─────────────── */
 
 function CategoryDetail({
   stats,
@@ -315,44 +316,45 @@ function CategoryDetail({
 
   return (
     <div
-      className="overflow-hidden border border-[#E8E4DC] rounded-sm"
+      className="overflow-hidden border border-[#E8E4DC]"
       style={{
         background: "#FFFFFF",
-        animation: "csSlideDown 0.3s cubic-bezier(0.34,1.1,0.64,1)",
+        borderRadius: "2px",
+        animation: "csSlideDown 0.28s cubic-bezier(0.34,1.1,0.64,1)",
       }}
     >
       <style>{`
         @keyframes csSlideDown {
-          from { opacity: 0; transform: translateY(-10px); }
+          from { opacity: 0; transform: translateY(-8px); }
           to   { opacity: 1; transform: translateY(0); }
         }
       `}</style>
 
       {/* Panel header */}
-      <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-[#F0EDE6]">
+      <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-[#F0EDE6]">
         <div>
-          <div className="flex items-center gap-2.5 mb-1">
-            <div className="w-6 h-px bg-[#B8964A]" />
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-5 h-px bg-[#B8964A]" />
             <span className="text-[9px] font-medium uppercase tracking-[0.2em] text-[#B8964A]">
               {meta.tag}
             </span>
           </div>
-          <h3 className="font-['Cormorant_Garamond'] text-xl font-light text-[#1C1A17]">
+          <h3 className="font-['Cormorant_Garamond'] text-lg sm:text-xl font-light text-[#1C1A17]">
             {meta.label}
           </h3>
         </div>
         <button
           onClick={onClose}
           aria-label="Close panel"
-          className="w-8 h-8 rounded-full border border-[#E8E4DC] flex items-center justify-center text-[#A09890] hover:bg-[#FAF8F4] hover:text-[#1C1A17] transition-all duration-200"
+          className="w-8 h-8 rounded-full border border-[#E8E4DC] flex items-center justify-center text-[#A09890] hover:bg-[#FAF8F4] hover:text-[#1C1A17] transition-all duration-200 shrink-0"
         >
           <XMarkIcon className="w-4 h-4" />
         </button>
       </div>
 
-      {/* Listings */}
+      {/* Listings grid */}
       {listings.length === 0 ? (
-        <div className="py-14 text-center">
+        <div className="py-12 text-center">
           <p className="text-[#A09890] text-sm font-light">
             No {meta.label.toLowerCase()} available right now.
           </p>
@@ -362,7 +364,9 @@ function CategoryDetail({
         <div
           className="grid gap-px"
           style={{
-            gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+            // 1 col on mobile, 2 on sm, 3 on md+
+            gridTemplateColumns:
+              "repeat(auto-fill, minmax(min(100%, 180px), 1fr))",
             background: "#F0EDE6",
           }}
         >
@@ -372,8 +376,7 @@ function CategoryDetail({
               onClick={() => onBook?.(listing.id)}
               className="group text-left bg-white hover:bg-[#FDFCFA] transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B8964A]"
             >
-              {/* Listing image */}
-              <div className="relative h-36 overflow-hidden">
+              <div className="relative h-32 sm:h-36 overflow-hidden">
                 <img
                   src={listing.images[0] ?? meta.fallbackImage}
                   alt={listing.name}
@@ -386,7 +389,7 @@ function CategoryDetail({
                 />
                 {listing.featured && (
                   <span
-                    className="absolute top-2 right-2 text-[8px] font-medium uppercase tracking-[0.15em] px-2 py-0.5 rounded-sm"
+                    className="absolute top-2 right-2 text-[8px] font-medium uppercase tracking-[0.15em] px-2 py-0.5"
                     style={{
                       background: "rgba(212,170,102,0.18)",
                       border: "1px solid rgba(212,170,102,0.4)",
@@ -398,24 +401,23 @@ function CategoryDetail({
                 )}
               </div>
 
-              {/* Listing info */}
-              <div className="px-4 py-3.5">
-                <p className="font-['Cormorant_Garamond'] text-base font-normal text-[#1C1A17] leading-tight truncate">
+              <div className="px-3 py-3 sm:px-4 sm:py-3.5">
+                <p className="font-['Cormorant_Garamond'] text-sm sm:text-base font-normal text-[#1C1A17] leading-tight truncate">
                   {listing.name}
                 </p>
-                <p className="flex items-center gap-1 text-[11px] text-[#A09890] font-light mt-0.5 truncate">
+                <p className="flex items-center gap-1 text-[10px] text-[#A09890] font-light mt-0.5 truncate">
                   <MapPinIcon className="w-2.5 h-2.5 shrink-0 text-[#C4BFB5]" />
                   {listing.location}
                 </p>
-                <div className="flex items-center justify-between mt-2.5">
-                  <p className="font-['Cormorant_Garamond'] text-base font-normal text-[#B8964A]">
+                <div className="flex items-center justify-between mt-2">
+                  <p className="font-['Cormorant_Garamond'] text-sm sm:text-base font-normal text-[#B8964A]">
                     ₦{listing.pricePerNight.toLocaleString()}
                     <span className="font-sans text-[9px] text-[#C4BFB5] ml-0.5">
                       /night
                     </span>
                   </p>
                   {listing.rating > 0 && (
-                    <p className="flex items-center gap-1 text-[11px] text-[#8A8478]">
+                    <p className="flex items-center gap-0.5 text-[10px] text-[#8A8478]">
                       <StarSolid className="w-2.5 h-2.5 text-[#B8964A]" />
                       {listing.rating.toFixed(1)}
                     </p>
@@ -430,21 +432,12 @@ function CategoryDetail({
   );
 }
 
-/* ─────────────── Main export ─────────────── */
+/* ─────────────── Main section ─────────────── */
 
 interface CategorySectionProps {
   onCategorySelect?: (category: CategoryKey) => void;
   onListingSelect?: (listingId: string) => void;
 }
-
-// Card layout order: villa is wide (index 0), rest are normal
-const CARD_ORDER: CategoryKey[] = [
-  "villa",
-  "resort",
-  "penthouse",
-  "apartment",
-  "boutique",
-];
 
 const CategorySection = ({
   onCategorySelect,
@@ -456,18 +449,19 @@ const CategorySection = ({
   );
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Re-order stats to match desired card layout
   const categories = CARD_ORDER.map(
     (key) => allStats.find((s) => s.key === key)!,
   ).filter(Boolean);
 
   const activeCategoryStats = categories.find((c) => c.key === activeCategory);
   const totalListings = categories.reduce((s, c) => s + c.count, 0);
+
+  const ratedCategories = categories.filter((c) => c.topRating > 0);
   const avgRating =
-    categories.filter((c) => c.topRating > 0).length > 0
+    ratedCategories.length > 0
       ? (
-          categories.reduce((s, c) => s + c.topRating, 0) /
-          categories.filter((c) => c.topRating > 0).length
+          ratedCategories.reduce((s, c) => s + c.topRating, 0) /
+          ratedCategories.length
         ).toFixed(1)
       : "—";
 
@@ -477,108 +471,108 @@ const CategorySection = ({
     } else {
       setActiveCategory(key);
       onCategorySelect?.(key);
-      // Scroll panel into view after state update
       setTimeout(() => {
         panelRef.current?.scrollIntoView({
           behavior: "smooth",
           block: "nearest",
         });
-      }, 50);
+      }, 60);
     }
   };
 
   return (
     <section
-      className="relative py-16 sm:py-20 md:py-24 px-5 sm:px-8 md:px-12"
+      className="relative py-14 sm:py-20 md:py-24 px-4 sm:px-8 md:px-12"
       style={{ background: "#FAF8F4" }}
     >
       <div className="max-w-7xl mx-auto">
         {/* ── Eyebrow ── */}
         <div className="flex items-center gap-3 mb-5">
-          <div className="w-8 h-px bg-[#B8964A]" />
+          <div className="w-7 h-px bg-[#B8964A]" />
           <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-[#B8964A]">
             Curated Collection
           </span>
         </div>
 
-        {/* ── Header row ── */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-12 sm:mb-16">
+        {/* ── Header ── */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10 sm:mb-14">
           <div>
             <h2
               className="font-['Cormorant_Garamond'] font-light leading-[1.05] text-[#1C1A17]"
-              style={{ fontSize: "clamp(36px, 6vw, 56px)" }}
+              style={{ fontSize: "clamp(34px, 6vw, 54px)" }}
             >
               Browse by{" "}
-              <em
-                className="italic text-[#B8964A]"
-                style={{ fontStyle: "italic" }}
-              >
+              <em style={{ fontStyle: "italic", color: "#B8964A" }}>
                 Category
               </em>
             </h2>
-            <p className="text-[#8A8478] text-sm font-light leading-relaxed mt-4 max-w-xs">
+            <p className="text-[#8A8478] text-sm font-light leading-relaxed mt-3 max-w-sm">
               From clifftop estates to skyline penthouses — each property
               handpicked for the discerning traveller.
             </p>
           </div>
 
-          {/* Stats */}
-          <div className="flex items-center gap-8 shrink-0">
-            <div className="text-right">
-              <p className="font-['Cormorant_Garamond'] text-3xl font-light text-[#1C1A17] leading-none">
+          {/* Stats — scrolls horizontally on very small screens */}
+          <div className="flex items-center gap-5 sm:gap-8 shrink-0 overflow-x-auto pb-1">
+            <div className="text-left sm:text-right shrink-0">
+              <p className="font-['Cormorant_Garamond'] text-2xl sm:text-3xl font-light text-[#1C1A17] leading-none">
                 {totalListings}
               </p>
-              <p className="text-[10px] uppercase tracking-[0.14em] text-[#A09890] mt-1">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-[#A09890] mt-1 whitespace-nowrap">
                 Live properties
               </p>
             </div>
-            <div className="w-px h-9 bg-[#DDD8CE]" />
-            <div className="text-right">
-              <p className="font-['Cormorant_Garamond'] text-3xl font-light text-[#1C1A17] leading-none">
+            <div className="w-px h-8 bg-[#DDD8CE] shrink-0" />
+            <div className="text-left sm:text-right shrink-0">
+              <p className="font-['Cormorant_Garamond'] text-2xl sm:text-3xl font-light text-[#1C1A17] leading-none">
                 {categories.filter((c) => c.count > 0).length}
               </p>
-              <p className="text-[10px] uppercase tracking-[0.14em] text-[#A09890] mt-1">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-[#A09890] mt-1 whitespace-nowrap">
                 Categories
               </p>
             </div>
-            <div className="w-px h-9 bg-[#DDD8CE]" />
-            <div className="text-right">
-              <p className="font-['Cormorant_Garamond'] text-3xl font-light text-[#1C1A17] leading-none flex items-center gap-1 justify-end">
+            <div className="w-px h-8 bg-[#DDD8CE] shrink-0" />
+            <div className="text-left sm:text-right shrink-0">
+              <p className="font-['Cormorant_Garamond'] text-2xl sm:text-3xl font-light text-[#1C1A17] leading-none flex items-center gap-1">
                 {avgRating}
-                <StarSolid className="w-4 h-4 text-[#B8964A]" />
+                <StarSolid className="w-3.5 h-3.5 text-[#B8964A]" />
               </p>
-              <p className="text-[10px] uppercase tracking-[0.14em] text-[#A09890] mt-1">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-[#A09890] mt-1 whitespace-nowrap">
                 Avg rating
               </p>
             </div>
           </div>
         </div>
 
-        {/* ── Card grid ── */}
-        {/*
-          Layout (lg):
-            [  VILLA (col-span-2)  ] [ RESORT ]
-            [ PENTHOUSE ] [ APARTMENT ] [ BOUTIQUE ]
+        {/* ── Card grid ──
+              Mobile  : 1 column, all cards full width
+              sm (640): 2 columns, villa spans both
+              lg (1024): 3 columns, villa spans 2
+        ── */}
+        <style>{`
+          .cs-grid {
+            display: grid;
+            gap: 2px;
+            grid-template-columns: 1fr;
+            background: #E8E4DC;
+            border: 1px solid #E8E4DC;
+            border-radius: 2px;
+          }
+          @media (min-width: 640px) {
+            .cs-grid { grid-template-columns: repeat(2, 1fr); }
+            .cs-grid .cs-card-wide { grid-column: 1 / -1; }
+          }
+          @media (min-width: 1024px) {
+            .cs-grid { grid-template-columns: repeat(3, 1fr); }
+            .cs-grid .cs-card-wide { grid-column: span 2; }
+          }
+        `}</style>
 
-          Mobile: single column stack
-        */}
-        <div
-          className="grid gap-0.5"
-          style={{
-            gridTemplateColumns: "repeat(3, 1fr)",
-            background: "#E8E4DC",
-            border: "1px solid #E8E4DC",
-            borderRadius: "2px",
-          }}
-        >
+        <div className="cs-grid">
           {categories.map((stats, i) => {
             const isWide = stats.key === "villa";
             return (
-              <div
-                key={stats.key}
-                style={isWide ? { gridColumn: "span 2" } : {}}
-                className={isWide ? "col-span-2 sm:col-span-2" : ""}
-              >
+              <div key={stats.key} className={isWide ? "cs-card-wide" : ""}>
                 <CategoryCard
                   stats={stats}
                   index={i}
@@ -602,12 +596,12 @@ const CategorySection = ({
           )}
         </div>
 
-        {/* ── Footer CTA ── */}
-        <div className="mt-14 flex flex-col sm:flex-row items-center justify-between gap-6">
-          <p className="text-[11px] text-[#C4BFB5] uppercase tracking-[0.12em] font-light">
+        {/* ── Footer ── */}
+        <div className="mt-12 sm:mt-14 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+          <p className="text-[11px] text-[#C4BFB5] uppercase tracking-[0.1em] font-light leading-relaxed">
             All properties verified &amp; insured · Concierge available 24/7
           </p>
-          <button className="group flex items-center gap-2.5 border border-[#B8964A] text-[#B8964A] text-[11px] font-medium uppercase tracking-[0.15em] px-6 py-3 rounded-sm hover:bg-[#B8964A] hover:text-white transition-all duration-250 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B8964A]">
+          <button className="group flex items-center gap-2.5 border border-[#B8964A] text-[#B8964A] text-[11px] font-medium uppercase tracking-[0.15em] px-5 py-2.5 sm:px-6 sm:py-3 hover:bg-[#B8964A] hover:text-white transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B8964A] shrink-0">
             Browse all {totalListings} properties
             <ArrowRightIcon className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform duration-200" />
           </button>
