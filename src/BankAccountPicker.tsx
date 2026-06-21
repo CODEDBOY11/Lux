@@ -26,11 +26,26 @@ export function BankAccountPicker({
   const [resolvedName, setResolvedName] = useState("");
   const [resolving, setResolving] = useState(false);
   const [error, setError] = useState("");
+  const [loadingBanks, setLoadingBanks] = useState(true);
+  const [bankError, setBankError] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const boxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    WalletDB.listBanks().then(setBanks);
+    setLoadingBanks(true);
+    setBankError("");
+    WalletDB.listBanks()
+      .then((data) => {
+        setBanks(data);
+        if (!data || data.length === 0) {
+          setBankError("No banks available");
+        }
+      })
+      .catch((err) => {
+        setBankError(err.message || "Failed to load banks");
+        console.error("Failed to load banks:", err);
+      })
+      .finally(() => setLoadingBanks(false));
   }, []);
 
   useEffect(() => {
@@ -104,22 +119,41 @@ export function BankAccountPicker({
           onFocus={() => setShowDropdown(true)}
           placeholder="Search for your bank…"
         />
-        {showDropdown && filtered.length > 0 && (
+        {showDropdown && (
           <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-xl">
-            {filtered.map((b) => (
-              <button
-                type="button"
-                key={b.code}
-                onClick={() => {
-                  setSelectedBank(b);
-                  setBankQuery(b.name);
-                  setShowDropdown(false);
-                }}
-                className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50"
-              >
-                {b.name}
-              </button>
-            ))}
+            {loadingBanks ? (
+              <div className="px-4 py-3 text-center">
+                <p className="text-xs text-gray-400 flex items-center justify-center gap-2">
+                  <span className="w-3 h-3 border border-[#C9A96E]/40 border-t-[#C9A96E] rounded-full animate-spin" />
+                  Loading banks…
+                </p>
+              </div>
+            ) : bankError ? (
+              <div className="px-4 py-3">
+                <p className="text-xs text-red-500">{bankError}</p>
+              </div>
+            ) : filtered.length > 0 ? (
+              filtered.map((b) => (
+                <button
+                  type="button"
+                  key={b.code}
+                  onClick={() => {
+                    setSelectedBank(b);
+                    setBankQuery(b.name);
+                    setShowDropdown(false);
+                  }}
+                  className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50"
+                >
+                  {b.name}
+                </button>
+              ))
+            ) : (
+              <div className="px-4 py-3 text-center">
+                <p className="text-xs text-gray-400">
+                  {bankQuery.trim() ? "No banks found" : "Type to search"}
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>
