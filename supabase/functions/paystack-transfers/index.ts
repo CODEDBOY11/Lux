@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.199.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-const PAYSTACK_SECRET = Deno.env.get("PAYSTACK_SECRET_KEY")!;
+const PAYSTACK_SECRET = Deno.env.get("PAYSTACK_SECRET_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -37,6 +37,10 @@ serve(async (req: { method: string; body: any; text: () => any; headers: { get: 
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   try {
+    if (!PAYSTACK_SECRET) {
+      throw new Error("PAYSTACK_SECRET_KEY environment variable is not set. Please configure it in Supabase dashboard under Settings → Edge Functions → Secrets");
+    }
+
     let body: any = {};
     if (req.body) {
       try {
