@@ -1,4 +1,9 @@
 
+[functions.confirm-booking]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/confirm-booking/index.ts"
+
 [functions.paystack-transfers]
 enabled = true
 verify_jwt = false

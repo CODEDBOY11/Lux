@@ -9,11 +9,14 @@ const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Max-Age": "86400",
 };
 
 function ok(data: unknown) {
   return new Response(JSON.stringify({ data }), {
+    status: 200,
     headers: { ...cors, "Content-Type": "application/json" },
   });
 }
@@ -25,7 +28,12 @@ function fail(message: string, status = 400) {
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      status: 200,
+      headers: cors,
+    });
+  }
 
   try {
     const body = await req.json();
