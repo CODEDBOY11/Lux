@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { BankAccountPicker, type ResolvedAccount } from "../BankAccountPicker";
 import { useNavigate } from "react-router-dom";
 import {
   supabase,
@@ -1650,40 +1651,158 @@ const AllReviewsPanel = () => {
   );
 };
 /* ═══════════════════════════════════════════════════════════
+  /* ═══════════════════════════════════════════════════════════
    ADMIN: PLATFORM EARNINGS SUMMARY
 ═══════════════════════════════════════════════════════════ */
 const PlatformEarningsSummary = ({ adminId }: { adminId: string }) => {
   const [wallet, setWallet] = useState<import("../index").Wallet | null>(null);
+  const [showWithdraw, setShowWithdraw] = useState(false);
+  const [resolved, setResolved] = useState<ResolvedAccount | null>(null);
+  const [amount, setAmount] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
 
-  useEffect(() => {
+  const loadWallet = useCallback(() => {
     WalletDB.get(adminId).then(setWallet);
   }, [adminId]);
 
+  useEffect(() => {
+    loadWallet();
+  }, [loadWallet]);
+
+  const submit = async () => {
+    setError("");
+    const amt = Number(amount);
+    if (!amt || amt <= 0) return setError("Enter a valid amount.");
+    if (!resolved) return setError("Select a bank and verify the account.");
+    if (wallet && amt > wallet.balance)
+      return setError(
+        `Amount exceeds platform balance (₦${wallet.balance.toLocaleString()}).`,
+      );
+
+    setSubmitting(true);
+    try {
+      await WalletDB.withdrawPlatformBalance({
+        amount: amt,
+        bankName: resolved.bankName,
+        bankCode: resolved.bankCode,
+        accountNumber: resolved.accountNumber,
+        accountName: resolved.accountName,
+      });
+      setSuccess(true);
+      setShowWithdraw(false);
+      setAmount("");
+      setResolved(null);
+      loadWallet();
+    } catch (e: any) {
+      setError(e.message ?? "Withdrawal failed.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <div className="bg-gradient-to-br from-[#1a1208] to-[#2d1f0a] rounded-2xl p-5 border border-[#C9A96E]/20 flex gap-8 flex-wrap mb-6">
-      <div>
-        <p className="text-[#C9A96E] text-[10px] font-bold uppercase tracking-widest mb-1">
-          Platform Balance
-        </p>
-        <p className="font-['Cormorant_Garamond'] text-4xl font-bold text-white">
-          ₦{(wallet?.balance ?? 0).toLocaleString()}
-        </p>
+    <>
+      <div className="bg-gradient-to-br from-[#1a1208] to-[#2d1f0a] rounded-2xl p-5 border border-[#C9A96E]/20 flex gap-8 flex-wrap mb-6 items-center">
+        <div>
+          <p className="text-[#C9A96E] text-[10px] font-bold uppercase tracking-widest mb-1">
+            Platform Balance
+          </p>
+          <p className="font-['Cormorant_Garamond'] text-4xl font-bold text-white">
+            ₦{(wallet?.balance ?? 0).toLocaleString()}
+          </p>
+        </div>
+        <div className="flex flex-col justify-center">
+          <p className="text-white/40 text-xs mb-0.5">
+            Total Platform Earned (10% fees)
+          </p>
+          <p className="text-white font-bold text-xl">
+            ₦{(wallet?.totalEarned ?? 0).toLocaleString()}
+          </p>
+        </div>
+        <div className="flex flex-col justify-center">
+          <p className="text-white/40 text-xs mb-0.5">
+            Total Paid Out to Hosts
+          </p>
+          <p className="text-amber-400 font-bold text-xl">
+            ₦{(wallet?.totalWithdrawn ?? 0).toLocaleString()}
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            setShowWithdraw(true);
+            setSuccess(false);
+            setError("");
+          }}
+          className="ml-auto bg-[#C9A96E] text-[#0e0d0b] font-bold text-sm px-5 py-2.5 rounded-xl hover:bg-[#dbb87f] transition-all"
+        >
+          Withdraw to Bank
+        </button>
       </div>
-      <div className="flex flex-col justify-center">
-        <p className="text-white/40 text-xs mb-0.5">
-          Total Platform Earned (10% fees)
-        </p>
-        <p className="text-white font-bold text-xl">
-          ₦{(wallet?.totalEarned ?? 0).toLocaleString()}
-        </p>
-      </div>
-      <div className="flex flex-col justify-center">
-        <p className="text-white/40 text-xs mb-0.5">Total Paid Out to Hosts</p>
-        <p className="text-amber-400 font-bold text-xl">
-          ₦{(wallet?.totalWithdrawn ?? 0).toLocaleString()}
-        </p>
-      </div>
-    </div>
+
+      {success && (
+        <div className="bg-emerald-50/10 border border-emerald-500/30 rounded-xl p-4 flex items-center gap-3 text-emerald-400 text-sm font-semibold mb-6">
+          <CheckCircleIcon className="w-5 h-5 shrink-0" />
+          Withdrawal initiated! Funds are on their way to your bank.
+        </div>
+      )}
+
+      {showWithdraw && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div
+            className="bg-[#1a1610] border border-[rgba(245,240,232,0.1)] rounded-2xl shadow-2xl p-6 w-full max-w-md"
+            style={{ animation: "fadeUp 0.2s ease both" }}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="font-['Cormorant_Garamond'] text-xl text-[#f5f0e8]">
+                Withdraw Platform Balance
+              </h3>
+              <button
+                onClick={() => setShowWithdraw(false)}
+                className="text-[rgba(245,240,232,0.4)] hover:text-white"
+              >
+                <XCircleIcon className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-[rgba(245,240,232,0.4)] mb-1 block">
+                  Amount (₦)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder={`Max: ₦${(wallet?.balance ?? 0).toLocaleString()}`}
+                  className="w-full bg-[rgba(245,240,232,0.04)] border border-[rgba(245,240,232,0.08)] rounded-xl px-3 py-2.5 text-sm text-[#f5f0e8] outline-none focus:border-[#C9A96E]"
+                />
+              </div>
+
+              <BankAccountPicker onResolved={setResolved} />
+
+              {error && <p className="text-xs text-[#e07070]">{error}</p>}
+
+              <button
+                onClick={submit}
+                disabled={submitting || !resolved}
+                className="w-full bg-[#C9A96E] disabled:opacity-40 text-[#0e0d0b] font-bold py-3 rounded-xl text-sm hover:bg-[#dbb87f] transition-all flex items-center justify-center gap-2"
+              >
+                {submitting ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-[#0e0d0b]/30 border-t-[#0e0d0b] rounded-full animate-spin" />
+                    Processing…
+                  </>
+                ) : (
+                  "Send to Bank"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
