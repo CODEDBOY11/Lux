@@ -1764,7 +1764,9 @@ export const WalletDB = {
   ): Promise<WithdrawalRequest[]> {
     let q = supabase
       .from("withdrawal_requests")
-      .select("*, users(first_name, last_name, email)")
+      .select(
+        "*, users!withdrawal_requests_host_id_fkey(first_name, last_name, email)",
+      )
       .order("created_at", { ascending: false });
     if (status) q = q.eq("status", status);
     const { data, error } = await q;
