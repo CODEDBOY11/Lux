@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { MessagesDB, NotificationsDB, type Conversation } from "../index";
+import { MessagesDB, type Conversation } from "../index";
 import SEO from "../seo";
-import { WalletDB } from "../index";
 import {
   MapPinIcon,
   ChevronLeftIcon,
@@ -23,7 +22,13 @@ import {
 } from "@heroicons/react/24/solid";
 import { StarIcon as StarOutline } from "@heroicons/react/24/outline";
 import { useAuth } from "../AuthContext";
-import { BookingsDB, ReviewsDB, type Hotel, type Booking } from "../index";
+import {
+  BookingsDB,
+  supabase,
+  ReviewsDB,
+  type Hotel,
+  type Booking,
+} from "../index";
 
 declare global {
   interface Window {
@@ -1090,11 +1095,13 @@ function MiniCalendar({
   onChange,
   min,
   label,
+  isDisabledDate,
 }: {
   value: string;
   onChange: (d: string) => void;
   min?: string;
   label: string;
+  isDisabledDate?: (iso: string) => boolean;
 }) {
   const today = new Date();
   const initial = value ? new Date(value + "T00:00:00") : today;
@@ -1213,7 +1220,8 @@ function MiniCalendar({
         {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
           const iso = toISO(viewYear, viewMonth, day);
           const isSelected = selected && iso === value;
-          const isDisabled = new Date(iso + "T00:00:00") < minDate;
+          const isDisabled =
+            new Date(iso + "T00:00:00") < minDate || !!isDisabledDate?.(iso);
           const isToday =
             iso ===
             toISO(today.getFullYear(), today.getMonth(), today.getDate());
@@ -1457,6 +1465,9 @@ export default function BookingPage({
     import("../index").Review[]
   >([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [bookedRanges, setBookedRanges] = useState<
+    { checkIn: string; checkOut: string }[]
+  >([]);
 
   const [guestInfo, setGuestInfo] = useState({
     name: user ? `${user.firstName} ${user.lastName}`.trim() : "",
@@ -1475,7 +1486,12 @@ export default function BookingPage({
       .catch(console.error)
       .finally(() => setReviewsLoading(false));
   }, [activeTab, hotel.id]);
+  useEffect(() => {
+    BookingsDB.getBookedRanges(hotel.id).then(setBookedRanges);
+  }, [hotel.id]);
 
+  const isDateBooked = (iso: string) =>
+    bookedRanges.some((r) => iso >= r.checkIn && iso < r.checkOut);
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 60);
     window.addEventListener("scroll", handler, { passive: true });
@@ -1521,12 +1537,6 @@ export default function BookingPage({
   const generateRef = () =>
     `ZB-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
 
-  /* ══════════════════════════════════════
-     PAYSTACK — key fix:
-     NO setSaving(true) or any state update
-     before handler.openIframe(). All async
-     work happens inside the callback only.
-  ══════════════════════════════════════ */
   const handlePayWithPaystack = () => {
     if (!window.PaystackPop) {
       setSaveError("Paystack script not loaded. Check your index.html.");
@@ -1537,14 +1547,13 @@ export default function BookingPage({
       return;
     }
 
-    setSaveError(""); // ✅ only a clear, no re-render that blocks popup
+    setSaveError("");
 
-    // ✅ Setup synchronously — no await, no state updates before openIframe
     const handler = window.PaystackPop.setup({
       key: PAYSTACK_KEY,
       email: guestInfo.email,
       amount: total * 100,
-      currency: "NGN", // change to "USD" if needed
+      currency: "NGN",
       ref: generateRef(),
       metadata: {
         listingId: hotel.id,
@@ -1558,74 +1567,78 @@ export default function BookingPage({
         roomType: room.name,
       },
       onClose: () => {
-        // ✅ state updates are safe here — popup is already open/closed
         setSaving(false);
         setSaveError("Payment was cancelled. Please try again.");
       },
-      callback: (response) => {
+      callback: (response: any) => {
         if (response.status !== "success") {
           setSaving(false);
           setSaveError("Payment was not completed. Please try again.");
           return;
         }
-        setSaving(true);
-        BookingsDB.add({
-          guestId: user?.id ?? "guest_anonymous",
-          guestName: guestInfo.name,
-          guestEmail: guestInfo.email,
-          guestPhone: guestInfo.phone,
-          listingId: hotel.id,
-          listingName: hotel.name,
-          hostId: hotel.hostId,
-          checkIn: checkIn || today,
-          checkOut:
-            checkOut ||
-            new Date(Date.now() + 86400000).toISOString().split("T")[0],
-          guests,
-          nights: Math.max(nights, 1),
-          totalAmount: total,
-          specialRequests: guestInfo.requests,
-        })
-          .then(async (booking) => {
-            // Split payment: 90% to host, 10% to platform
-            await WalletDB.splitBookingPayment(
-              booking.hostId,
-              booking.id,
-              booking.totalAmount,
-              booking.listingName,
-            );
-            await NotificationsDB.create({
-              userId: booking.hostId,
-              type: "booking_confirmed",
-              title: "New booking confirmed!",
-              body: `${booking.guestName} booked ${booking.listingName} for ${booking.nights} night${booking.nights > 1 ? "s" : ""}.`,
-              link: "/dashboard?tab=bookings",
-            });
-            // Notify the guest (payment confirmation)
-            await NotificationsDB.create({
-              userId: booking.guestId,
-              type: "payment",
-              title: "Payment successful",
-              body: `Your booking at ${booking.listingName} is confirmed. Ref: ${response.reference}`,
-              link: `/listing/${booking.listingId}`,
-            });
 
-            setBookingRef(response.reference);
-            setCompletedBooking(booking);
-            setStep("done");
+        setSaving(true);
+
+        supabase.functions
+          .invoke("confirm-booking", {
+            body: {
+              reference: response.reference,
+              guestId: user?.id ?? "guest_anonymous",
+              guestName: guestInfo.name,
+              guestEmail: guestInfo.email,
+              guestPhone: guestInfo.phone,
+              listingId: hotel.id,
+              listingName: hotel.name,
+              hostId: hotel.hostId,
+              checkIn: checkIn || today,
+              checkOut:
+                checkOut ||
+                new Date(Date.now() + 86400000).toISOString().split("T")[0],
+              guests,
+              nights: Math.max(nights, 1),
+              totalAmount: total,
+              specialRequests: guestInfo.requests,
+            },
           })
-          .catch((err) => {
-            setSaveError(
-              err.message ??
-                "Payment succeeded but booking failed. Contact support.",
-            );
+          .then(({ data, error }) => {
+            if (error || !data?.data?.booking) {
+              setSaveError(
+                error?.message ??
+                  "Payment succeeded but the booking could not be confirmed. If you were not refunded, contact support with reference " +
+                    response.reference,
+              );
+              return;
+            }
+            const booking = data.data.booking;
+            setBookingRef(response.reference);
+            setCompletedBooking({
+              id: booking.id,
+              ref: booking.ref,
+              guestId: booking.guest_id,
+              guestName: booking.guest_name,
+              guestEmail: booking.guest_email,
+              guestPhone: booking.guest_phone,
+              listingId: booking.listing_id,
+              listingName: booking.listing_name,
+              hostId: booking.host_id,
+              checkIn: booking.check_in,
+              checkOut: booking.check_out,
+              guests: booking.guests,
+              nights: booking.nights,
+              totalAmount: Number(booking.total_amount),
+              status: booking.status,
+              specialRequests: booking.special_requests,
+              createdAt: booking.created_at,
+            });
+            setStep("done");
           })
           .finally(() => {
             setSaving(false);
           });
       },
     });
-    handler.openIframe(); // ✅ called synchronously, no prior state updates
+
+    handler.openIframe();
   };
 
   const calInRef = useRef<HTMLDivElement>(null);
@@ -2023,8 +2036,22 @@ export default function BookingPage({
                   </span>
                 </div>
               </div>
+              {saveError && (
+                <div
+                  style={{
+                    background: "rgba(220,60,60,0.12)",
+                    border: "1px solid rgba(220,60,60,0.3)",
+                    borderRadius: 10,
+                    padding: "12px 16px",
+                    fontSize: 13,
+                    color: "#e07070",
+                  }}
+                >
+                  {saveError}
+                </div>
+              )}
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (!user) {
                     sessionStorage.setItem(
                       "zb_redirect_after_login",
@@ -2032,6 +2059,19 @@ export default function BookingPage({
                     );
                     window.location.href = "/login";
                     return;
+                  }
+                  if (checkIn && checkOut) {
+                    const available = await BookingsDB.checkAvailability(
+                      hotel.id,
+                      checkIn,
+                      checkOut,
+                    );
+                    if (!available) {
+                      setSaveError(
+                        "Sorry, these dates were just booked. Please choose different dates.",
+                      );
+                      return;
+                    }
                   }
                   setStep("confirm");
                 }}
@@ -4148,6 +4188,7 @@ export default function BookingPage({
                           }}
                           min={today}
                           label="Check-in date"
+                          isDisabledDate={isDateBooked}
                         />
                       </div>
                     )}
@@ -4216,6 +4257,7 @@ export default function BookingPage({
                           }}
                           min={checkIn || today}
                           label="Check-out date"
+                          isDisabledDate={isDateBooked}
                         />
                       </div>
                     )}

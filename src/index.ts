@@ -772,6 +772,44 @@ export const BookingsDB = {
       .eq("id", id);
     if (error) console.error("BookingsDB.updateStatus:", error.message);
   },
+   /** Returns true if the date range is free for this listing */
+  async checkAvailability(
+    listingId: string,
+    checkIn: string,
+    checkOut: string,
+  ): Promise<boolean> {
+    const { data, error } = await supabase
+      .from("bookings")
+      .select("id")
+      .eq("listing_id", listingId)
+      .neq("status", "cancelled")
+      .lt("check_in", checkOut)
+      .gt("check_out", checkIn);
+    if (error) {
+      console.error("BookingsDB.checkAvailability:", error.message);
+      return false;
+    }
+    return (data ?? []).length === 0;
+  },
+
+  /** Returns all booked date ranges for a listing (for calendar UI) */
+  async getBookedRanges(
+    listingId: string,
+  ): Promise<{ checkIn: string; checkOut: string }[]> {
+    const { data, error } = await supabase
+      .from("bookings")
+      .select("check_in, check_out")
+      .eq("listing_id", listingId)
+      .neq("status", "cancelled");
+    if (error) {
+      console.error("BookingsDB.getBookedRanges:", error.message);
+      return [];
+    }
+    return (data ?? []).map((r: any) => ({
+      checkIn: r.check_in,
+      checkOut: r.check_out,
+    }));
+  },
 };
 
 /* ─────────────── Hotel helpers ─────────────── */
