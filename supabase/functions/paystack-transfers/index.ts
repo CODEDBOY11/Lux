@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.199.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.64.0?target=deno&no-check";
+import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const PAYSTACK_SECRET = Deno.env.get("PAYSTACK_SECRET_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;

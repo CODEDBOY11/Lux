@@ -36,14 +36,18 @@ export function BankAccountPicker({
     setBankError("");
     WalletDB.listBanks()
       .then((data) => {
+        console.log("Banks loaded:", data);
         setBanks(data);
         if (!data || data.length === 0) {
-          setBankError("No banks available");
+          setBankError(
+            "No banks available. Check console for details or contact support.",
+          );
         }
       })
       .catch((err) => {
-        setBankError(err.message || "Failed to load banks");
-        console.error("Failed to load banks:", err);
+        const msg = err.message || "Failed to load banks";
+        setBankError(msg);
+        console.error("❌ BankAccountPicker error:", msg, err);
       })
       .finally(() => setLoadingBanks(false));
   }, []);

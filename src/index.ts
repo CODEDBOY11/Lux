@@ -1859,7 +1859,13 @@ export const WalletDB = {
   const { data, error } = await supabase.functions.invoke("paystack-transfers", {
     body: { action: "list-banks" },
   });
-  if (error) { console.error("WalletDB.listBanks:", error.message); return []; }
+  if (error) {
+    console.error("❌ WalletDB.listBanks error:", error);
+    throw new Error(error.message || "Failed to fetch banks from Paystack");
+  }
+  if (!data || !data.data) {
+    throw new Error("Invalid response from bank list API");
+  }
   return data.data;
 },
 
