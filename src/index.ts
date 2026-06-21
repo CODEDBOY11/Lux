@@ -1714,6 +1714,7 @@ export const WalletDB = {
     hostId: string;
     amount: number;
     bankName: string;
+    bankCode: string;
     accountNumber: string;
     accountName: string;
   }): Promise<WithdrawalRequest> {
@@ -1732,6 +1733,7 @@ export const WalletDB = {
         host_id: data.hostId,
         amount: data.amount,
         bank_name: data.bankName,
+         bank_code: data.bankCode,
         account_number: data.accountNumber,
         account_name: data.accountName,
         status: "pending",
@@ -1755,6 +1757,13 @@ export const WalletDB = {
     }
     return (data ?? []).map(toWithdrawal);
   },
+  async withdrawPlatformBalance(data: {
+  amount: number; bankName: string; bankCode: string;
+  accountNumber: string; accountName: string;
+}): Promise<void> {
+  const wr = await this.requestWithdrawal({ hostId: PLATFORM_ADMIN_ID, ...data });
+  await this.initiateTransfer(wr.id);
+},
 
   /* ── Admin methods ── */
 
@@ -1846,6 +1855,29 @@ export const WalletDB = {
       });
     }
   },
+   async listBanks(): Promise<{ name: string; code: string }[]> {
+  const { data, error } = await supabase.functions.invoke("paystack-transfers", {
+    body: { action: "list-banks" },
+  });
+  if (error) { console.error("WalletDB.listBanks:", error.message); return []; }
+  return data.data;
+},
+
+async resolveAccount(accountNumber: string, bankCode: string): Promise<string> {
+  const { data, error } = await supabase.functions.invoke("paystack-transfers", {
+    body: { action: "resolve-account", accountNumber, bankCode },
+  });
+  if (error) throw new Error(error.message);
+  return data.data.accountName;
+},
+
+async initiateTransfer(withdrawalId: string): Promise<{ status: string }> {
+  const { data, error } = await supabase.functions.invoke("paystack-transfers", {
+    body: { action: "initiate-transfer", withdrawalId },
+  });
+  if (error) throw new Error(error.message);
+  return data.data;
+},
 };
 /* ─────────────────────────────────────────────────────────────
    NOTIFICATIONS
@@ -1968,4 +2000,5 @@ export const NotificationsDB = {
       )
       .subscribe();
   },
+ 
 };

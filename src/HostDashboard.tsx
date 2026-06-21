@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import ReviewsSection from "./ReviewSection";
 import { WalletDB } from "./index";
 import PropertyVerificationForm from "./Verification/Property";
+import { BankAccountPicker, type ResolvedAccount } from "./BankAccountPicker";
 import {
   HomeIcon,
   BuildingOffice2Icon,
@@ -1457,6 +1458,9 @@ const HostBookings = () => {
 /* ═══════════════════════════════════════════════════════════
    HOST: EARNINGS + WALLET + WITHDRAWALS
 ═══════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════
+   HOST: EARNINGS + WALLET + WITHDRAWALS
+═══════════════════════════════════════════════════════════ */
 const EarningsSection = () => {
   const { user } = useAuth();
   const [wallet, setWallet] = useState<import("./index").Wallet | null>(null);
@@ -1471,12 +1475,8 @@ const EarningsSection = () => {
   const [withdrawing, setWithdrawing] = useState(false);
   const [withdrawError, setWithdrawError] = useState("");
   const [withdrawSuccess, setWithdrawSuccess] = useState(false);
-  const [form, setForm] = useState({
-    amount: "",
-    bankName: "",
-    accountNumber: "",
-    accountName: "",
-  });
+  const [form, setForm] = useState({ amount: "" });
+  const [resolved, setResolved] = useState<ResolvedAccount | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -1501,11 +1501,10 @@ const EarningsSection = () => {
     const amount = Number(form.amount);
     if (!amount || amount <= 0)
       return setWithdrawError("Enter a valid amount.");
-    if (!form.bankName.trim()) return setWithdrawError("Enter your bank name.");
-    if (!form.accountNumber.trim())
-      return setWithdrawError("Enter your account number.");
-    if (!form.accountName.trim())
-      return setWithdrawError("Enter your account name.");
+    if (!resolved)
+      return setWithdrawError(
+        "Select a bank and enter a valid account number.",
+      );
     if (wallet && amount > wallet.balance)
       return setWithdrawError(
         `Insufficient balance. Available: ₦${wallet.balance.toLocaleString()}`,
@@ -1516,13 +1515,15 @@ const EarningsSection = () => {
       await WalletDB.requestWithdrawal({
         hostId: user!.id,
         amount,
-        bankName: form.bankName,
-        accountNumber: form.accountNumber,
-        accountName: form.accountName,
+        bankName: resolved.bankName,
+        bankCode: resolved.bankCode,
+        accountNumber: resolved.accountNumber,
+        accountName: resolved.accountName,
       });
       setWithdrawSuccess(true);
       setShowWithdrawForm(false);
-      setForm({ amount: "", bankName: "", accountNumber: "", accountName: "" });
+      setForm({ amount: "" });
+      setResolved(null);
       await load();
     } catch (e: any) {
       setWithdrawError(e.message ?? "Withdrawal failed.");
@@ -1635,41 +1636,9 @@ const EarningsSection = () => {
                 }
               />
             </div>
-            <div>
-              <label className={lbl}>Bank Name</label>
-              <input
-                className={inp}
-                placeholder="e.g. Guaranty Trust Bank"
-                value={form.bankName}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, bankName: e.target.value }))
-                }
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={lbl}>Account Number</label>
-                <input
-                  className={inp}
-                  placeholder="0123456789"
-                  value={form.accountNumber}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, accountNumber: e.target.value }))
-                  }
-                />
-              </div>
-              <div>
-                <label className={lbl}>Account Name</label>
-                <input
-                  className={inp}
-                  placeholder="As on bank record"
-                  value={form.accountName}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, accountName: e.target.value }))
-                  }
-                />
-              </div>
-            </div>
+
+            <BankAccountPicker onResolved={setResolved} />
+
             {withdrawError && (
               <p className="text-sm text-red-500 flex items-center gap-1.5">
                 <XMarkIcon className="w-4 h-4 shrink-0" />
@@ -1679,7 +1648,7 @@ const EarningsSection = () => {
             <div className="flex gap-3 pt-1">
               <button
                 onClick={handleWithdraw}
-                disabled={withdrawing}
+                disabled={withdrawing || !resolved}
                 className="flex-1 bg-[#C9A96E] disabled:opacity-50 text-white font-bold py-3 rounded-xl text-sm hover:bg-[#b8935a] transition-all flex items-center justify-center gap-2"
               >
                 {withdrawing ? (
@@ -1801,7 +1770,6 @@ const EarningsSection = () => {
     </div>
   );
 };
-
 /* ═══════════════════════════════════════════════════════════
    SETTINGS
 ═══════════════════════════════════════════════════════════ */
