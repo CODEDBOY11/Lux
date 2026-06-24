@@ -8,10 +8,12 @@ import {
   BookingsDB,
   ReviewsDB,
   WalletDB,
+  RefundRequestsDB,
   type User,
   type Listing,
   type Booking,
   type Review,
+  type RefundRequest,
 } from "../index";
 import {
   VerificationDB,
@@ -38,6 +40,7 @@ import {
   ChatBubbleLeftRightIcon,
   VideoCameraIcon,
   ArrowRightOnRectangleIcon,
+  ReceiptRefundIcon,
 } from "@heroicons/react/24/outline";
 import { StarIcon as StarSolid } from "@heroicons/react/24/solid";
 
@@ -71,7 +74,8 @@ type AdminView =
   | "host-detail"
   | "verification"
   | "bookings"
-  | "reviews";
+  | "reviews"
+  | "refunds";
 
 /* ─────────── stat card ─────────── */
 const StatCard = ({
@@ -186,12 +190,477 @@ const BookingBadge = ({ status }: { status: string }) => {
   );
 };
 
+const RefundStatusBadge = ({ status }: { status: string }) => {
+  const map: Record<
+    string,
+    { color: string; bg: string; border: string; label: string }
+  > = {
+    pending: {
+      color: "#f59e0b",
+      bg: "rgba(245,158,11,0.1)",
+      border: "rgba(245,158,11,0.25)",
+      label: "Pending",
+    },
+    approved: {
+      color: "#4ade80",
+      bg: "rgba(74,222,128,0.1)",
+      border: "rgba(74,222,128,0.25)",
+      label: "Approved",
+    },
+    declined: {
+      color: "#e07070",
+      bg: "rgba(220,60,60,0.1)",
+      border: "rgba(220,60,60,0.25)",
+      label: "Declined",
+    },
+  };
+  const cfg = map[status] ?? map.pending;
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap"
+      style={{ color: cfg.color, background: cfg.bg, borderColor: cfg.border }}
+    >
+      <span className="w-1.5 h-1.5 rounded-full bg-current" />
+      {cfg.label}
+    </span>
+  );
+};
+
 /* ─────────── skeleton ─────────── */
 const Sk = ({ h = "h-8", r = "rounded-xl" }: { h?: string; r?: string }) => (
   <div
     className={`w-full ${h} ${r} bg-[rgba(245,240,232,0.05)] animate-pulse`}
   />
 );
+
+/* ═══════════════════════════════════════════════════════════
+   REFUND REQUESTS PANEL
+═══════════════════════════════════════════════════════════ */
+const RefundRequestsPanel = ({ adminId }: { adminId: string }) => {
+  const [requests, setRequests] = useState<RefundRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<
+    "all" | "pending" | "approved" | "declined"
+  >("pending");
+  const [selected, setSelected] = useState<RefundRequest | null>(null);
+  const [adminNote, setAdminNote] = useState("");
+  const [actioning, setActioning] = useState(false);
+  const [actionError, setActionError] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const data = await RefundRequestsDB.all(
+      filter === "all"
+        ? undefined
+        : (filter as "pending" | "approved" | "declined"),
+    );
+    setRequests(data);
+    setLoading(false);
+  }, [filter]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const counts = {
+    all: requests.length,
+    pending: requests.filter((r) => r.status === "pending").length,
+    approved: requests.filter((r) => r.status === "approved").length,
+    declined: requests.filter((r) => r.status === "declined").length,
+  };
+
+  const totalPending = requests.filter((r) => r.status === "pending").length;
+  const totalRefundAmt = requests
+    .filter((r) => r.status === "approved")
+    .reduce((s, r) => s + r.refundAmount, 0);
+
+  const act = async (action: "approve" | "decline") => {
+    if (!selected) return;
+    if (action === "decline" && !adminNote.trim()) {
+      setActionError("A reason is required when declining a refund request.");
+      return;
+    }
+    setActioning(true);
+    setActionError("");
+    try {
+      if (action === "approve") {
+        await RefundRequestsDB.approve(
+          selected.id,
+          adminId,
+          adminNote.trim() || undefined,
+        );
+      } else {
+        await RefundRequestsDB.decline(selected.id, adminId, adminNote.trim());
+      }
+      setSelected(null);
+      setAdminNote("");
+      await load();
+    } catch (e: any) {
+      setActionError(e?.message ?? "Action failed. Please try again.");
+    } finally {
+      setActioning(false);
+    }
+  };
+
+  /* ── Detail view ── */
+  if (selected) {
+    const daysLeft = Math.ceil(
+      (new Date(selected.checkIn).getTime() - Date.now()) / 86400000,
+    );
+    const refundColor =
+      selected.refundAmount >= selected.totalAmount
+        ? "#7ec8a0"
+        : selected.refundAmount > 0
+          ? "#C9A96E"
+          : "#e07070";
+
+    return (
+      <div
+        className="flex-1 overflow-y-auto p-6"
+        style={{ animation: "fadeUp 0.3s ease both" }}
+      >
+        <button
+          onClick={() => {
+            setSelected(null);
+            setAdminNote("");
+            setActionError("");
+          }}
+          className="flex items-center gap-2 text-[rgba(245,240,232,0.4)] hover:text-[#C9A96E] text-sm mb-6 transition-colors"
+        >
+          <ArrowLeftIcon className="w-4 h-4" /> Back to requests
+        </button>
+
+        <div className="max-w-2xl space-y-5">
+          {/* Header card */}
+          <div className="bg-[#1a1610] border border-[rgba(245,240,232,0.07)] rounded-2xl p-6">
+            <div className="flex items-start justify-between mb-5">
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-[#C9A96E] mb-1">
+                  Cancellation / Refund Request
+                </p>
+                <h2 className="font-['Cormorant_Garamond'] text-2xl text-[#f5f0e8]">
+                  {selected.listingName}
+                </h2>
+                <p className="text-sm text-[rgba(245,240,232,0.4)] mt-0.5">
+                  {fmtDate(selected.checkIn)} → {fmtDate(selected.checkOut)}
+                </p>
+              </div>
+              <RefundStatusBadge status={selected.status} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              {(
+                [
+                  ["Guest", selected.guestName],
+                  ["Email", selected.guestEmail],
+                  ["Total Paid", fmt$(selected.totalAmount)],
+                  [
+                    "Days to Check-in",
+                    `${daysLeft} day${daysLeft !== 1 ? "s" : ""}`,
+                  ],
+                  ["Submitted", fmtDate(selected.createdAt)],
+                  ["Booking Ref", selected.bookingId.slice(0, 8) + "…"],
+                ] as [string, string][]
+              ).map(([k, v]) => (
+                <div
+                  key={k}
+                  className="bg-[rgba(245,240,232,0.03)] rounded-xl p-3"
+                >
+                  <p className="text-[10px] uppercase tracking-wider text-[rgba(245,240,232,0.3)] mb-1">
+                    {k}
+                  </p>
+                  <p className="text-[#f5f0e8] text-sm font-medium">{v}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Refund amount */}
+          <div
+            className="rounded-2xl p-5 border"
+            style={{
+              background: `${refundColor}0d`,
+              borderColor: `${refundColor}30`,
+            }}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-[rgba(245,240,232,0.35)] mb-1">
+                  Refund Amount (if approved)
+                </p>
+                <p
+                  className="font-['Cormorant_Garamond'] text-3xl font-bold"
+                  style={{ color: refundColor }}
+                >
+                  {fmt$(selected.refundAmount)}
+                </p>
+                <p className="text-xs text-[rgba(245,240,232,0.35)] mt-1">
+                  {selected.refundAmount === selected.totalAmount
+                    ? "100% — full refund"
+                    : selected.refundAmount > 0
+                      ? `${Math.round((selected.refundAmount / selected.totalAmount) * 100)}% of total paid`
+                      : "0% — no refund per policy"}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] uppercase tracking-widest text-[rgba(245,240,232,0.3)] mb-1">
+                  Total Paid
+                </p>
+                <p className="text-lg font-bold text-[#f5f0e8]">
+                  {fmt$(selected.totalAmount)}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Guest's reason */}
+          <div className="bg-[#1a1610] border border-[rgba(245,240,232,0.07)] rounded-2xl p-5">
+            <p className="text-[10px] uppercase tracking-widest text-[rgba(245,240,232,0.3)] mb-3 flex items-center gap-2">
+              <ChatBubbleLeftRightIcon className="w-3.5 h-3.5" />
+              Guest's Reason
+            </p>
+            <p className="text-sm font-semibold text-[#f5f0e8] mb-2">
+              {selected.reason}
+            </p>
+            {selected.note && (
+              <p className="text-sm text-[rgba(245,240,232,0.5)] leading-relaxed border-t border-[rgba(245,240,232,0.06)] pt-3 mt-2">
+                {selected.note}
+              </p>
+            )}
+          </div>
+
+          {/* Previous admin note if already reviewed */}
+          {selected.adminNote && selected.status !== "pending" && (
+            <div
+              className="rounded-2xl p-5 border"
+              style={{
+                background:
+                  selected.status === "approved"
+                    ? "rgba(74,222,128,0.05)"
+                    : "rgba(224,112,112,0.05)",
+                borderColor:
+                  selected.status === "approved"
+                    ? "rgba(74,222,128,0.2)"
+                    : "rgba(224,112,112,0.2)",
+              }}
+            >
+              <p
+                className="text-[10px] uppercase tracking-widest mb-2"
+                style={{
+                  color: selected.status === "approved" ? "#4ade80" : "#e07070",
+                }}
+              >
+                Admin Note ({selected.status})
+              </p>
+              <p className="text-sm text-[rgba(245,240,232,0.6)]">
+                {selected.adminNote}
+              </p>
+              {selected.reviewedAt && (
+                <p className="text-[10px] text-[rgba(245,240,232,0.25)] mt-2">
+                  Reviewed {fmtDate(selected.reviewedAt)}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Action panel — only for pending */}
+          {selected.status === "pending" && (
+            <div className="bg-[#1a1610] border border-[rgba(245,240,232,0.07)] rounded-2xl p-5">
+              <p className="text-[10px] uppercase tracking-widest text-[rgba(245,240,232,0.3)] mb-4">
+                Admin Decision
+              </p>
+              <textarea
+                value={adminNote}
+                onChange={(e) => setAdminNote(e.target.value)}
+                rows={3}
+                placeholder="Add a note (required if declining, optional if approving)…"
+                className="w-full bg-[rgba(245,240,232,0.04)] border border-[rgba(245,240,232,0.08)] rounded-xl p-3 text-sm text-[#f5f0e8] outline-none resize-none mb-4 focus:border-[#C9A96E] transition-colors placeholder:text-[rgba(245,240,232,0.2)]"
+              />
+              {actionError && (
+                <p className="text-xs text-[#e07070] mb-3">{actionError}</p>
+              )}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => act("approve")}
+                  disabled={actioning}
+                  className="flex-1 bg-[#4ade80] text-[#0e0d0b] font-bold py-3 rounded-xl text-sm hover:bg-[#22c55e] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {actioning ? (
+                    <span className="w-4 h-4 border-2 border-[#0e0d0b]/20 border-t-[#0e0d0b] rounded-full animate-spin" />
+                  ) : (
+                    <CheckCircleIcon className="w-4 h-4" />
+                  )}
+                  Approve & Cancel Booking
+                </button>
+                <button
+                  onClick={() => act("decline")}
+                  disabled={actioning}
+                  className="flex-1 bg-[rgba(220,60,60,0.1)] border border-[rgba(220,60,60,0.25)] text-[#e07070] font-bold py-3 rounded-xl text-sm hover:bg-[rgba(220,60,60,0.2)] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  <XCircleIcon className="w-4 h-4" /> Decline
+                </button>
+              </div>
+              <p className="text-[11px] text-[rgba(245,240,232,0.25)] mt-3 text-center">
+                Approving will cancel the booking and notify the guest.
+                {selected.refundAmount > 0
+                  ? ` A refund of ${fmt$(selected.refundAmount)} must be processed manually.`
+                  : " No refund applies per policy."}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  /* ── List view ── */
+  return (
+    <div
+      className="flex-1 overflow-y-auto p-6"
+      style={{ animation: "fadeUp 0.3s ease both" }}
+    >
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h2 className="font-['Cormorant_Garamond'] text-3xl text-[#f5f0e8] mb-1">
+            Refund Requests
+          </h2>
+          <p className="text-[rgba(245,240,232,0.4)] text-sm">
+            Guest cancellation requests awaiting admin review
+          </p>
+        </div>
+        {/* Summary pills */}
+        <div className="flex gap-3 text-right">
+          <div className="bg-[rgba(245,158,11,0.08)] border border-[rgba(245,158,11,0.2)] rounded-xl px-4 py-2.5 text-center">
+            <p className="font-['Cormorant_Garamond'] text-2xl text-[#f59e0b] font-bold">
+              {totalPending}
+            </p>
+            <p className="text-[10px] text-[rgba(245,240,232,0.35)] uppercase tracking-wider">
+              Pending
+            </p>
+          </div>
+          <div className="bg-[rgba(74,222,128,0.06)] border border-[rgba(74,222,128,0.18)] rounded-xl px-4 py-2.5 text-center">
+            <p className="font-['Cormorant_Garamond'] text-2xl text-[#4ade80] font-bold">
+              {fmt$(totalRefundAmt)}
+            </p>
+            <p className="text-[10px] text-[rgba(245,240,232,0.35)] uppercase tracking-wider">
+              Approved Refunds
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Filter tabs */}
+      <div className="flex gap-2 flex-wrap mb-5">
+        {(["pending", "approved", "declined", "all"] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`text-xs font-semibold px-4 py-2 rounded-full border transition-all capitalize ${
+              filter === f
+                ? "bg-[#C9A96E] border-[#C9A96E] text-[#0e0d0b]"
+                : "border-[rgba(245,240,232,0.1)] text-[rgba(245,240,232,0.45)] hover:border-[rgba(201,169,110,0.3)]"
+            }`}
+          >
+            {f} ({counts[f] ?? 0})
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <Sk key={i} h="h-24" r="rounded-2xl" />
+          ))}
+        </div>
+      ) : requests.length === 0 ? (
+        <div className="py-24 text-center">
+          <ReceiptRefundIcon className="w-10 h-10 text-[rgba(245,240,232,0.1)] mx-auto mb-3" />
+          <p className="text-[rgba(245,240,232,0.35)] text-sm">
+            No {filter !== "all" ? filter : ""} refund requests
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {requests.map((req, i) => {
+            const daysLeft = Math.ceil(
+              (new Date(req.checkIn).getTime() - Date.now()) / 86400000,
+            );
+            const refundColor =
+              req.refundAmount >= req.totalAmount
+                ? "#7ec8a0"
+                : req.refundAmount > 0
+                  ? "#C9A96E"
+                  : "#e07070";
+
+            return (
+              <div
+                key={req.id}
+                onClick={() => {
+                  setSelected(req);
+                  setAdminNote("");
+                  setActionError("");
+                }}
+                className="bg-[#1a1610] border border-[rgba(245,240,232,0.07)] rounded-2xl p-5 hover:border-[rgba(201,169,110,0.25)] cursor-pointer transition-all group"
+                style={{ animation: `fadeUp 0.3s ease ${i * 40}ms both` }}
+              >
+                <div className="flex items-start gap-4">
+                  {/* Avatar */}
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#6EADC9] to-[#4a8aad] flex items-center justify-center text-white font-bold text-sm shrink-0">
+                    {req.guestName?.[0]?.toUpperCase() ?? "G"}
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <p className="text-[#f5f0e8] text-sm font-semibold truncate">
+                        {req.guestName}
+                      </p>
+                      <RefundStatusBadge status={req.status} />
+                    </div>
+                    <p className="text-xs text-[rgba(245,240,232,0.4)] mb-1">
+                      {req.guestEmail}
+                    </p>
+                    <p className="text-xs text-[rgba(245,240,232,0.6)] font-medium truncate">
+                      {req.listingName}
+                    </p>
+                    <p className="text-xs text-[rgba(245,240,232,0.35)] mt-0.5">
+                      {fmtDateShort(req.checkIn)} → {fmtDateShort(req.checkOut)}
+                      {daysLeft > 0 && ` · Check-in in ${daysLeft}d`}
+                    </p>
+                    <p className="text-xs text-[rgba(245,240,232,0.4)] mt-1 italic">
+                      "{req.reason}"
+                    </p>
+                  </div>
+
+                  {/* Amount */}
+                  <div className="text-right shrink-0">
+                    <p className="text-xs text-[rgba(245,240,232,0.3)] mb-1">
+                      Refund
+                    </p>
+                    <p
+                      className="text-base font-bold"
+                      style={{ color: refundColor }}
+                    >
+                      {fmt$(req.refundAmount)}
+                    </p>
+                    <p className="text-[10px] text-[rgba(245,240,232,0.25)]">
+                      of {fmt$(req.totalAmount)}
+                    </p>
+                    <p className="text-[10px] text-[rgba(245,240,232,0.25)] mt-1">
+                      {fmtDate(req.createdAt)}
+                    </p>
+                  </div>
+
+                  <ChevronRightIcon className="w-4 h-4 text-[rgba(245,240,232,0.2)] group-hover:text-[#C9A96E] transition-colors shrink-0 self-center" />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
 
 /* ═══════════════════════════════════════════════════════════
    VERIFICATION QUEUE PANEL
@@ -299,13 +768,10 @@ const VerificationPanel = ({ adminId }: { adminId: string }) => {
               ))}
             </div>
           </div>
-
-          {/* Listing images */}
           {selected.listingImages.length > 0 && (
             <div className="bg-[#1a1610] border border-[rgba(245,240,232,0.07)] rounded-2xl p-5">
               <p className="text-[10px] uppercase tracking-widest text-[rgba(245,240,232,0.3)] mb-3 flex items-center gap-2">
-                <DocumentTextIcon className="w-3.5 h-3.5" />
-                Listing Photos
+                <DocumentTextIcon className="w-3.5 h-3.5" /> Listing Photos
               </p>
               <div className="flex gap-2 flex-wrap">
                 {selected.listingImages.slice(0, 6).map((url, i) => (
@@ -326,13 +792,10 @@ const VerificationPanel = ({ adminId }: { adminId: string }) => {
               </div>
             </div>
           )}
-
-          {/* Verification video */}
           {selected.videoUrl && (
             <div className="bg-[#1a1610] border border-[rgba(245,240,232,0.07)] rounded-2xl p-5">
               <p className="text-[10px] uppercase tracking-widest text-[rgba(245,240,232,0.3)] mb-3 flex items-center gap-2">
-                <VideoCameraIcon className="w-3.5 h-3.5" />
-                Walkthrough Video
+                <VideoCameraIcon className="w-3.5 h-3.5" /> Walkthrough Video
               </p>
               <a
                 href={selected.videoUrl}
@@ -347,21 +810,16 @@ const VerificationPanel = ({ adminId }: { adminId: string }) => {
               </a>
             </div>
           )}
-
-          {/* Host notes */}
           {selected.hostNotes && (
             <div className="bg-[#1a1610] border border-[rgba(245,240,232,0.07)] rounded-2xl p-5">
               <p className="text-[10px] uppercase tracking-widest text-[rgba(245,240,232,0.3)] mb-2 flex items-center gap-2">
-                <ChatBubbleLeftRightIcon className="w-3.5 h-3.5" />
-                Host Notes
+                <ChatBubbleLeftRightIcon className="w-3.5 h-3.5" /> Host Notes
               </p>
               <p className="text-sm text-[rgba(245,240,232,0.6)] leading-relaxed">
                 {selected.hostNotes}
               </p>
             </div>
           )}
-
-          {/* Previous admin note */}
           {selected.adminNote && (
             <div className="bg-[rgba(245,158,11,0.06)] border border-[rgba(245,158,11,0.2)] rounded-2xl p-5">
               <p className="text-[10px] uppercase tracking-widest text-[#f59e0b] mb-2">
@@ -372,8 +830,6 @@ const VerificationPanel = ({ adminId }: { adminId: string }) => {
               </p>
             </div>
           )}
-
-          {/* Action panel */}
           {selected.status === "pending" ||
           selected.status === "needs_more_info" ? (
             <div className="bg-[#1a1610] border border-[rgba(245,240,232,0.07)] rounded-2xl p-5">
@@ -553,8 +1009,6 @@ const HostDetail = ({
       >
         <ArrowLeftIcon className="w-4 h-4" /> Back to hosts
       </button>
-
-      {/* Host header */}
       <div className="bg-[#1a1610] border border-[rgba(245,240,232,0.07)] rounded-2xl p-6 mb-5">
         <div className="flex items-center gap-4 mb-5">
           <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#C9A96E] to-[#8a6030] flex items-center justify-center text-white font-bold text-xl shadow-lg shrink-0">
@@ -611,8 +1065,6 @@ const HostDetail = ({
           ))}
         </div>
       </div>
-
-      {/* Tabs */}
       <div className="flex gap-0 border-b border-[rgba(245,240,232,0.07)] mb-5">
         {(["overview", "listings", "bookings", "reviews"] as const).map(
           (tab) => (
@@ -621,23 +1073,20 @@ const HostDetail = ({
               onClick={() => setActiveTab(tab)}
               className={`px-5 py-3 text-sm font-medium capitalize transition-all border-b-2 -mb-px ${activeTab === tab ? "text-[#C9A96E] border-[#C9A96E]" : "text-[rgba(245,240,232,0.4)] border-transparent hover:text-[rgba(245,240,232,0.7)]"}`}
             >
-              {tab}{" "}
+              {tab}
               {tab === "listings"
-                ? `(${listings.length})`
+                ? ` (${listings.length})`
                 : tab === "bookings"
-                  ? `(${bookings.length})`
+                  ? ` (${bookings.length})`
                   : tab === "reviews"
-                    ? `(${reviews.length})`
+                    ? ` (${reviews.length})`
                     : ""}
             </button>
           ),
         )}
       </div>
-
-      {/* Overview */}
       {activeTab === "overview" && (
         <div className="space-y-4">
-          {/* Earnings breakdown */}
           <div className="bg-[#1a1610] border border-[rgba(245,240,232,0.07)] rounded-2xl p-5">
             <p className="text-[10px] uppercase tracking-widest text-[rgba(245,240,232,0.3)] mb-4">
               Earnings Breakdown
@@ -681,7 +1130,6 @@ const HostDetail = ({
               </div>
             )}
           </div>
-          {/* Recent reviews */}
           {reviews.length > 0 && (
             <div className="bg-[#1a1610] border border-[rgba(245,240,232,0.07)] rounded-2xl p-5">
               <p className="text-[10px] uppercase tracking-widest text-[rgba(245,240,232,0.3)] mb-4">
@@ -720,8 +1168,6 @@ const HostDetail = ({
           )}
         </div>
       )}
-
-      {/* Listings */}
       {activeTab === "listings" && (
         <div className="space-y-3">
           {listings.length === 0 ? (
@@ -752,7 +1198,7 @@ const HostDetail = ({
                     {l.city}, {l.country} · {l.category}
                   </p>
                   <p className="text-xs text-[#C9A96E] mt-0.5">
-                    ${l.pricePerNight}/night
+                    ₦{l.pricePerNight}/night
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
@@ -768,8 +1214,6 @@ const HostDetail = ({
           )}
         </div>
       )}
-
-      {/* Bookings */}
       {activeTab === "bookings" && (
         <div className="bg-[#1a1610] border border-[rgba(245,240,232,0.07)] rounded-2xl overflow-hidden">
           {bookings.length === 0 ? (
@@ -826,8 +1270,6 @@ const HostDetail = ({
           )}
         </div>
       )}
-
-      {/* Reviews */}
       {activeTab === "reviews" && (
         <div className="space-y-3">
           {reviews.length === 0 ? (
@@ -967,8 +1409,6 @@ const HostsPanel = ({ adminId: _adminId }: { adminId: string }) => {
           </p>
         </div>
       </div>
-
-      {/* Search + sort */}
       <div className="flex gap-3 mb-5 flex-wrap">
         <div className="flex items-center gap-2 bg-[rgba(245,240,232,0.04)] border border-[rgba(245,240,232,0.08)] rounded-xl px-3 py-2 flex-1 min-w-48">
           <MagnifyingGlassIcon className="w-4 h-4 text-[rgba(245,240,232,0.3)] shrink-0" />
@@ -993,7 +1433,6 @@ const HostsPanel = ({ adminId: _adminId }: { adminId: string }) => {
           )}
         </div>
       </div>
-
       {loading ? (
         <div className="space-y-3">
           {[...Array(6)].map((_, i) => (
@@ -1094,6 +1533,7 @@ const OverviewPanel = ({
     pending: 0,
     avgRating: 0,
     reviews: 0,
+    pendingRefunds: 0,
   });
   const [recentBookings, setRecentBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1112,8 +1552,6 @@ const OverviewPanel = ({
         const revenue = allBookings
           .filter((b) => b.status === "confirmed")
           .reduce((s, b) => s + b.totalAmount, 0);
-
-        // Get all reviews for avg rating
         const { data: reviewData } = await supabase
           .from("reviews")
           .select("rating");
@@ -1122,10 +1560,8 @@ const OverviewPanel = ({
           ? reviews.reduce((s: number, r: any) => s + r.rating, 0) /
             reviews.length
           : 0;
-
-        // Pending verifications
         const verifPending = await VerificationDB.adminQueue("pending");
-
+        const refundPending = await RefundRequestsDB.all("pending");
         setStats({
           hosts,
           guests,
@@ -1135,6 +1571,7 @@ const OverviewPanel = ({
           pending: verifPending.length,
           avgRating,
           reviews: reviews.length,
+          pendingRefunds: refundPending.length,
         });
         setRecentBookings(allBookings.slice(0, 8));
       } catch (e) {
@@ -1161,8 +1598,6 @@ const OverviewPanel = ({
           Real-time metrics across all users, hosts and listings
         </p>
       </div>
-
-      {/* Stats grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-7">
         {loading ? (
           [...Array(8)].map((_, i) => <Sk key={i} h="h-28" r="rounded-2xl" />)
@@ -1203,11 +1638,18 @@ const OverviewPanel = ({
             />
             <StatCard
               icon={<ClockIcon className="w-4 h-4 text-[#f59e0b]" />}
-              label="Pending Approvals"
+              label="Pending Verifications"
               value={stats.pending}
               delay={300}
               accent="#f59e0b"
-              sub="Awaiting verification review"
+            />
+            <StatCard
+              icon={<ReceiptRefundIcon className="w-4 h-4 text-[#e07070]" />}
+              label="Pending Refunds"
+              value={stats.pendingRefunds}
+              delay={360}
+              accent="#e07070"
+              sub="Awaiting admin decision"
             />
             <StatCard
               icon={<StarIcon className="w-4 h-4 text-[#C9A96E]" />}
@@ -1215,21 +1657,11 @@ const OverviewPanel = ({
               value={
                 stats.avgRating > 0 ? stats.avgRating.toFixed(1) + "★" : "—"
               }
-              delay={360}
-            />
-            <StatCard
-              icon={
-                <ChatBubbleLeftRightIcon className="w-4 h-4 text-[#C9A96E]" />
-              }
-              label="Total Reviews"
-              value={stats.reviews}
               delay={420}
             />
           </>
         )}
       </div>
-
-      {/* Quick actions */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-7">
         {[
           {
@@ -1240,11 +1672,11 @@ const OverviewPanel = ({
             icon: ShieldCheckIcon,
           },
           {
-            label: "Manage Hosts",
-            sub: `${stats.hosts} hosts`,
-            view: "hosts" as AdminView,
-            accent: "#C9A96E",
-            icon: UsersIcon,
+            label: "Refund Requests",
+            sub: `${stats.pendingRefunds} pending`,
+            view: "refunds" as AdminView,
+            accent: "#e07070",
+            icon: ReceiptRefundIcon,
           },
           {
             label: "All Bookings",
@@ -1254,11 +1686,11 @@ const OverviewPanel = ({
             icon: CalendarDaysIcon,
           },
           {
-            label: "All Reviews",
-            sub: `${stats.reviews} reviews`,
-            view: "reviews" as AdminView,
-            accent: "#4ade80",
-            icon: StarIcon,
+            label: "Manage Hosts",
+            sub: `${stats.hosts} hosts`,
+            view: "hosts" as AdminView,
+            accent: "#C9A96E",
+            icon: UsersIcon,
           },
         ].map(({ label, sub, view, accent, icon: Icon }) => (
           <button
@@ -1284,8 +1716,6 @@ const OverviewPanel = ({
           </button>
         ))}
       </div>
-
-      {/* Recent bookings */}
       <div className="bg-[#1a1610] border border-[rgba(245,240,232,0.07)] rounded-2xl overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[rgba(245,240,232,0.06)]">
           <h3 className="font-['Cormorant_Garamond'] text-lg text-[#f5f0e8]">
@@ -1315,21 +1745,16 @@ const OverviewPanel = ({
             <table className="w-full min-w-[640px]">
               <thead>
                 <tr className="border-b border-[rgba(245,240,232,0.05)]">
-                  {[
-                    "Guest",
-                    "Property",
-                    "Host",
-                    "Amount",
-                    "Status",
-                    "Date",
-                  ].map((h) => (
-                    <th
-                      key={h}
-                      className="text-left px-5 py-3 text-[10px] uppercase tracking-widest text-[rgba(245,240,232,0.25)] font-bold"
-                    >
-                      {h}
-                    </th>
-                  ))}
+                  {["Guest", "Property", "Amount", "Status", "Date"].map(
+                    (h) => (
+                      <th
+                        key={h}
+                        className="text-left px-5 py-3 text-[10px] uppercase tracking-widest text-[rgba(245,240,232,0.25)] font-bold"
+                      >
+                        {h}
+                      </th>
+                    ),
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -1347,9 +1772,6 @@ const OverviewPanel = ({
                     </td>
                     <td className="px-5 py-3 text-sm text-[rgba(245,240,232,0.6)] max-w-[120px] truncate">
                       {b.listingName}
-                    </td>
-                    <td className="px-5 py-3 text-xs text-[rgba(245,240,232,0.4)] font-mono">
-                      {b.hostId.slice(0, 8)}…
                     </td>
                     <td className="px-5 py-3 text-sm font-bold text-[#f5f0e8]">
                       {fmt$(b.totalAmount)}
@@ -1532,7 +1954,6 @@ const AllReviewsPanel = () => {
           .from("reviews")
           .select("*")
           .order("created_at", { ascending: false });
-
         setReviews(
           (data ?? []).map((r: any) => ({
             id: r.id,
@@ -1559,7 +1980,6 @@ const AllReviewsPanel = () => {
         setLoading(false);
       }
     };
-
     loadReviews();
   }, []);
 
@@ -1650,9 +2070,9 @@ const AllReviewsPanel = () => {
     </div>
   );
 };
+
 /* ═══════════════════════════════════════════════════════════
-  /* ═══════════════════════════════════════════════════════════
-   ADMIN: PLATFORM EARNINGS SUMMARY
+   PLATFORM EARNINGS SUMMARY
 ═══════════════════════════════════════════════════════════ */
 const PlatformEarningsSummary = ({ adminId }: { adminId: string }) => {
   const [wallet, setWallet] = useState<import("../index").Wallet | null>(null);
@@ -1666,7 +2086,6 @@ const PlatformEarningsSummary = ({ adminId }: { adminId: string }) => {
   const loadWallet = useCallback(() => {
     WalletDB.get(adminId).then(setWallet);
   }, [adminId]);
-
   useEffect(() => {
     loadWallet();
   }, [loadWallet]);
@@ -1680,7 +2099,6 @@ const PlatformEarningsSummary = ({ adminId }: { adminId: string }) => {
       return setError(
         `Amount exceeds platform balance (₦${wallet.balance.toLocaleString()}).`,
       );
-
     setSubmitting(true);
     try {
       await WalletDB.withdrawPlatformBalance({
@@ -1740,14 +2158,12 @@ const PlatformEarningsSummary = ({ adminId }: { adminId: string }) => {
           Withdraw to Bank
         </button>
       </div>
-
       {success && (
         <div className="bg-emerald-50/10 border border-emerald-500/30 rounded-xl p-4 flex items-center gap-3 text-emerald-400 text-sm font-semibold mb-6">
-          <CheckCircleIcon className="w-5 h-5 shrink-0" />
-          Withdrawal initiated! Funds are on their way to your bank.
+          <CheckCircleIcon className="w-5 h-5 shrink-0" /> Withdrawal initiated!
+          Funds are on their way to your bank.
         </div>
       )}
-
       {showWithdraw && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div
@@ -1779,11 +2195,8 @@ const PlatformEarningsSummary = ({ adminId }: { adminId: string }) => {
                   className="w-full bg-[rgba(245,240,232,0.04)] border border-[rgba(245,240,232,0.08)] rounded-xl px-3 py-2.5 text-sm text-[#f5f0e8] outline-none focus:border-[#C9A96E]"
                 />
               </div>
-
               <BankAccountPicker onResolved={setResolved} />
-
               {error && <p className="text-xs text-[#e07070]">{error}</p>}
-
               <button
                 onClick={submit}
                 disabled={submitting || !resolved}
@@ -1807,7 +2220,7 @@ const PlatformEarningsSummary = ({ adminId }: { adminId: string }) => {
 };
 
 /* ═══════════════════════════════════════════════════════════
-   ADMIN: WITHDRAWAL REQUESTS PANEL
+   WITHDRAWALS PANEL
 ═══════════════════════════════════════════════════════════ */
 const WithdrawalsPanel = ({ adminId }: { adminId: string }) => {
   const [requests, setRequests] = useState<
@@ -1885,28 +2298,19 @@ const WithdrawalsPanel = ({ adminId }: { adminId: string }) => {
           Review and process host payout requests
         </p>
       </div>
-
       <PlatformEarningsSummary adminId={adminId} />
-
-      {/* Filter tabs */}
       <div className="flex gap-2 flex-wrap mb-5">
         {(["pending", "approved", "rejected", "all"] as const).map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`text-xs font-semibold px-4 py-2 rounded-full border transition-all ${
-              filter === f
-                ? "bg-[#C9A96E] border-[#C9A96E] text-[#0e0d0b]"
-                : "border-[rgba(245,240,232,0.1)] text-[rgba(245,240,232,0.45)] hover:border-[rgba(201,169,110,0.3)]"
-            }`}
+            className={`text-xs font-semibold px-4 py-2 rounded-full border transition-all ${filter === f ? "bg-[#C9A96E] border-[#C9A96E] text-[#0e0d0b]" : "border-[rgba(245,240,232,0.1)] text-[rgba(245,240,232,0.45)] hover:border-[rgba(201,169,110,0.3)]"}`}
           >
             {f.charAt(0).toUpperCase() + f.slice(1)}
             {f !== "all" && ` (${counts[f] ?? 0})`}
           </button>
         ))}
       </div>
-
-      {/* Reject modal */}
       {rejectModal && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div
@@ -1952,8 +2356,6 @@ const WithdrawalsPanel = ({ adminId }: { adminId: string }) => {
           </div>
         </div>
       )}
-
-      {/* Table */}
       <div className="bg-[#1a1610] border border-[rgba(245,240,232,0.07)] rounded-2xl overflow-hidden">
         {loading ? (
           <div className="p-5 space-y-3">
@@ -2023,13 +2425,7 @@ const WithdrawalsPanel = ({ adminId }: { adminId: string }) => {
                     </td>
                     <td className="px-5 py-3">
                       <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                          wr.status === "approved"
-                            ? "text-[#4ade80] bg-[rgba(74,222,128,0.1)] border-[rgba(74,222,128,0.25)]"
-                            : wr.status === "rejected"
-                              ? "text-[#e07070] bg-[rgba(220,60,60,0.1)] border-[rgba(220,60,60,0.25)]"
-                              : "text-[#f59e0b] bg-[rgba(245,158,11,0.1)] border-[rgba(245,158,11,0.25)]"
-                        }`}
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${wr.status === "approved" ? "text-[#4ade80] bg-[rgba(74,222,128,0.1)] border-[rgba(74,222,128,0.25)]" : wr.status === "rejected" ? "text-[#e07070] bg-[rgba(220,60,60,0.1)] border-[rgba(220,60,60,0.25)]" : "text-[#f59e0b] bg-[rgba(245,158,11,0.1)] border-[rgba(245,158,11,0.25)]"}`}
                       >
                         {wr.status.charAt(0).toUpperCase() + wr.status.slice(1)}
                       </span>
@@ -2066,8 +2462,7 @@ const WithdrawalsPanel = ({ adminId }: { adminId: string }) => {
                             disabled={!!processing}
                             className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg bg-[rgba(220,60,60,0.08)] text-[#e07070] border border-[rgba(220,60,60,0.2)] hover:bg-[rgba(220,60,60,0.15)] transition-all disabled:opacity-40"
                           >
-                            <XCircleIcon className="w-3.5 h-3.5" />
-                            Reject
+                            <XCircleIcon className="w-3.5 h-3.5" /> Reject
                           </button>
                         </div>
                       ) : (
@@ -2088,7 +2483,7 @@ const WithdrawalsPanel = ({ adminId }: { adminId: string }) => {
 };
 
 /* ═══════════════════════════════════════════════════════════
-   SIDEBAR
+   NAV + MAIN EXPORT
 ═══════════════════════════════════════════════════════════ */
 const NAV = [
   {
@@ -2108,6 +2503,11 @@ const NAV = [
     icon: ShieldCheckIcon,
   },
   {
+    key: "refunds" as AdminView,
+    label: "Refund Requests",
+    icon: ReceiptRefundIcon,
+  },
+  {
     key: "bookings" as AdminView,
     label: "All Bookings",
     icon: CalendarDaysIcon,
@@ -2115,9 +2515,6 @@ const NAV = [
   { key: "reviews" as AdminView, label: "All Reviews", icon: StarIcon },
 ];
 
-/* ═══════════════════════════════════════════════════════════
-   MAIN EXPORT
-═══════════════════════════════════════════════════════════ */
 export default function AdminDashboard({ adminId }: { adminId: string }) {
   const [view, setView] = useState<AdminView>("overview");
   const navigate = useNavigate();
@@ -2133,9 +2530,7 @@ export default function AdminDashboard({ adminId }: { adminId: string }) {
 
   return (
     <div className="min-h-screen bg-[#0e0d0b] text-[#f5f0e8] flex overflow-hidden">
-      <style>{`
-        @keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
-      `}</style>
+      <style>{`@keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }`}</style>
 
       {/* Sidebar */}
       <aside
@@ -2160,7 +2555,7 @@ export default function AdminDashboard({ adminId }: { adminId: string }) {
             </span>
           </div>
         </div>
-        <nav className="flex-1 px-2 pt-3 space-y-0.5">
+        <nav className="flex-1 px-2 pt-3 space-y-0.5 overflow-y-auto">
           {NAV.map(({ key, label, icon: Icon }) => {
             const isActive =
               view === key || (view === "host-detail" && key === "hosts");
@@ -2200,7 +2595,6 @@ export default function AdminDashboard({ adminId }: { adminId: string }) {
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top bar */}
         <header className="h-14 bg-[rgba(14,13,11,0.9)] border-b border-[rgba(245,240,232,0.06)] flex items-center px-6 shrink-0 sticky top-0 z-10 backdrop-blur-md">
           <div className="flex items-center gap-2">
             <EyeIcon className="w-4 h-4 text-[#C9A96E]" />
@@ -2215,8 +2609,6 @@ export default function AdminDashboard({ adminId }: { adminId: string }) {
             </span>
           </div>
         </header>
-
-        {/* Content */}
         <div className="flex-1 overflow-hidden flex flex-col">
           {view === "overview" && <OverviewPanel onNavigate={setView} />}
           {(view === "hosts" || view === "host-detail") && (
@@ -2224,6 +2616,7 @@ export default function AdminDashboard({ adminId }: { adminId: string }) {
           )}
           {view === "withdrawals" && <WithdrawalsPanel adminId={adminId} />}
           {view === "verification" && <VerificationPanel adminId={adminId} />}
+          {view === "refunds" && <RefundRequestsPanel adminId={adminId} />}
           {view === "bookings" && <AllBookingsPanel />}
           {view === "reviews" && <AllReviewsPanel />}
         </div>
