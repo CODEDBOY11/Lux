@@ -26,8 +26,10 @@ import {
   BookingsDB,
   supabase,
   ReviewsDB,
+  RoomTypesDB,
   type Hotel,
   type Booking,
+  type RoomType,
 } from "../index";
 
 declare global {
@@ -1403,23 +1405,68 @@ function Gallery({
   );
 }
 
-const makeRoomTypes = (hotel: Hotel) => {
-  const baseFeatures = hotel.amenities.slice(0, 5);
-  const stdPrice = hotel.pricePerNight;
-  return [
-    {
-      id: "standard",
-      name: `${hotel.category} Suite`,
-      size: `${Math.max(hotel.bedrooms * 28, 60)} m²`,
-      guests: hotel.maxGuests,
-      bed: hotel.bedrooms > 1 ? `${hotel.bedrooms} bedrooms` : "1 bedroom",
-      price: stdPrice,
-      features: baseFeatures,
-      image: hotel.images[0],
-      badge: hotel.featured ? "Featured" : null,
-    },
-  ];
+/** Shape the UI expects for a room type card */
+type RoomCard = {
+  id: string;
+  name: string;
+  size: string;
+  guests: number;
+  bed: string;
+  price: number;
+  features: string[];
+  image: string;
+  badge: string | null;
 };
+
+/** Convert a Supabase RoomType to a RoomCard */
+const toRoomCard = (rt: RoomType, hotelImage: string): RoomCard => ({
+  id: rt.id,
+  name: rt.name,
+  size: rt.size || `${rt.maxGuests * 22} m²`,
+  guests: rt.maxGuests,
+  bed: rt.bedType || "1 Bedroom",
+  price: rt.pricePerNight,
+  features: rt.amenities.length ? rt.amenities : [],
+  image: rt.images[0] || hotelImage,
+  badge: null,
+});
+
+/** Fallback single room derived from the listing itself */
+const fallbackRoom = (hotel: Hotel): RoomCard => ({
+  id: "default",
+  name: `${hotel.category.charAt(0).toUpperCase() + hotel.category.slice(1)} Suite`,
+  size: `${Math.max(hotel.bedrooms * 28, 60)} m²`,
+  guests: hotel.maxGuests,
+  bed: hotel.bedrooms > 1 ? `${hotel.bedrooms} Bedrooms` : "1 Bedroom",
+  price: hotel.pricePerNight,
+  features: hotel.amenities.slice(0, 5),
+  image: hotel.images[0],
+  badge: hotel.featured ? "Featured" : null,
+});
+
+/** Fetch room types from Supabase; fall back to derived room while loading */
+function useRoomTypes(hotel: Hotel) {
+  const [roomTypes, setRoomTypes] = useState<RoomCard[]>([fallbackRoom(hotel)]);
+  const [loadingRooms, setLoadingRooms] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    RoomTypesDB.byListing(hotel.id).then((rows) => {
+      if (cancelled) return;
+      setRoomTypes(
+        rows.length
+          ? rows.map((rt) => toRoomCard(rt, hotel.images[0]))
+          : [fallbackRoom(hotel)],
+      );
+      setLoadingRooms(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [hotel.id]);
+
+  return { roomTypes, loadingRooms };
+}
 
 type Props = {
   hotel: Hotel;
@@ -1433,13 +1480,17 @@ export default function BookingPage({
   onBookingComplete,
 }: Props) {
   const { user } = useAuth();
-  const roomTypes = makeRoomTypes(hotel);
+  const { roomTypes, loadingRooms } = useRoomTypes(hotel);
 
   const [activeImg, setActiveImg] = useState(0);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [wishlisted, setWishlisted] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  const [selectedRoom, setSelectedRoom] = useState(roomTypes[0].id);
+  const [selectedRoom, setSelectedRoom] = useState<string>("");
+  // Sync selectedRoom once rooms load
+  useEffect(() => {
+    if (roomTypes.length && !selectedRoom) setSelectedRoom(roomTypes[0].id);
+  }, [roomTypes, selectedRoom]);
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
   const [guests, setGuests] = useState(2);
@@ -1516,7 +1567,9 @@ export default function BookingPage({
     );
   })();
 
-  const room = roomTypes.find((r) => r.id === selectedRoom) ?? roomTypes[0];
+  const room =
+    (selectedRoom ? roomTypes.find((r) => r.id === selectedRoom) : undefined) ??
+    roomTypes[0];
   const subtotal = room.price * Math.max(nights, 1);
   const taxes = Math.round(subtotal * 0.12);
   const total = subtotal + taxes;
@@ -3480,193 +3533,207 @@ export default function BookingPage({
                 >
                   Select your preferred room type.
                 </p>
-                {roomTypes.map((rt) => (
-                  <div
-                    key={rt.id}
-                    className="room-card"
-                    onClick={() => setSelectedRoom(rt.id)}
-                    style={{
-                      background: "rgba(245,240,232,0.03)",
-                      border: `2px solid ${selectedRoom === rt.id ? "#C9A96E" : "rgba(245,240,232,0.07)"}`,
-                      borderRadius: 18,
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
-                      className="room-card-inner"
-                      style={{ display: "flex" }}
-                    >
+                {loadingRooms
+                  ? [1, 2, 3].map((i) => (
                       <div
-                        className="room-card-img"
+                        key={i}
                         style={{
-                          width: 180,
-                          flexShrink: 0,
+                          height: 160,
+                          borderRadius: 18,
+                          background: "rgba(245,240,232,0.04)",
+                          border: "2px solid rgba(245,240,232,0.07)",
+                          animation: "pulse 1.5s ease-in-out infinite",
+                        }}
+                      />
+                    ))
+                  : roomTypes.map((rt) => (
+                      <div
+                        key={rt.id}
+                        className="room-card"
+                        onClick={() => setSelectedRoom(rt.id)}
+                        style={{
+                          background: "rgba(245,240,232,0.03)",
+                          border: `2px solid ${selectedRoom === rt.id ? "#C9A96E" : "rgba(245,240,232,0.07)"}`,
+                          borderRadius: 18,
                           overflow: "hidden",
                         }}
                       >
-                        <img
-                          src={getSafeImage(rt.image)}
-                          alt={rt.name}
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                            minHeight: 140,
-                          }}
-                        />
-                      </div>
-                      <div style={{ flex: 1, padding: 20, minWidth: 0 }}>
                         <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "flex-start",
-                            marginBottom: 6,
-                          }}
+                          className="room-card-inner"
+                          style={{ display: "flex" }}
                         >
-                          <div style={{ minWidth: 0 }}>
+                          <div
+                            className="room-card-img"
+                            style={{
+                              width: 180,
+                              flexShrink: 0,
+                              overflow: "hidden",
+                            }}
+                          >
+                            <img
+                              src={getSafeImage(rt.image)}
+                              alt={rt.name}
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "cover",
+                                minHeight: 140,
+                              }}
+                            />
+                          </div>
+                          <div style={{ flex: 1, padding: 20, minWidth: 0 }}>
                             <div
                               style={{
                                 display: "flex",
-                                alignItems: "center",
-                                gap: 8,
-                                marginBottom: 4,
-                                flexWrap: "wrap",
+                                justifyContent: "space-between",
+                                alignItems: "flex-start",
+                                marginBottom: 6,
                               }}
                             >
-                              <h3
+                              <div style={{ minWidth: 0 }}>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 8,
+                                    marginBottom: 4,
+                                    flexWrap: "wrap",
+                                  }}
+                                >
+                                  <h3
+                                    style={{
+                                      fontFamily: "Cormorant Garamond, serif",
+                                      fontSize: 17,
+                                      fontWeight: 600,
+                                      color: "#f5f0e8",
+                                    }}
+                                  >
+                                    {rt.name}
+                                  </h3>
+                                  {rt.badge && (
+                                    <span
+                                      style={{
+                                        fontSize: 10,
+                                        fontWeight: 700,
+                                        color: "#C9A96E",
+                                        background: "rgba(201,169,110,0.12)",
+                                        borderRadius: 99,
+                                        padding: "3px 10px",
+                                      }}
+                                    >
+                                      {rt.badge}
+                                    </span>
+                                  )}
+                                </div>
+                                <p
+                                  style={{
+                                    fontSize: 12,
+                                    color: "rgba(245,240,232,0.4)",
+                                  }}
+                                >
+                                  {rt.size} · {rt.bed} · Up to {rt.guests}{" "}
+                                  guests
+                                </p>
+                              </div>
+                              <div
                                 style={{
-                                  fontFamily: "Cormorant Garamond, serif",
-                                  fontSize: 17,
-                                  fontWeight: 600,
-                                  color: "#f5f0e8",
+                                  textAlign: "right",
+                                  flexShrink: 0,
+                                  marginLeft: 12,
                                 }}
                               >
-                                {rt.name}
-                              </h3>
-                              {rt.badge && (
-                                <span
+                                <p
                                   style={{
-                                    fontSize: 10,
+                                    fontFamily: "Cormorant Garamond, serif",
+                                    fontSize: 20,
                                     fontWeight: 700,
                                     color: "#C9A96E",
-                                    background: "rgba(201,169,110,0.12)",
+                                  }}
+                                >
+                                  ₦{rt.price.toLocaleString()}
+                                </p>
+                                <p
+                                  style={{
+                                    fontSize: 11,
+                                    color: "rgba(245,240,232,0.35)",
+                                  }}
+                                >
+                                  / night
+                                </p>
+                              </div>
+                            </div>
+                            <div
+                              style={{
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: 6,
+                                marginTop: 10,
+                              }}
+                            >
+                              {rt.features.map((f) => (
+                                <span
+                                  key={f}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 4,
+                                    fontSize: 11,
+                                    color: "rgba(245,240,232,0.55)",
+                                    background: "rgba(245,240,232,0.05)",
+                                    border: "1px solid rgba(245,240,232,0.08)",
                                     borderRadius: 99,
                                     padding: "3px 10px",
                                   }}
                                 >
-                                  {rt.badge}
+                                  <CheckIcon
+                                    style={{
+                                      width: 10,
+                                      height: 10,
+                                      color: "#C9A96E",
+                                    }}
+                                  />{" "}
+                                  {f}
                                 </span>
-                              )}
+                              ))}
                             </div>
-                            <p
-                              style={{
-                                fontSize: 12,
-                                color: "rgba(245,240,232,0.4)",
-                              }}
-                            >
-                              {rt.size} · {rt.bed} · Up to {rt.guests} guests
-                            </p>
                           </div>
                           <div
                             style={{
-                              textAlign: "right",
+                              display: "flex",
+                              alignItems: "center",
+                              padding: "0 16px",
                               flexShrink: 0,
-                              marginLeft: 12,
                             }}
                           >
-                            <p
+                            <div
                               style={{
-                                fontFamily: "Cormorant Garamond, serif",
-                                fontSize: 20,
-                                fontWeight: 700,
-                                color: "#C9A96E",
-                              }}
-                            >
-                              ₦{rt.price.toLocaleString()}
-                            </p>
-                            <p
-                              style={{
-                                fontSize: 11,
-                                color: "rgba(245,240,232,0.35)",
-                              }}
-                            >
-                              / night
-                            </p>
-                          </div>
-                        </div>
-                        <div
-                          style={{
-                            display: "flex",
-                            flexWrap: "wrap",
-                            gap: 6,
-                            marginTop: 10,
-                          }}
-                        >
-                          {rt.features.map((f) => (
-                            <span
-                              key={f}
-                              style={{
+                                width: 20,
+                                height: 20,
+                                borderRadius: "50%",
+                                border: `2px solid ${selectedRoom === rt.id ? "#C9A96E" : "rgba(245,240,232,0.2)"}`,
+                                background:
+                                  selectedRoom === rt.id
+                                    ? "#C9A96E"
+                                    : "transparent",
                                 display: "flex",
                                 alignItems: "center",
-                                gap: 4,
-                                fontSize: 11,
-                                color: "rgba(245,240,232,0.55)",
-                                background: "rgba(245,240,232,0.05)",
-                                border: "1px solid rgba(245,240,232,0.08)",
-                                borderRadius: 99,
-                                padding: "3px 10px",
+                                justifyContent: "center",
                               }}
                             >
-                              <CheckIcon
-                                style={{
-                                  width: 10,
-                                  height: 10,
-                                  color: "#C9A96E",
-                                }}
-                              />{" "}
-                              {f}
-                            </span>
-                          ))}
+                              {selectedRoom === rt.id && (
+                                <CheckIcon
+                                  style={{
+                                    width: 11,
+                                    height: 11,
+                                    color: "#0e0d0b",
+                                  }}
+                                />
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          padding: "0 16px",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: 20,
-                            height: 20,
-                            borderRadius: "50%",
-                            border: `2px solid ${selectedRoom === rt.id ? "#C9A96E" : "rgba(245,240,232,0.2)"}`,
-                            background:
-                              selectedRoom === rt.id
-                                ? "#C9A96E"
-                                : "transparent",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          {selectedRoom === rt.id && (
-                            <CheckIcon
-                              style={{
-                                width: 11,
-                                height: 11,
-                                color: "#0e0d0b",
-                              }}
-                            />
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                    ))}
               </div>
             )}
 
@@ -4367,99 +4434,111 @@ export default function BookingPage({
                   <div
                     style={{ display: "flex", flexDirection: "column", gap: 6 }}
                   >
-                    {roomTypes.map((rt) => (
-                      <button
-                        key={rt.id}
-                        onClick={() => setSelectedRoom(rt.id)}
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          padding: "10px 14px",
-                          borderRadius: 10,
-                          background:
-                            selectedRoom === rt.id
-                              ? "rgba(201,169,110,0.1)"
-                              : "rgba(245,240,232,0.03)",
-                          border: `1px solid ${selectedRoom === rt.id ? "rgba(201,169,110,0.35)" : "rgba(245,240,232,0.07)"}`,
-                          cursor: "pointer",
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 500,
-                            color: "#f5f0e8",
-                          }}
-                        >
-                          {rt.name}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 700,
-                            color:
-                              selectedRoom === rt.id
-                                ? "#C9A96E"
-                                : "rgba(245,240,232,0.4)",
-                            flexShrink: 0,
-                            marginLeft: 8,
-                          }}
-                        >
-                          ₦{rt.price.toLocaleString()}
-                        </span>
-                      </button>
-                    ))}
+                    {loadingRooms
+                      ? [1, 2].map((i) => (
+                          <div
+                            key={i}
+                            style={{
+                              height: 40,
+                              borderRadius: 10,
+                              background: "rgba(245,240,232,0.05)",
+                              border: "1px solid rgba(245,240,232,0.07)",
+                              animation: "pulse 1.5s ease-in-out infinite",
+                            }}
+                          />
+                        ))
+                      : roomTypes.map((rt) => (
+                          <button
+                            key={rt.id}
+                            onClick={() => setSelectedRoom(rt.id)}
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              padding: "10px 14px",
+                              borderRadius: 10,
+                              background:
+                                selectedRoom === rt.id
+                                  ? "rgba(201,169,110,0.1)"
+                                  : "rgba(245,240,232,0.03)",
+                              border: `1px solid ${selectedRoom === rt.id ? "rgba(201,169,110,0.35)" : "rgba(245,240,232,0.07)"}`,
+                              cursor: "pointer",
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 500,
+                                color: "#f5f0e8",
+                              }}
+                            >
+                              {rt.name}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 700,
+                                color:
+                                  selectedRoom === rt.id
+                                    ? "#C9A96E"
+                                    : "rgba(245,240,232,0.4)",
+                                flexShrink: 0,
+                                marginLeft: 8,
+                              }}
+                            >
+                              ₦{rt.price.toLocaleString()}
+                            </span>
+                          </button>
+                        ))}
                   </div>
                 </div>
-                {nights > 0 && (
-                  <div
-                    style={{
-                      borderTop: "1px solid rgba(245,240,232,0.07)",
-                      paddingTop: 14,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 8,
-                    }}
-                  >
-                    {[
-                      [
-                        `₦${room.price.toLocaleString()} × ${nights} nights`,
-                        `₦${subtotal.toLocaleString()}`,
-                      ],
-                      ["Taxes & resort fees", `₦${taxes.toLocaleString()}`],
-                    ].map(([k, v]) => (
-                      <div
-                        key={k}
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          fontSize: 12,
-                          color: "rgba(245,240,232,0.4)",
-                        }}
-                      >
-                        <span>{k}</span>
-                        <span>{v}</span>
-                      </div>
-                    ))}
+                <div
+                  style={{
+                    borderTop: "1px solid rgba(245,240,232,0.07)",
+                    paddingTop: 14,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                  }}
+                >
+                  {[
+                    [
+                      `₦${room.price.toLocaleString()} × ${nights} nights`,
+                      `₦${subtotal.toLocaleString()}`,
+                    ],
+                    ["Taxes & resort fees", `₦${taxes.toLocaleString()}`],
+                  ].map(([k, v]) => (
                     <div
+                      key={k}
                       style={{
                         display: "flex",
                         justifyContent: "space-between",
-                        fontSize: 15,
-                        fontWeight: 700,
-                        color: "#f5f0e8",
-                        paddingTop: 10,
-                        borderTop: "1px solid rgba(245,240,232,0.07)",
+                        fontSize: 12,
+                        color: "rgba(245,240,232,0.4)",
                       }}
                     >
-                      <span>Total</span>
-                      <span style={{ color: "#C9A96E" }}>
-                        ₦{total.toLocaleString()}
-                      </span>
+                      <span>{k}</span>
+                      <span>{v}</span>
                     </div>
+                  ))}
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontSize: 15,
+                      fontWeight: 700,
+                      color: "#f5f0e8",
+                      paddingTop: 10,
+                      borderTop: "1px solid rgba(245,240,232,0.07)",
+                    }}
+                  >
+                    <span>Total</span>
+                    <span style={{ color: "#C9A96E" }}>
+                      ₦{total.toLocaleString()}
+                    </span>
                   </div>
-                )}
+                </div>
+                ){"}"}
                 <button
                   onClick={() => setStep("form")}
                   style={{

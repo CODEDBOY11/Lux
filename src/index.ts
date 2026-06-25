@@ -11,6 +11,56 @@
  *        VITE_SUPABASE_ANON_KEY=sb_publishable_K7uv10xSBpxGRDF86xvOhg_AiCsVO-U
  *   3. Run schema.sql in Supabase SQL Editor (already done)
  *   4. Replace your old index.ts with this file
+ *
+ * NEW TABLES — run in Supabase SQL Editor:
+ * ─────────────────────────────────────────
+ * -- Room Types (per listing)
+ * create table room_types (
+ *   id uuid primary key default gen_random_uuid(),
+ *   listing_id uuid references listings(id) on delete cascade not null,
+ *   name text not null,
+ *   description text default '',
+ *   size text default '',
+ *   bed_type text default '',
+ *   max_guests int default 2,
+ *   price_per_night numeric not null,
+ *   images text[] default '{}',
+ *   amenities text[] default '{}',
+ *   available boolean default true,
+ *   created_at timestamptz default now()
+ * );
+ * alter table room_types enable row level security;
+ * create policy "public read" on room_types for select using (true);
+ * create policy "host write" on room_types for all using (
+ *   listing_id in (select id from listings where host_id = auth.uid())
+ * );
+ *
+ * -- Refund Requests (guest cancellation → admin review)
+ * create table refund_requests (
+ *   id uuid primary key default gen_random_uuid(),
+ *   booking_id uuid references bookings(id) not null,
+ *   guest_id uuid references users(id) not null,
+ *   guest_name text default '',
+ *   guest_email text default '',
+ *   listing_name text default '',
+ *   check_in date not null,
+ *   check_out date not null,
+ *   total_amount numeric not null,
+ *   refund_amount numeric not null,
+ *   reason text not null,
+ *   note text default '',
+ *   status text default 'pending' check (status in ('pending','approved','declined')),
+ *   admin_note text,
+ *   reviewed_by uuid references users(id),
+ *   reviewed_at timestamptz,
+ *   created_at timestamptz default now()
+ * );
+ * alter table refund_requests enable row level security;
+ * create policy "guest read own" on refund_requests for select using (guest_id = auth.uid());
+ * create policy "guest insert" on refund_requests for insert with check (guest_id = auth.uid());
+ * create policy "admin all" on refund_requests for all using (
+ *   exists (select 1 from users where id = auth.uid() and role = 'admin')
+ * );
  * ─────────────────────────────────────────────────────────────
  */
 
@@ -2045,4 +2095,330 @@ export const NotificationsDB = {
       .subscribe();
   },
  
+};
+
+/* ─────────────────────────────────────────────────────────────
+   ROOM TYPES
+───────────────────────────────────────────────────────────── */
+
+export interface RoomType {
+  id: string;
+  listingId: string;
+  name: string;
+  description: string;
+  size: string;          // e.g. "45 m²"
+  bedType: string;       // e.g. "King Bed", "2 Twin Beds"
+  maxGuests: number;
+  pricePerNight: number;
+  images: string[];
+  amenities: string[];
+  available: boolean;
+  createdAt: string;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toRoomType(r: any): RoomType {
+  return {
+    id: r.id,
+    listingId: r.listing_id,
+    name: r.name,
+    description: r.description ?? "",
+    size: r.size ?? "",
+    bedType: r.bed_type ?? "",
+    maxGuests: r.max_guests ?? 2,
+    pricePerNight: Number(r.price_per_night),
+    images: r.images ?? [],
+    amenities: r.amenities ?? [],
+    available: r.available ?? true,
+    createdAt: r.created_at,
+  };
+}
+
+export const RoomTypesDB = {
+  async byListing(listingId: string): Promise<RoomType[]> {
+    const { data, error } = await supabase
+      .from("room_types")
+      .select("*")
+      .eq("listing_id", listingId)
+      .eq("available", true)
+      .order("price_per_night", { ascending: true });
+    if (error) { console.error("RoomTypesDB.byListing:", error.message); return []; }
+    return (data ?? []).map(toRoomType);
+  },
+
+  async add(data: Omit<RoomType, "id" | "createdAt">): Promise<RoomType> {
+    const { data: row, error } = await supabase
+      .from("room_types")
+      .insert({
+        listing_id: data.listingId,
+        name: data.name,
+        description: data.description,
+        size: data.size,
+        bed_type: data.bedType,
+        max_guests: data.maxGuests,
+        price_per_night: data.pricePerNight,
+        images: data.images,
+        amenities: data.amenities,
+        available: data.available,
+      })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return toRoomType(row);
+  },
+
+  async update(id: string, data: Partial<Omit<RoomType, "id" | "createdAt" | "listingId">>): Promise<RoomType | null> {
+    const p: Record<string, unknown> = {};
+    if (data.name !== undefined) p.name = data.name;
+    if (data.description !== undefined) p.description = data.description;
+    if (data.size !== undefined) p.size = data.size;
+    if (data.bedType !== undefined) p.bed_type = data.bedType;
+    if (data.maxGuests !== undefined) p.max_guests = data.maxGuests;
+    if (data.pricePerNight !== undefined) p.price_per_night = data.pricePerNight;
+    if (data.images !== undefined) p.images = data.images;
+    if (data.amenities !== undefined) p.amenities = data.amenities;
+    if (data.available !== undefined) p.available = data.available;
+    const { data: row, error } = await supabase
+      .from("room_types")
+      .update(p)
+      .eq("id", id)
+      .select()
+      .single();
+    if (error) { console.error("RoomTypesDB.update:", error.message); return null; }
+    return toRoomType(row);
+  },
+
+  async delete(id: string): Promise<void> {
+    await supabase.from("room_types").delete().eq("id", id);
+  },
+};
+
+/* ─────────────────────────────────────────────────────────────
+   REFUND REQUESTS
+───────────────────────────────────────────────────────────── */
+
+export type RefundStatus = "pending" | "approved" | "declined";
+
+export const CANCELLATION_REASONS = [
+  "Change of plans",
+  "Found a better option",
+  "Travel dates changed",
+  "Medical / health emergency",
+  "Family emergency",
+  "Work conflict",
+  "Visa / travel document issues",
+  "Natural disaster / travel advisory",
+  "Other",
+] as const;
+
+export type CancellationReason = typeof CANCELLATION_REASONS[number];
+
+export interface RefundRequest {
+  id: string;
+  bookingId: string;
+  guestId: string;
+  guestName: string;
+  guestEmail: string;
+  listingName: string;
+  checkIn: string;
+  checkOut: string;
+  totalAmount: number;
+  refundAmount: number;
+  reason: CancellationReason;
+  note: string;
+  status: RefundStatus;
+  adminNote?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  createdAt: string;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toRefundRequest(r: any): RefundRequest {
+  return {
+    id: r.id,
+    bookingId: r.booking_id,
+    guestId: r.guest_id,
+    guestName: r.guest_name ?? "",
+    guestEmail: r.guest_email ?? "",
+    listingName: r.listing_name ?? "",
+    checkIn: r.check_in,
+    checkOut: r.check_out,
+    totalAmount: Number(r.total_amount),
+    refundAmount: Number(r.refund_amount),
+    reason: r.reason,
+    note: r.note ?? "",
+    status: r.status,
+    adminNote: r.admin_note ?? undefined,
+    reviewedBy: r.reviewed_by ?? undefined,
+    reviewedAt: r.reviewed_at ?? undefined,
+    createdAt: r.created_at,
+  };
+}
+
+/** Calculate refund amount based on days until check-in */
+export function calcRefundAmount(totalAmount: number, checkIn: string): { amount: number; pct: number; label: string } {
+  const days = Math.ceil((new Date(checkIn).getTime() - Date.now()) / 86400000);
+  if (days >= 14) return { amount: totalAmount, pct: 100, label: "Full Refund" };
+  if (days >= 7)  return { amount: Math.round(totalAmount * 0.5), pct: 50, label: "50% Refund" };
+  return { amount: 0, pct: 0, label: "No Refund" };
+}
+
+export const RefundRequestsDB = {
+  async create(data: {
+    bookingId: string;
+    guestId: string;
+    guestName: string;
+    guestEmail: string;
+    listingName: string;
+    checkIn: string;
+    checkOut: string;
+    totalAmount: number;
+    refundAmount: number;
+    reason: CancellationReason;
+    note: string;
+  }): Promise<RefundRequest> {
+
+    /* Guard 1: fetch the booking and verify it exists */
+    const { data: booking, error: bookingErr } = await supabase
+      .from("bookings")
+      .select("id, guest_id, status, check_in")
+      .eq("id", data.bookingId)
+      .single();
+
+    if (bookingErr || !booking) {
+      throw new Error("Booking not found.");
+    }
+
+    /* Guard 2: booking must belong to the requesting guest */
+    if (booking.guest_id !== data.guestId) {
+      throw new Error("You can only request a refund for your own bookings.");
+    }
+
+    /* Guard 3: booking must be confirmed */
+    if (booking.status !== "confirmed") {
+      throw new Error(
+        booking.status === "cancelled"
+          ? "This booking has already been cancelled."
+          : booking.status === "pending"
+            ? "A cancellation request is already under review for this booking."
+            : "Only confirmed bookings are eligible for a cancellation request.",
+      );
+    }
+
+    /* Guard 4: check-in must be in the future */
+    if (new Date(booking.check_in) <= new Date()) {
+      throw new Error(
+        "Cancellation requests can only be submitted for upcoming bookings. Your check-in date has already passed.",
+      );
+    }
+
+    /* Guard 5: no duplicate pending/approved request already exists */
+    const { count } = await supabase
+      .from("refund_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("booking_id", data.bookingId)
+      .in("status", ["pending", "approved"]);
+
+    if ((count ?? 0) > 0) {
+      throw new Error("A cancellation request already exists for this booking.");
+    }
+
+    /* All guards passed — create the request */
+    const { data: row, error } = await supabase
+      .from("refund_requests")
+      .insert({
+        booking_id: data.bookingId,
+        guest_id: data.guestId,
+        guest_name: data.guestName,
+        guest_email: data.guestEmail,
+        listing_name: data.listingName,
+        check_in: data.checkIn,
+        check_out: data.checkOut,
+        total_amount: data.totalAmount,
+        refund_amount: data.refundAmount,
+        reason: data.reason,
+        note: data.note,
+        status: "pending",
+      })
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    // Mark booking as pending-cancellation so host sees it
+    await BookingsDB.updateStatus(data.bookingId, "pending");
+    return toRefundRequest(row);
+  },
+
+  async byGuest(guestId: string): Promise<RefundRequest[]> {
+    const { data, error } = await supabase
+      .from("refund_requests")
+      .select("*")
+      .eq("guest_id", guestId)
+      .order("created_at", { ascending: false });
+    if (error) { console.error("RefundRequestsDB.byGuest:", error.message); return []; }
+    return (data ?? []).map(toRefundRequest);
+  },
+
+  async all(status?: RefundStatus): Promise<RefundRequest[]> {
+    let q = supabase.from("refund_requests").select("*").order("created_at", { ascending: false });
+    if (status) q = q.eq("status", status);
+    const { data, error } = await q;
+    if (error) { console.error("RefundRequestsDB.all:", error.message); return []; }
+    return (data ?? []).map(toRefundRequest);
+  },
+
+  async approve(id: string, adminId: string, adminNote?: string): Promise<void> {
+    const { data: req } = await supabase.from("refund_requests").select("*").eq("id", id).single();
+    if (!req) throw new Error("Refund request not found");
+    await supabase.from("refund_requests").update({
+      status: "approved",
+      admin_note: adminNote ?? null,
+      reviewed_by: adminId,
+      reviewed_at: new Date().toISOString(),
+    }).eq("id", id);
+    // Cancel the booking
+    await BookingsDB.updateStatus(req.booking_id, "cancelled");
+    // Notify guest
+    await NotificationsDB.create({
+      userId: req.guest_id,
+      type: "payment",
+      title: "Cancellation Approved",
+      body: req.refund_amount > 0
+        ? `Your cancellation for ${req.listing_name} was approved. ₦${Number(req.refund_amount).toLocaleString()} will be refunded within 5–10 business days.`
+        : `Your cancellation for ${req.listing_name} was approved. No refund applies per our policy.`,
+      link: "/dashboard?tab=bookings",
+    });
+  },
+
+  async decline(id: string, adminId: string, adminNote: string): Promise<void> {
+    const { data: req } = await supabase.from("refund_requests").select("*").eq("id", id).single();
+    if (!req) throw new Error("Refund request not found");
+    await supabase.from("refund_requests").update({
+      status: "declined",
+      admin_note: adminNote,
+      reviewed_by: adminId,
+      reviewed_at: new Date().toISOString(),
+    }).eq("id", id);
+    // Restore booking to confirmed
+    await BookingsDB.updateStatus(req.booking_id, "confirmed");
+    await NotificationsDB.create({
+      userId: req.guest_id,
+      type: "payment",
+      title: "Cancellation Request Declined",
+      body: `Your cancellation request for ${req.listing_name} was declined. ${adminNote}`,
+      link: "/dashboard?tab=bookings",
+    });
+  },
+
+  /** Check if a refund request already exists for a booking */
+  async existsForBooking(bookingId: string): Promise<boolean> {
+    const { count } = await supabase
+      .from("refund_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("booking_id", bookingId)
+      .in("status", ["pending", "approved"]);
+    return (count ?? 0) > 0;
+  },
 };

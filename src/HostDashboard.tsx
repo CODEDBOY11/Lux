@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import MessagesInbox from "./Components/MessagesInbox";
 import { useNavigate } from "react-router-dom";
 import ReviewsSection from "./ReviewSection";
-import { WalletDB } from "./index";
+import { WalletDB, RoomTypesDB, type RoomType } from "./index";
 import PropertyVerificationForm from "./Verification/Property";
 import { BankAccountPicker, type ResolvedAccount } from "./BankAccountPicker";
 import {
@@ -244,7 +244,6 @@ const Sidebar = ({
   const { user } = useAuth();
   const nav = role === "guest" ? GUEST_NAV : HOST_NAV;
   const isGuest = role === "guest";
-
   return (
     <aside
       className="w-64 h-full flex flex-col relative"
@@ -308,11 +307,7 @@ const Sidebar = ({
                 onNav(key);
                 onClose?.();
               }}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                isActive
-                  ? "text-white shadow-md"
-                  : "text-white/50 hover:text-white/80 hover:bg-white/5"
-              }`}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${isActive ? "text-white shadow-md" : "text-white/50 hover:text-white/80 hover:bg-white/5"}`}
               style={
                 isActive
                   ? {
@@ -404,6 +399,585 @@ const TopBar = ({
         </div>
       </div>
     </header>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   ROOM TYPES MANAGER  — embedded inside ListingForm
+═══════════════════════════════════════════════════════════ */
+const BED_TYPES = [
+  "King Bed",
+  "Queen Bed",
+  "Twin Beds",
+  "Double Bed",
+  "Bunk Beds",
+  "Sofa Bed",
+  "Studio",
+] as const;
+
+type RoomForm = {
+  name: string;
+  description: string;
+  size: string;
+  bedType: string;
+  maxGuests: string;
+  pricePerNight: string;
+  images: string[];
+  amenities: string[];
+};
+
+const BLANK_ROOM: RoomForm = {
+  name: "",
+  description: "",
+  size: "",
+  bedType: "King Bed",
+  maxGuests: "2",
+  pricePerNight: "",
+  images: [],
+  amenities: [],
+};
+
+const ROOM_AMENITY_OPTIONS = [
+  "En-suite Bathroom",
+  "Private Balcony",
+  "Sea View",
+  "Pool Access",
+  "Air Conditioning",
+  "King Bed",
+  "Smart TV",
+  "Mini Bar",
+  "Safe",
+  "Workspace",
+  "Bathtub",
+  "Walk-in Shower",
+  "Coffee Machine",
+  "Room Service",
+  "Blackout Curtains",
+  "Soundproofing",
+];
+
+const RoomTypesManager = ({ listingId }: { listingId: string }) => {
+  const [rooms, setRooms] = useState<RoomType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<RoomType | "new" | null>(null);
+  const [form, setForm] = useState<RoomForm>(BLANK_ROOM);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [urlInput, setUrlInput] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingImg, setUploadingImg] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const data = await RoomTypesDB.byListing(listingId);
+    setRooms(data);
+    setLoading(false);
+  }, [listingId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const openNew = () => {
+    setForm(BLANK_ROOM);
+    setError("");
+    setEditing("new");
+  };
+
+  const openEdit = (rt: RoomType) => {
+    setForm({
+      name: rt.name,
+      description: rt.description,
+      size: rt.size,
+      bedType: rt.bedType || "King Bed",
+      maxGuests: String(rt.maxGuests),
+      pricePerNight: String(rt.pricePerNight),
+      images: rt.images,
+      amenities: rt.amenities,
+    });
+    setError("");
+    setEditing(rt);
+  };
+
+  const setF = (k: keyof RoomForm) => (v: string | string[]) =>
+    setForm((f) => ({ ...f, [k]: v }));
+
+  const toggleAmenity = (a: string) =>
+    setF("amenities")(
+      form.amenities.includes(a)
+        ? form.amenities.filter((x) => x !== a)
+        : [...form.amenities, a],
+    );
+
+  const addUrl = () => {
+    const t = urlInput.trim();
+    if (!t) return;
+    setF("images")([...form.images, t]);
+    setUrlInput("");
+  };
+
+  const handleFileUpload = async (files: FileList) => {
+    if (!files.length) return;
+    setUploadingImg(true);
+    try {
+      const { uploadToCloudinary } = await import("./cloudinary");
+      const urls: string[] = [];
+      for (const file of Array.from(files)) {
+        const url = await uploadToCloudinary(file, "image");
+        urls.push(url);
+      }
+      setF("images")([...form.images, ...urls]);
+    } catch (e: any) {
+      setError(e.message ?? "Image upload failed.");
+    } finally {
+      setUploadingImg(false);
+    }
+  };
+
+  const save = async () => {
+    if (!form.name.trim()) return setError("Room name is required.");
+    if (
+      !form.pricePerNight ||
+      isNaN(Number(form.pricePerNight)) ||
+      Number(form.pricePerNight) <= 0
+    )
+      return setError("A valid price per night is required.");
+    setSaving(true);
+    setError("");
+    const payload = {
+      listingId,
+      name: form.name.trim(),
+      description: form.description.trim(),
+      size: form.size.trim(),
+      bedType: form.bedType,
+      maxGuests: Number(form.maxGuests),
+      pricePerNight: Number(form.pricePerNight),
+      images: form.images,
+      amenities: form.amenities,
+      available: true,
+    };
+    try {
+      if (editing === "new") {
+        await RoomTypesDB.add(payload);
+      } else if (editing) {
+        await RoomTypesDB.update((editing as RoomType).id, payload);
+      }
+      setEditing(null);
+      await load();
+    } catch (e: any) {
+      setError(e.message ?? "Something went wrong.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteRoom = async (id: string) => {
+    if (!confirm("Delete this room type permanently?")) return;
+    setDeleting(id);
+    await RoomTypesDB.delete(id);
+    setRooms((prev) => prev.filter((r) => r.id !== id));
+    setDeleting(null);
+  };
+
+  const inp =
+    "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#C9A96E] focus:ring-2 focus:ring-[#C9A96E]/10 transition-all bg-white";
+  const lbl =
+    "block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5";
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h3 className="font-bold text-gray-800 text-sm flex items-center gap-2">
+            <BuildingOffice2Icon className="w-4 h-4 text-[#C9A96E]" />
+            Room Types
+            <span className="text-xs font-normal text-gray-400">
+              ({rooms.length} added)
+            </span>
+          </h3>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Add individual room types guests can choose from when booking.
+          </p>
+        </div>
+        {!editing && (
+          <button
+            onClick={openNew}
+            className="flex items-center gap-1.5 text-xs font-semibold text-[#C9A96E] border border-[#C9A96E]/30 hover:bg-[#C9A96E]/5 px-3 py-2 rounded-xl transition-all"
+          >
+            <PlusIcon className="w-3.5 h-3.5" /> Add Room
+          </button>
+        )}
+      </div>
+
+      {/* ── Room form ── */}
+      {editing && (
+        <div
+          className="mb-5 bg-gray-50 border border-gray-200 rounded-2xl p-5 space-y-4"
+          style={{ animation: "fadeUp 0.2s ease both" }}
+        >
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-bold text-gray-700">
+              {editing === "new"
+                ? "New Room Type"
+                : `Edit: ${(editing as RoomType).name}`}
+            </p>
+            <button
+              onClick={() => setEditing(null)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <XMarkIcon className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Name + price */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={lbl}>Room Name *</label>
+              <input
+                className={inp}
+                value={form.name}
+                onChange={(e) => setF("name")(e.target.value)}
+                placeholder="e.g. Ocean Suite"
+              />
+            </div>
+            <div>
+              <label className={lbl}>Price Per Night (₦) *</label>
+              <input
+                className={inp}
+                type="number"
+                min="1"
+                value={form.pricePerNight}
+                onChange={(e) => setF("pricePerNight")(e.target.value)}
+                placeholder="50000"
+              />
+            </div>
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className={lbl}>Short Description</label>
+            <textarea
+              className={inp + " resize-none"}
+              rows={2}
+              value={form.description}
+              onChange={(e) => setF("description")(e.target.value)}
+              placeholder="What makes this room special..."
+            />
+          </div>
+
+          {/* Size, Bed, Guests */}
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className={lbl}>Size</label>
+              <input
+                className={inp}
+                value={form.size}
+                onChange={(e) => setF("size")(e.target.value)}
+                placeholder="e.g. 45 m²"
+              />
+            </div>
+            <div>
+              <label className={lbl}>Bed Type</label>
+              <select
+                className={inp}
+                value={form.bedType}
+                onChange={(e) => setF("bedType")(e.target.value)}
+              >
+                {BED_TYPES.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={lbl}>Max Guests</label>
+              <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden bg-white">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setF("maxGuests")(
+                      String(Math.max(1, Number(form.maxGuests) - 1)),
+                    )
+                  }
+                  className="px-3 py-2.5 text-gray-400 hover:bg-gray-50 font-bold"
+                >
+                  −
+                </button>
+                <span className="flex-1 text-center text-sm font-bold text-gray-900">
+                  {form.maxGuests}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setF("maxGuests")(String(Number(form.maxGuests) + 1))
+                  }
+                  className="px-3 py-2.5 text-gray-400 hover:bg-gray-50 font-bold"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Room amenities */}
+          <div>
+            <label className={lbl}>
+              Room Features{" "}
+              <span className="normal-case font-normal text-gray-400">
+                ({form.amenities.length} selected)
+              </span>
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {ROOM_AMENITY_OPTIONS.map((a) => {
+                const on = form.amenities.includes(a);
+                return (
+                  <button
+                    key={a}
+                    type="button"
+                    onClick={() => toggleAmenity(a)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border transition-all text-left ${on ? "bg-[#C9A96E]/8 border-[#C9A96E]/40 text-[#C9A96E]" : "bg-gray-50 border-gray-100 text-gray-500 hover:border-gray-300"}`}
+                  >
+                    <div
+                      className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 transition-all ${on ? "bg-[#C9A96E] border-[#C9A96E]" : "border-gray-300"}`}
+                    >
+                      {on && (
+                        <span className="text-white text-[8px] font-bold">
+                          ✓
+                        </span>
+                      )}
+                    </div>
+                    {a}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Images */}
+          <div>
+            <label className={lbl}>Room Photos</label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) =>
+                e.target.files && handleFileUpload(e.target.files)
+              }
+            />
+            <div className="flex gap-2 mb-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className={`flex items-center gap-2 px-4 py-2 border-2 border-dashed rounded-xl text-xs font-medium transition-all ${uploadingImg ? "border-[#C9A96E]/40 text-[#C9A96E] cursor-wait" : "border-gray-200 text-gray-500 hover:border-[#C9A96E]/40 hover:text-[#C9A96E]"}`}
+              >
+                {uploadingImg ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-[#C9A96E]/30 border-t-[#C9A96E] rounded-full animate-spin" />
+                    Uploading…
+                  </>
+                ) : (
+                  <>
+                    <PhotoIcon className="w-4 h-4" />
+                    Upload Photos
+                  </>
+                )}
+              </button>
+              <input
+                className={inp + " flex-1 min-w-0"}
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                placeholder="Or paste image URL…"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addUrl();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={addUrl}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-xl text-xs font-semibold text-gray-600 transition-colors whitespace-nowrap"
+              >
+                Add
+              </button>
+            </div>
+            {form.images.length > 0 && (
+              <div className="flex gap-2 flex-wrap">
+                {form.images.map((url, i) => (
+                  <div
+                    key={i}
+                    className="relative w-20 h-16 rounded-xl overflow-hidden border border-gray-200 bg-gray-100 group"
+                  >
+                    <img
+                      src={url}
+                      alt=""
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (
+                          e.target as HTMLImageElement
+                        ).parentElement!.style.opacity = "0.35";
+                      }}
+                    />
+                    {i === 0 && (
+                      <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[9px] text-center py-0.5 font-bold">
+                        MAIN
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setF("images")(form.images.filter((_, j) => j !== i))
+                      }
+                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
+                    >
+                      <XMarkIcon className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {error && (
+            <p className="text-xs text-red-500 flex items-center gap-1">
+              <XMarkIcon className="w-3 h-3 shrink-0" />
+              {error}
+            </p>
+          )}
+
+          <div className="flex gap-3 pt-1">
+            <button
+              onClick={save}
+              disabled={saving}
+              className="flex-1 bg-[#C9A96E] disabled:opacity-50 text-white font-bold py-2.5 rounded-xl text-sm hover:bg-[#b8935a] transition-all flex items-center justify-center gap-2"
+            >
+              {saving ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Saving…
+                </>
+              ) : editing === "new" ? (
+                "Add Room Type"
+              ) : (
+                "Save Changes"
+              )}
+            </button>
+            <button
+              onClick={() => setEditing(null)}
+              className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 bg-white transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Room list ── */}
+      {loading ? (
+        <div className="space-y-2">
+          {[1, 2].map((i) => (
+            <Sk key={i} h="h-16" />
+          ))}
+        </div>
+      ) : rooms.length === 0 && !editing ? (
+        <div className="py-8 text-center border-2 border-dashed border-gray-100 rounded-2xl">
+          <BuildingOffice2Icon className="w-8 h-8 text-gray-200 mx-auto mb-2" />
+          <p className="text-sm text-gray-400 mb-1">No room types added yet</p>
+          <p className="text-xs text-gray-300">
+            Guests will see a single room based on your listing details until
+            you add specific room types.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {rooms.map((rt, i) => (
+            <div
+              key={rt.id}
+              className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-100 rounded-xl group hover:border-[#C9A96E]/30 transition-all"
+              style={{ animation: `fadeUp 0.3s ease ${i * 40}ms both` }}
+            >
+              {rt.images[0] ? (
+                <img
+                  src={rt.images[0]}
+                  alt={rt.name}
+                  className="w-14 h-12 rounded-lg object-cover shrink-0 border border-gray-200"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = "none";
+                  }}
+                />
+              ) : (
+                <div className="w-14 h-12 rounded-lg bg-gray-100 shrink-0 flex items-center justify-center border border-gray-200">
+                  <BuildingOffice2Icon className="w-5 h-5 text-gray-300" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-800 truncate">
+                  {rt.name}
+                </p>
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                  {rt.bedType && (
+                    <span className="text-xs text-gray-400">{rt.bedType}</span>
+                  )}
+                  {rt.size && (
+                    <>
+                      <span className="text-gray-200">·</span>
+                      <span className="text-xs text-gray-400">{rt.size}</span>
+                    </>
+                  )}
+                  <span className="text-gray-200">·</span>
+                  <span className="text-xs text-gray-400">
+                    Up to {rt.maxGuests} guests
+                  </span>
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-sm font-bold text-gray-900">
+                  {fmt$(rt.pricePerNight)}
+                  <span className="text-xs text-gray-400 font-normal">/n</span>
+                </p>
+                {rt.amenities.length > 0 && (
+                  <p className="text-[10px] text-gray-400">
+                    {rt.amenities.length} features
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-1 shrink-0">
+                <button
+                  onClick={() => openEdit(rt)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-[#C9A96E] hover:bg-[#C9A96E]/8 border border-transparent hover:border-[#C9A96E]/20 transition-all"
+                >
+                  <PencilSquareIcon className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  disabled={deleting === rt.id}
+                  onClick={() => deleteRoom(rt.id)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all disabled:opacity-40"
+                >
+                  {deleting === rt.id ? (
+                    <span className="w-3 h-3 border border-red-400 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <TrashIcon className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
+            </div>
+          ))}
+          {!editing && (
+            <button
+              onClick={openNew}
+              className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-xs font-medium text-gray-400 hover:border-[#C9A96E]/40 hover:text-[#C9A96E] transition-all mt-1"
+            >
+              <PlusIcon className="w-3.5 h-3.5" /> Add Another Room Type
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -509,7 +1083,10 @@ const ListingForm = ({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [createdListingId, setCreatedListingId] = useState<string | null>(null);
+  const [savedListingId, setSavedListingId] = useState<string | null>(
+    editing?.id ?? null,
+  );
+  const [showVerif, setShowVerif] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [urlInput, setUrlInput] = useState("");
@@ -538,16 +1115,11 @@ const ListingForm = ({
     setUploadingImages(true);
     setUploadError("");
     try {
-      const { uploadToCloudinary } = await import("./cloudinary"); // adjust path
-
+      const { uploadToCloudinary } = await import("./cloudinary");
       const urls: string[] = [];
       for (const file of Array.from(files)) {
-        const url = await uploadToCloudinary(file, "image", (percent) => {
-          // optional: you could show percent in UI
-          console.log(`Uploading: ${percent}%`);
-        });
+        const url = await uploadToCloudinary(file, "image");
         urls.push(url);
-        // Show each image as it finishes
         set("images")([...form.images, ...urls]);
       }
     } catch (err: any) {
@@ -556,6 +1128,7 @@ const ListingForm = ({
       setUploadingImages(false);
     }
   };
+
   const addUrlManually = () => {
     const trimmed = urlInput.trim();
     if (!trimmed) return;
@@ -606,7 +1179,7 @@ const ListingForm = ({
         onSave(listingToHotel(u));
       } else {
         const result = await ListingsDB.add({ hostId, hostName, ...payload });
-        setCreatedListingId(result.id);
+        setSavedListingId(result.id);
       }
     } catch (e: any) {
       setError(e.message ?? "Something went wrong.");
@@ -615,12 +1188,12 @@ const ListingForm = ({
     }
   };
 
-  if (createdListingId) {
+  if (showVerif && savedListingId) {
     return (
       <PropertyVerificationForm
-        listingId={createdListingId}
+        listingId={savedListingId}
         onComplete={() => {
-          onSave(listingToHotel({ id: createdListingId } as Listing));
+          onSave(listingToHotel({ id: savedListingId } as Listing));
           onCancel();
         }}
       />
@@ -716,7 +1289,7 @@ const ListingForm = ({
                   </select>
                 </div>
                 <div>
-                  <label className={lbl}>Price Per Night (NGN) *</label>
+                  <label className={lbl}>Base Price Per Night (₦) *</label>
                   <input
                     className={inp}
                     type="number"
@@ -837,7 +1410,8 @@ const ListingForm = ({
           {/* Amenities */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
             <h3 className="font-bold text-gray-800 text-sm mb-1 flex items-center gap-2">
-              <CheckCircleIcon className="w-4 h-4 text-[#C9A96E]" /> Amenities
+              <CheckCircleIcon className="w-4 h-4 text-[#C9A96E]" /> Property
+              Amenities
               <span className="text-xs font-normal text-gray-400">
                 ({form.amenities.length} selected)
               </span>
@@ -874,7 +1448,8 @@ const ListingForm = ({
           {/* Tags & Photos */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
             <h3 className="font-bold text-gray-800 text-sm mb-4 flex items-center gap-2">
-              <PhotoIcon className="w-4 h-4 text-[#C9A96E]" /> Tags & Photos
+              <PhotoIcon className="w-4 h-4 text-[#C9A96E]" /> Tags & Property
+              Photos
             </h3>
             <div className="space-y-5">
               <div>
@@ -907,7 +1482,7 @@ const ListingForm = ({
                     <>
                       <span className="w-7 h-7 border-2 border-[#C9A96E]/30 border-t-[#C9A96E] rounded-full animate-spin" />
                       <span className="text-sm text-[#C9A96E] font-semibold">
-                        Uploading to Supabase…
+                        Uploading…
                       </span>
                     </>
                   ) : (
@@ -928,7 +1503,8 @@ const ListingForm = ({
                 </button>
                 {uploadError && (
                   <p className="text-xs text-red-500 mt-2 flex items-center gap-1">
-                    <XMarkIcon className="w-3 h-3 shrink-0" /> {uploadError}
+                    <XMarkIcon className="w-3 h-3 shrink-0" />
+                    {uploadError}
                   </p>
                 )}
               </div>
@@ -1001,7 +1577,25 @@ const ListingForm = ({
             </div>
           </div>
 
-          {/* Save */}
+          {/* ── Room Types Manager ── only shown after listing is saved ── */}
+          {savedListingId ? (
+            <RoomTypesManager listingId={savedListingId} />
+          ) : (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex items-start gap-3">
+              <BuildingOffice2Icon className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-amber-800">
+                  Room types can be added after saving
+                </p>
+                <p className="text-xs text-amber-600 mt-0.5">
+                  Publish or update this listing first, then add individual room
+                  types for guests to choose from.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Save / Publish */}
           <div className="flex gap-3">
             <button
               onClick={save}
@@ -1010,20 +1604,30 @@ const ListingForm = ({
             >
               {saving ? (
                 <>
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{" "}
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   Saving…
                 </>
               ) : editing ? (
                 "Update Listing"
+              ) : savedListingId ? (
+                "Saved ✓"
               ) : (
                 "Publish Listing"
               )}
             </button>
+            {savedListingId && !editing && (
+              <button
+                onClick={() => setShowVerif(true)}
+                className="px-5 py-3.5 rounded-2xl border border-[#C9A96E]/40 text-sm font-semibold text-[#C9A96E] hover:bg-[#C9A96E]/5 bg-white transition-colors flex items-center gap-2"
+              >
+                <ShieldCheckIcon className="w-4 h-4" /> Verify →
+              </button>
+            )}
             <button
               onClick={onCancel}
               className="px-6 py-3.5 rounded-2xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 bg-white transition-colors"
             >
-              Cancel
+              {savedListingId ? "Done" : "Cancel"}
             </button>
           </div>
         </div>
@@ -1106,7 +1710,6 @@ const PropertiesSection = ({ onBook }: { onBook?: (h: Hotel) => void }) => {
           <PlusIcon className="w-4 h-4" /> Add Listing
         </button>
       </div>
-
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {[...Array(3)].map((_, i) => (
@@ -1458,9 +2061,6 @@ const HostBookings = () => {
 /* ═══════════════════════════════════════════════════════════
    HOST: EARNINGS + WALLET + WITHDRAWALS
 ═══════════════════════════════════════════════════════════ */
-/* ═══════════════════════════════════════════════════════════
-   HOST: EARNINGS + WALLET + WITHDRAWALS
-═══════════════════════════════════════════════════════════ */
 const EarningsSection = () => {
   const { user } = useAuth();
   const [wallet, setWallet] = useState<import("./index").Wallet | null>(null);
@@ -1509,7 +2109,6 @@ const EarningsSection = () => {
       return setWithdrawError(
         `Insufficient balance. Available: ₦${wallet.balance.toLocaleString()}`,
       );
-
     setWithdrawing(true);
     try {
       await WalletDB.requestWithdrawal({
@@ -1565,7 +2164,6 @@ const EarningsSection = () => {
           <BanknotesIcon className="w-4 h-4" /> Withdraw Funds
         </button>
       </div>
-
       {loading ? (
         <Sk h="h-28" rounded="rounded-2xl" />
       ) : (
@@ -1597,15 +2195,12 @@ const EarningsSection = () => {
           </div>
         </div>
       )}
-
       {withdrawSuccess && (
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center gap-3 text-emerald-700 text-sm font-semibold">
-          <CheckCircleIcon className="w-5 h-5 shrink-0" />
-          Withdrawal request submitted! Admin will process it within 24–48
-          hours.
+          <CheckCircleIcon className="w-5 h-5 shrink-0" /> Withdrawal request
+          submitted! Admin will process it within 24–48 hours.
         </div>
       )}
-
       {showWithdrawForm && (
         <div
           className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6"
@@ -1636,9 +2231,7 @@ const EarningsSection = () => {
                 }
               />
             </div>
-
             <BankAccountPicker onResolved={setResolved} />
-
             {withdrawError && (
               <p className="text-sm text-red-500 flex items-center gap-1.5">
                 <XMarkIcon className="w-4 h-4 shrink-0" />
@@ -1653,7 +2246,7 @@ const EarningsSection = () => {
               >
                 {withdrawing ? (
                   <>
-                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{" "}
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                     Processing…
                   </>
                 ) : (
@@ -1670,7 +2263,6 @@ const EarningsSection = () => {
           </div>
         </div>
       )}
-
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100">
           <h3 className="font-bold text-gray-900">Transaction History</h3>
@@ -1720,7 +2312,6 @@ const EarningsSection = () => {
           </div>
         )}
       </div>
-
       {withdrawals.length > 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100">
@@ -1751,13 +2342,7 @@ const EarningsSection = () => {
                     ₦{wr.amount.toLocaleString()}
                   </p>
                   <span
-                    className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
-                      wr.status === "approved"
-                        ? "text-emerald-600 bg-emerald-50 border-emerald-200"
-                        : wr.status === "rejected"
-                          ? "text-red-500 bg-red-50 border-red-200"
-                          : "text-amber-600 bg-amber-50 border-amber-200"
-                    }`}
+                    className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${wr.status === "approved" ? "text-emerald-600 bg-emerald-50 border-emerald-200" : wr.status === "rejected" ? "text-red-500 bg-red-50 border-red-200" : "text-amber-600 bg-amber-50 border-amber-200"}`}
                   >
                     {wr.status.charAt(0).toUpperCase() + wr.status.slice(1)}
                   </span>
@@ -1770,6 +2355,7 @@ const EarningsSection = () => {
     </div>
   );
 };
+
 /* ═══════════════════════════════════════════════════════════
    SETTINGS
 ═══════════════════════════════════════════════════════════ */
@@ -1917,7 +2503,7 @@ const SettingsSection = () => {
         >
           {saving ? (
             <>
-              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{" "}
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               Saving…
             </>
           ) : saved ? (
@@ -2206,67 +2792,6 @@ const HostHome = ({
           </div>
         </div>
       </div>
-      {!loading && hotels.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-gray-900">All Properties</h3>
-            <button
-              onClick={() => onNavigate("properties")}
-              className="text-sm font-semibold text-[#C9A96E] hover:underline"
-            >
-              Manage →
-            </button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {hotels.map((h, i) => (
-              <div
-                key={h.id}
-                className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-all group cursor-pointer"
-                style={{ animation: `fadeUp 0.4s ease ${i * 55}ms both` }}
-                onClick={() => onBook?.(h)}
-              >
-                <div className="relative h-40 overflow-hidden">
-                  <img
-                    src={
-                      h.thumbnail ||
-                      "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400"
-                    }
-                    alt={h.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src =
-                        "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400";
-                    }}
-                  />
-                  {h.featured && (
-                    <span className="absolute top-2 left-2 bg-[#C9A96E] text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase">
-                      Featured
-                    </span>
-                  )}
-                  <div className="absolute top-2 right-2">
-                    <VerifBadge status={h.verificationStatus ?? "unverified"} />
-                  </div>
-                </div>
-                <div className="p-3.5">
-                  <p className="font-bold text-gray-800 text-sm truncate">
-                    {h.name}
-                  </p>
-                  <div className="flex items-center gap-1 mt-0.5">
-                    <MapPinIcon className="w-3 h-3 text-[#C9A96E]" />
-                    <p className="text-xs text-gray-400 truncate">{h.city}</p>
-                  </div>
-                  <p className="font-bold text-gray-900 mt-1 text-sm">
-                    {fmt$(h.pricePerNight)}
-                    <span className="text-xs text-gray-400 font-normal">
-                      /night
-                    </span>
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 };
@@ -2299,9 +2824,6 @@ const Dashboard = ({ onBook, onLogout }: DashboardProps) => {
 
   if (role === "guest")
     return <GuestDashboard onBook={onBook} onLogout={onLogout} />;
-
-  // Admins have their own dashboard — redirect them there via your router
-  // If an admin lands here, just show the host shell as a fallback
   return <HostDashboardShell onBook={onBook} onLogout={handleLogout} />;
 };
 

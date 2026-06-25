@@ -20,16 +20,21 @@ import {
 import {
   HeartIcon as HeartSolid,
   StarIcon as StarSolid,
+  CheckCircleIcon,
 } from "@heroicons/react/24/solid";
 import { useAuth } from "./AuthContext";
 import {
   BookingsDB,
   ListingsDB,
   MessagesDB,
+  RefundRequestsDB,
+  calcRefundAmount,
+  CANCELLATION_REASONS,
   listingToHotel,
   type Booking,
   type Hotel,
   type Listing,
+  type CancellationReason,
 } from "./index";
 import MessagesInbox from "./Components/MessagesInbox";
 
@@ -716,16 +721,773 @@ const Overview = ({
 };
 
 /* ═══════════════════════════════════════════════════════════
+   REFUND REQUEST MODAL
+═══════════════════════════════════════════════════════════ */
+const RefundRequestModal = ({
+  booking,
+  onClose,
+  onSubmitted,
+}: {
+  booking: Booking;
+  onClose: () => void;
+  onSubmitted: () => void;
+}) => {
+  const { user } = useAuth();
+  const [step, setStep] = useState<"form" | "review" | "done">("form");
+  const [reason, setReason] = useState<CancellationReason | "">("");
+  const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [alreadyRequested, setAlreadyRequested] = useState(false);
+  const [checkingDupe, setCheckingDupe] = useState(true);
+
+  const refund = calcRefundAmount(booking.totalAmount, booking.checkIn);
+  const daysLeft = Math.ceil(
+    (new Date(booking.checkIn).getTime() - Date.now()) / 86400000,
+  );
+
+  useEffect(() => {
+    RefundRequestsDB.existsForBooking(booking.id).then((exists) => {
+      setAlreadyRequested(exists);
+      setCheckingDupe(false);
+    });
+  }, [booking.id]);
+
+  const handleSubmit = async () => {
+    if (!reason) return setError("Please select a reason.");
+    if (!user) return setError("You must be logged in.");
+    setError("");
+    setSubmitting(true);
+    try {
+      await RefundRequestsDB.create({
+        bookingId: booking.id,
+        guestId: user.id,
+        guestName: `${user.firstName} ${user.lastName}`.trim(),
+        guestEmail: user.email,
+        listingName: booking.listingName,
+        checkIn: booking.checkIn,
+        checkOut: booking.checkOut,
+        totalAmount: booking.totalAmount,
+        refundAmount: refund.amount,
+        reason: reason as CancellationReason,
+        note: note.trim(),
+      });
+      setStep("done");
+      onSubmitted();
+    } catch (e: any) {
+      setError(e?.message ?? "Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const fmtDate = (d: string) =>
+    new Date(d).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 80,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "20px",
+      }}
+    >
+      <div
+        onClick={step !== "done" ? onClose : undefined}
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: "rgba(0,0,0,0.82)",
+          backdropFilter: "blur(10px)",
+        }}
+      />
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          width: "100%",
+          maxWidth: 480,
+          background: "#141210",
+          border: "1px solid rgba(245,240,232,0.1)",
+          borderRadius: 24,
+          overflow: "hidden",
+          maxHeight: "90dvh",
+          overflowY: "auto",
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            padding: "22px 24px 16px",
+            borderBottom: "1px solid rgba(245,240,232,0.07)",
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            position: "sticky",
+            top: 0,
+            background: "#141210",
+            zIndex: 2,
+          }}
+        >
+          <div>
+            <p
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: "0.2em",
+                color: step === "done" ? "#7ec8a0" : "#e07070",
+                textTransform: "uppercase",
+                marginBottom: 4,
+              }}
+            >
+              {step === "done" ? "Request Submitted" : "Request Cancellation"}
+            </p>
+            <h2
+              style={{
+                fontFamily: "Cormorant Garamond, serif",
+                fontSize: 20,
+                fontWeight: 600,
+                color: "#f5f0e8",
+              }}
+            >
+              {booking.listingName}
+            </h2>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: "50%",
+              background: "rgba(245,240,232,0.07)",
+              border: "none",
+              color: "#f5f0e8",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <XMarkIcon style={{ width: 16, height: 16 }} />
+          </button>
+        </div>
+
+        <div style={{ padding: "20px 24px 28px" }}>
+          {checkingDupe ? (
+            <div style={{ textAlign: "center", padding: "32px 0" }}>
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 24,
+                  height: 24,
+                  border: "2px solid rgba(245,240,232,0.1)",
+                  borderTopColor: "#C9A96E",
+                  borderRadius: "50%",
+                  animation: "spin 0.7s linear infinite",
+                }}
+              />
+            </div>
+          ) : alreadyRequested ? (
+            <div style={{ textAlign: "center", padding: "20px 0" }}>
+              <div
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: "50%",
+                  background: "rgba(201,169,110,0.1)",
+                  border: "2px solid rgba(201,169,110,0.3)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  margin: "0 auto 16px",
+                }}
+              >
+                <ClockIcon
+                  style={{ width: 26, height: 26, color: "#C9A96E" }}
+                />
+              </div>
+              <p
+                style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "#f5f0e8",
+                  marginBottom: 8,
+                }}
+              >
+                Request Already Submitted
+              </p>
+              <p
+                style={{
+                  fontSize: 13,
+                  color: "rgba(245,240,232,0.45)",
+                  lineHeight: 1.6,
+                }}
+              >
+                Your cancellation request for this booking is currently under
+                admin review. You'll be notified once a decision is made.
+              </p>
+              <button
+                onClick={onClose}
+                style={{
+                  marginTop: 20,
+                  background: "rgba(245,240,232,0.07)",
+                  border: "1px solid rgba(245,240,232,0.1)",
+                  color: "#f5f0e8",
+                  fontWeight: 600,
+                  fontSize: 13,
+                  padding: "12px 32px",
+                  borderRadius: 12,
+                  cursor: "pointer",
+                }}
+              >
+                Close
+              </button>
+            </div>
+          ) : step === "done" ? (
+            <div style={{ textAlign: "center", padding: "12px 0" }}>
+              <div
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: "50%",
+                  background: "rgba(126,200,160,0.1)",
+                  border: "2px solid rgba(126,200,160,0.3)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  margin: "0 auto 20px",
+                }}
+              >
+                <CheckCircleIcon
+                  style={{ width: 30, height: 30, color: "#7ec8a0" }}
+                />
+              </div>
+              <p
+                style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "#f5f0e8",
+                  marginBottom: 10,
+                }}
+              >
+                Cancellation Request Submitted
+              </p>
+              <p
+                style={{
+                  fontSize: 13,
+                  color: "rgba(245,240,232,0.5)",
+                  lineHeight: 1.65,
+                  marginBottom: 24,
+                }}
+              >
+                Our team will review your request within 24–48 hours.
+                {refund.amount > 0
+                  ? ` If approved, ₦${refund.amount.toLocaleString()} will be refunded within 5–10 business days.`
+                  : " Per our policy, no refund applies for this booking window."}
+              </p>
+              <button
+                onClick={onClose}
+                style={{
+                  width: "100%",
+                  background: "#C9A96E",
+                  color: "#0e0d0b",
+                  fontWeight: 700,
+                  fontSize: 14,
+                  padding: "14px 0",
+                  borderRadius: 14,
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                Done
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* Booking summary */}
+              <div
+                style={{
+                  background: "rgba(245,240,232,0.04)",
+                  border: "1px solid rgba(245,240,232,0.08)",
+                  borderRadius: 14,
+                  padding: "14px 16px",
+                  marginBottom: 20,
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "8px 20px",
+                }}
+              >
+                {(
+                  [
+                    [
+                      "Booking Ref",
+                      <span
+                        style={{ fontFamily: "monospace", color: "#C9A96E" }}
+                      >
+                        {booking.ref}
+                      </span>,
+                    ],
+                    ["Guests", booking.guests],
+                    ["Check-in", fmtDate(booking.checkIn)],
+                    ["Check-out", fmtDate(booking.checkOut)],
+                    ["Nights", booking.nights],
+                    ["Total Paid", `₦${booking.totalAmount.toLocaleString()}`],
+                  ] as [string, React.ReactNode][]
+                ).map(([label, val]) => (
+                  <div key={label}>
+                    <p
+                      style={{
+                        fontSize: 10,
+                        color: "rgba(245,240,232,0.3)",
+                        fontWeight: 700,
+                        letterSpacing: "0.1em",
+                        textTransform: "uppercase",
+                        marginBottom: 2,
+                      }}
+                    >
+                      {label}
+                    </p>
+                    <p
+                      style={{
+                        fontSize: 13,
+                        color: "#f5f0e8",
+                        fontWeight: 500,
+                      }}
+                    >
+                      {val}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Refund estimate */}
+              <div
+                style={{
+                  background: `${refund.pct === 100 ? "rgba(126,200,160" : refund.pct === 50 ? "rgba(201,169,110" : "rgba(224,112,112"},.08)`,
+                  border: `1px solid ${refund.pct === 100 ? "rgba(126,200,160" : refund.pct === 50 ? "rgba(201,169,110" : "rgba(224,112,112"},.25)`,
+                  borderRadius: 12,
+                  padding: "14px 16px",
+                  marginBottom: 20,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 8,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.1em",
+                      color: "rgba(245,240,232,0.35)",
+                    }}
+                  >
+                    Refund Estimate
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 800,
+                      color:
+                        refund.pct === 100
+                          ? "#7ec8a0"
+                          : refund.pct === 50
+                            ? "#C9A96E"
+                            : "#e07070",
+                    }}
+                  >
+                    {refund.label} · ₦{refund.amount.toLocaleString()}
+                  </span>
+                </div>
+                <div
+                  style={{ display: "flex", flexDirection: "column", gap: 4 }}
+                >
+                  {[
+                    {
+                      days: "14+ days before check-in",
+                      pct: 100,
+                      label: "Full refund",
+                      active: daysLeft >= 14,
+                    },
+                    {
+                      days: "7–13 days before check-in",
+                      pct: 50,
+                      label: "50% refund",
+                      active: daysLeft >= 7 && daysLeft < 14,
+                    },
+                    {
+                      days: "Under 7 days",
+                      pct: 0,
+                      label: "No refund",
+                      active: daysLeft < 7,
+                    },
+                  ].map(({ days, label, active }) => (
+                    <div
+                      key={days}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        fontSize: 12,
+                        color: active
+                          ? refund.pct === 100
+                            ? "#7ec8a0"
+                            : refund.pct === 50
+                              ? "#C9A96E"
+                              : "#e07070"
+                          : "rgba(245,240,232,0.25)",
+                        fontWeight: active ? 700 : 400,
+                      }}
+                    >
+                      <span>{days}</span>
+                      <span>{label}</span>
+                    </div>
+                  ))}
+                </div>
+                <p
+                  style={{
+                    fontSize: 11,
+                    color: "rgba(245,240,232,0.3)",
+                    marginTop: 10,
+                    borderTop: "1px solid rgba(245,240,232,0.06)",
+                    paddingTop: 10,
+                  }}
+                >
+                  Check-in in{" "}
+                  <strong style={{ color: "#f5f0e8" }}>{daysLeft}</strong> day
+                  {daysLeft !== 1 ? "s" : ""}. Final refund decision made by
+                  admin.
+                </p>
+              </div>
+
+              {step === "form" && (
+                <>
+                  {/* Reason selector */}
+                  <div style={{ marginBottom: 16 }}>
+                    <p
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: "0.15em",
+                        textTransform: "uppercase",
+                        color: "rgba(245,240,232,0.35)",
+                        marginBottom: 10,
+                      }}
+                    >
+                      Reason for cancellation *
+                    </p>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 6,
+                      }}
+                    >
+                      {CANCELLATION_REASONS.map((r) => (
+                        <button
+                          key={r}
+                          onClick={() => setReason(r)}
+                          style={{
+                            textAlign: "left",
+                            padding: "11px 14px",
+                            borderRadius: 10,
+                            background:
+                              reason === r
+                                ? "rgba(201,169,110,0.1)"
+                                : "rgba(245,240,232,0.03)",
+                            border: `1px solid ${reason === r ? "rgba(201,169,110,0.4)" : "rgba(245,240,232,0.07)"}`,
+                            color:
+                              reason === r
+                                ? "#C9A96E"
+                                : "rgba(245,240,232,0.6)",
+                            fontSize: 13,
+                            fontWeight: reason === r ? 600 : 400,
+                            cursor: "pointer",
+                            transition: "all 0.15s",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          {r}
+                          {reason === r && (
+                            <CheckCircleIcon
+                              style={{
+                                width: 16,
+                                height: 16,
+                                color: "#C9A96E",
+                                flexShrink: 0,
+                              }}
+                            />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Optional note */}
+                  <div style={{ marginBottom: 20 }}>
+                    <label
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: "0.15em",
+                        textTransform: "uppercase",
+                        color: "rgba(245,240,232,0.35)",
+                        display: "block",
+                        marginBottom: 8,
+                      }}
+                    >
+                      Additional details (optional)
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={note}
+                      onChange={(e) => setNote(e.target.value)}
+                      placeholder="Anything else you'd like to tell us…"
+                      style={{
+                        width: "100%",
+                        background: "rgba(245,240,232,0.04)",
+                        border: "1px solid rgba(245,240,232,0.09)",
+                        borderRadius: 12,
+                        padding: "11px 14px",
+                        fontSize: 13,
+                        color: "#f5f0e8",
+                        outline: "none",
+                        resize: "none",
+                        fontFamily: "inherit",
+                        boxSizing: "border-box",
+                      }}
+                      onFocus={(e) => (e.target.style.borderColor = "#C9A96E")}
+                      onBlur={(e) =>
+                        (e.target.style.borderColor = "rgba(245,240,232,0.09)")
+                      }
+                    />
+                  </div>
+
+                  {error && (
+                    <p
+                      style={{
+                        fontSize: 13,
+                        color: "#e07070",
+                        marginBottom: 14,
+                      }}
+                    >
+                      {error}
+                    </p>
+                  )}
+
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button
+                      onClick={onClose}
+                      style={{
+                        flex: 1,
+                        background: "rgba(245,240,232,0.06)",
+                        border: "1px solid rgba(245,240,232,0.1)",
+                        color: "#f5f0e8",
+                        fontWeight: 600,
+                        fontSize: 13,
+                        padding: "13px 0",
+                        borderRadius: 12,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Keep Booking
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!reason) {
+                          setError("Please select a reason.");
+                          return;
+                        }
+                        setError("");
+                        setStep("review");
+                      }}
+                      style={{
+                        flex: 1,
+                        background: "rgba(224,112,112,0.12)",
+                        border: "1px solid rgba(224,112,112,0.3)",
+                        color: "#e07070",
+                        fontWeight: 700,
+                        fontSize: 13,
+                        padding: "13px 0",
+                        borderRadius: 12,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Review Request →
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {step === "review" && (
+                <>
+                  <div
+                    style={{
+                      background: "rgba(224,112,112,0.06)",
+                      border: "1px solid rgba(224,112,112,0.18)",
+                      borderRadius: 12,
+                      padding: "14px 16px",
+                      marginBottom: 18,
+                    }}
+                  >
+                    <p
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.1em",
+                        color: "rgba(245,240,232,0.3)",
+                        marginBottom: 8,
+                      }}
+                    >
+                      Your Reason
+                    </p>
+                    <p
+                      style={{
+                        fontSize: 14,
+                        color: "#f5f0e8",
+                        fontWeight: 600,
+                        marginBottom: note ? 6 : 0,
+                      }}
+                    >
+                      {reason}
+                    </p>
+                    {note && (
+                      <p
+                        style={{
+                          fontSize: 13,
+                          color: "rgba(245,240,232,0.5)",
+                          lineHeight: 1.55,
+                        }}
+                      >
+                        {note}
+                      </p>
+                    )}
+                  </div>
+                  <p
+                    style={{
+                      fontSize: 13,
+                      color: "rgba(245,240,232,0.4)",
+                      lineHeight: 1.65,
+                      marginBottom: 18,
+                    }}
+                  >
+                    ⚠️ Submitting this request will put your booking on hold
+                    while admin reviews it. If approved, it cannot be undone.
+                  </p>
+                  {error && (
+                    <p
+                      style={{
+                        fontSize: 13,
+                        color: "#e07070",
+                        marginBottom: 14,
+                      }}
+                    >
+                      {error}
+                    </p>
+                  )}
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button
+                      onClick={() => setStep("form")}
+                      style={{
+                        flex: 1,
+                        background: "rgba(245,240,232,0.06)",
+                        border: "1px solid rgba(245,240,232,0.1)",
+                        color: "#f5f0e8",
+                        fontWeight: 600,
+                        fontSize: 13,
+                        padding: "13px 0",
+                        borderRadius: 12,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Go Back
+                    </button>
+                    <button
+                      onClick={handleSubmit}
+                      disabled={submitting}
+                      style={{
+                        flex: 1,
+                        background: submitting
+                          ? "rgba(224,112,112,0.15)"
+                          : "#e07070",
+                        color: submitting ? "#e07070" : "#fff",
+                        fontWeight: 700,
+                        fontSize: 13,
+                        padding: "13px 0",
+                        borderRadius: 12,
+                        border: "none",
+                        cursor: submitting ? "not-allowed" : "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 8,
+                      }}
+                    >
+                      {submitting ? (
+                        <>
+                          <span
+                            style={{
+                              width: 14,
+                              height: 14,
+                              border: "2px solid rgba(224,112,112,0.3)",
+                              borderTopColor: "#e07070",
+                              borderRadius: "50%",
+                              display: "inline-block",
+                              animation: "spin 0.7s linear infinite",
+                            }}
+                          />
+                          Submitting…
+                        </>
+                      ) : (
+                        "Submit Cancellation Request"
+                      )}
+                    </button>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
    BOOKINGS TAB  — unchanged
 ═══════════════════════════════════════════════════════════ */
 const BookingsTab = ({
-  bookings,
+  bookings: initialBookings,
   loading,
 }: {
   bookings: Booking[];
   loading: boolean;
 }) => {
   const [filter, setFilter] = useState<"all" | "upcoming" | "past">("all");
+  const [bookings, setBookings] = useState<Booking[]>(initialBookings);
+  const [refundTarget, setRefundTarget] = useState<Booking | null>(null);
+
+  // Keep local list in sync if parent re-fetches
+  useEffect(() => {
+    setBookings(initialBookings);
+  }, [initialBookings]);
+
   const now = new Date();
   const upcoming = bookings.filter(
     (b) => b.status !== "cancelled" && new Date(b.checkIn) >= now,
@@ -733,6 +1495,18 @@ const BookingsTab = ({
   const past = bookings.filter((b) => new Date(b.checkOut) < now);
   const show =
     filter === "upcoming" ? upcoming : filter === "past" ? past : bookings;
+
+  // After request submitted: mark booking as pending in local state
+  const handleRequested = () => {
+    if (refundTarget) {
+      setBookings((prev) =>
+        prev.map((b) =>
+          b.id === refundTarget.id ? { ...b, status: "pending" as const } : b,
+        ),
+      );
+    }
+    setRefundTarget(null);
+  };
 
   return (
     <div style={{ animation: "fadeUp 0.4s ease both" }}>
@@ -777,7 +1551,7 @@ const BookingsTab = ({
       ) : (
         <div className="bg-[#1a1610] border border-[rgba(245,240,232,0.07)] rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px]">
+            <table className="w-full min-w-[700px]">
               <thead>
                 <tr className="border-b border-[rgba(245,240,232,0.06)]">
                   {[
@@ -788,9 +1562,10 @@ const BookingsTab = ({
                     "Nights",
                     "Total",
                     "Status",
-                  ].map((h) => (
+                    "",
+                  ].map((h, idx) => (
                     <th
-                      key={h}
+                      key={idx}
                       className="text-left px-5 py-3.5 text-[10px] uppercase tracking-[0.12em] text-[rgba(245,240,232,0.3)] font-bold"
                     >
                       {h}
@@ -799,39 +1574,66 @@ const BookingsTab = ({
                 </tr>
               </thead>
               <tbody>
-                {show.map((b, i) => (
-                  <tr
-                    key={b.id}
-                    className="border-b border-[rgba(245,240,232,0.04)] hover:bg-[rgba(245,240,232,0.02)] transition-colors"
-                    style={{ animation: `fadeUp 0.3s ease ${i * 30}ms both` }}
-                  >
-                    <td className="px-5 py-3.5 font-mono text-[11px] text-[#C9A96E]">
-                      {b.ref}
-                    </td>
-                    <td className="px-5 py-3.5 text-sm text-[#f5f0e8] max-w-[160px] truncate">
-                      {b.listingName}
-                    </td>
-                    <td className="px-5 py-3.5 text-sm text-[rgba(245,240,232,0.55)] whitespace-nowrap">
-                      {fmtDate(b.checkIn)}
-                    </td>
-                    <td className="px-5 py-3.5 text-sm text-[rgba(245,240,232,0.55)] whitespace-nowrap">
-                      {fmtDate(b.checkOut)}
-                    </td>
-                    <td className="px-5 py-3.5 text-sm text-[rgba(245,240,232,0.55)]">
-                      {b.nights}
-                    </td>
-                    <td className="px-5 py-3.5 text-sm font-bold text-[#f5f0e8]">
-                      {fmt$(b.totalAmount)}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <Badge status={b.status} />
-                    </td>
-                  </tr>
-                ))}
+                {show.map((b, i) => {
+                  return (
+                    <tr
+                      key={b.id}
+                      className="border-b border-[rgba(245,240,232,0.04)] hover:bg-[rgba(245,240,232,0.02)] transition-colors"
+                      style={{ animation: `fadeUp 0.3s ease ${i * 30}ms both` }}
+                    >
+                      <td className="px-5 py-3.5 font-mono text-[11px] text-[#C9A96E]">
+                        {b.ref}
+                      </td>
+                      <td className="px-5 py-3.5 text-sm text-[#f5f0e8] max-w-[160px] truncate">
+                        {b.listingName}
+                      </td>
+                      <td className="px-5 py-3.5 text-sm text-[rgba(245,240,232,0.55)] whitespace-nowrap">
+                        {fmtDate(b.checkIn)}
+                      </td>
+                      <td className="px-5 py-3.5 text-sm text-[rgba(245,240,232,0.55)] whitespace-nowrap">
+                        {fmtDate(b.checkOut)}
+                      </td>
+                      <td className="px-5 py-3.5 text-sm text-[rgba(245,240,232,0.55)]">
+                        {b.nights}
+                      </td>
+                      <td className="px-5 py-3.5 text-sm font-bold text-[#f5f0e8]">
+                        {fmt$(b.totalAmount)}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <Badge status={b.status} />
+                      </td>
+                      <td className="px-4 py-3.5">
+                        {b.status === "confirmed" &&
+                          new Date(b.checkIn) > new Date() && (
+                            <button
+                              onClick={() => setRefundTarget(b)}
+                              className="text-[11px] font-semibold text-[rgba(224,112,112,0.7)] hover:text-[#e07070] border border-[rgba(224,112,112,0.2)] hover:border-[rgba(224,112,112,0.5)] px-3 py-1.5 rounded-lg transition-all whitespace-nowrap"
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        {b.status === "pending" &&
+                          new Date(b.checkIn) > new Date() && (
+                            <span className="text-[11px] text-[rgba(245,240,232,0.3)] italic">
+                              Under review
+                            </span>
+                          )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
+      )}
+
+      {refundTarget && (
+        <RefundRequestModal
+          booking={refundTarget}
+          onClose={() => setRefundTarget(null)}
+          onSubmitted={handleRequested}
+        />
       )}
     </div>
   );
@@ -857,7 +1659,8 @@ const WishlistTab = ({
         Wishlist
       </h2>
       <p className="text-[rgba(245,240,232,0.4)] text-sm">
-        {wishlist.length} saved propert{wishlist.length !== 1 ? "ies" : "y"}
+        {wishlist.length} saved{" "}
+        {wishlist.length !== 1 ? "properties" : "property"}
       </p>
     </div>
     {loading ? (
