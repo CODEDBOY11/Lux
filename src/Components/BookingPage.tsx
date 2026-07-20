@@ -4505,7 +4505,7 @@ export default function BookingPage({
                       "#C9A96E")
                   }
                   disabled={
-                    !checkIn || !checkOut || nights < 1 || !selectedRoom
+                    !checkIn || !checkOut || nights < 0 || !selectedRoom
                   }
                 >
                   Reserve ·{" "}
