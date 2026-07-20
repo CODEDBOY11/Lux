@@ -1,4747 +1,2930 @@
-import { useState, useEffect, useRef } from "react";
-import { MessagesDB, type Conversation } from "../index";
-
-import SEO from "../seo";
+import { useState, useEffect, useCallback, useRef } from "react";
+import MessagesInbox from "./Components/MessagesInbox";
+import { useNavigate } from "react-router-dom";
+import ReviewsSection from "./ReviewSection";
+import { WalletDB, RoomTypesDB, type RoomType } from "./index";
+import PropertyVerificationForm from "./Verification/Property";
+import { BankAccountPicker, type ResolvedAccount } from "./BankAccountPicker";
 import {
-  MapPinIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
+  HomeIcon,
+  BuildingOffice2Icon,
+  CalendarDaysIcon,
+  StarIcon,
+  BanknotesIcon,
+  ChatBubbleLeftRightIcon,
+  Cog6ToothIcon,
+  ArrowRightOnRectangleIcon,
+  Bars3Icon,
   XMarkIcon,
+  BellIcon,
+  MagnifyingGlassIcon,
+  MapPinIcon,
+  HeartIcon,
+  GlobeAltIcon,
+  EllipsisHorizontalIcon,
+  PlusIcon,
+  ChevronRightIcon,
+  ClockIcon,
+  PencilSquareIcon,
+  TrashIcon,
+  CheckCircleIcon,
+  PhotoIcon,
   UserIcon,
   ShieldCheckIcon,
-  HeartIcon,
-  ShareIcon,
-  ChevronDownIcon,
-  PaperAirplaneIcon,
-  ChatBubbleLeftRightIcon,
 } from "@heroicons/react/24/outline";
+import { StarIcon as StarSolid } from "@heroicons/react/24/solid";
+import { useAuth } from "./AuthContext";
 import {
-  StarIcon,
-  HeartIcon as HeartSolid,
-  CheckCircleIcon,
-} from "@heroicons/react/24/solid";
-import { StarIcon as StarOutline } from "@heroicons/react/24/outline";
-import { useAuth } from "../AuthContext";
-import {
+  ListingsDB,
   BookingsDB,
-  supabase,
-  ReviewsDB,
-  RoomTypesDB,
+  listingToHotel,
   type Hotel,
   type Booking,
-  type RoomType,
-} from "../index";
+  type Listing,
+  type VerificationStatus,
+} from "./index";
+import GuestDashboard from "./GuestDashboard";
 
-declare global {
-  interface Window {
-    PaystackPop: {
-      setup(options: {
-        key: string;
-        email: string;
-        amount: number;
-        currency?: string;
-        ref: string;
-        metadata?: Record<string, unknown>;
-        onClose: () => void;
-        callback: (response: { reference: string; status: string }) => void;
-      }): { openIframe(): void };
-    };
-  }
-}
+/* ─────────────────────────────────────────────────────────
+   TYPES
+───────────────────────────────────────────────────────── */
+type NavKey =
+  | "dashboard"
+  | "properties"
+  | "bookings"
+  | "reviews"
+  | "earnings"
+  | "messages"
+  | "settings"
+  | "wishlist"
+  | "history";
 
-const PAYSTACK_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY as string;
+/* ─────────────────────────────────────────────────────────
+   HELPERS
+───────────────────────────────────────────────────────── */
+const fmt$ = (n: number) =>
+  "₦" + n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+const fmtDate = (d: string) =>
+  new Date(d).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 
-const DEFAULT_IMAGE =
-  "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=75";
-const getSafeImage = (url?: string) =>
-  !url || url.includes("bing.com") ? DEFAULT_IMAGE : url;
-
-const AMENITY_ICONS: Record<string, string> = {
-  "Free WiFi": "📶",
-  "Private Pool": "🏊",
-  "Butler Service": "🛎",
-  "Coral Reef Diving": "🤿",
-  "Water Sports": "🚤",
-  "Spa Island": "💆",
-  "Sunset Cruise": "🌅",
-  Aquarium: "🐠",
-  "Airport Transfer": "✈️",
-  "Fine Dining": "🍽",
-  "Kids Club": "🧒",
-  "Overwater Bungalow": "🌊",
-  "Sea View": "🌊",
-  "Air Conditioning": "❄️",
-  BBQ: "🍖",
-  "Wine Cellar": "🍷",
-  Netflix: "🎬",
-  "Daily Cleaning": "🧹",
-  Gym: "🏋️",
-  Parking: "🚗",
-  Concierge: "🔔",
-  "Hot Tub": "♨️",
+const VERIF_CONFIG: Record<
+  VerificationStatus,
+  { label: string; color: string; bg: string; border: string }
+> = {
+  unverified: {
+    label: "Unverified",
+    color: "rgba(245,240,232,0.4)",
+    bg: "rgba(245,240,232,0.05)",
+    border: "rgba(245,240,232,0.1)",
+  },
+  pending: {
+    label: "In Review",
+    color: "#f59e0b",
+    bg: "rgba(245,158,11,0.1)",
+    border: "rgba(245,158,11,0.25)",
+  },
+  verified: {
+    label: "✓ Verified",
+    color: "#4ade80",
+    bg: "rgba(74,222,128,0.1)",
+    border: "rgba(74,222,128,0.25)",
+  },
+  rejected: {
+    label: "Rejected",
+    color: "#e07070",
+    bg: "rgba(220,60,60,0.1)",
+    border: "rgba(220,60,60,0.25)",
+  },
 };
 
-function StarPicker({
-  value,
-  onChange,
-  size = 28,
+const VerifBadge = ({ status }: { status: VerificationStatus }) => {
+  const cfg = VERIF_CONFIG[status];
+  return (
+    <span
+      className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap"
+      style={{ color: cfg.color, background: cfg.bg, borderColor: cfg.border }}
+    >
+      {cfg.label}
+    </span>
+  );
+};
+
+const Sk = ({
+  h = "h-8",
+  rounded = "rounded-xl",
 }: {
-  value: number;
-  onChange: (v: number) => void;
-  size?: number;
-}) {
-  const [hovered, setHovered] = useState(0);
+  h?: string;
+  rounded?: string;
+}) => <div className={`w-full ${h} ${rounded} bg-gray-100 animate-pulse`} />;
 
+const StatusPill = ({ status }: { status: string }) => {
+  const cfg: Record<string, { label: string; cls: string }> = {
+    confirmed: {
+      label: "Confirmed",
+      cls: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    },
+    pending: {
+      label: "Waiting",
+      cls: "bg-amber-50  text-amber-700  border-amber-200",
+    },
+    cancelled: {
+      label: "Declined",
+      cls: "bg-red-50    text-red-600    border-red-200",
+    },
+  };
+  const s = cfg[status] ?? {
+    label: status,
+    cls: "bg-gray-50 text-gray-500 border-gray-200",
+  };
   return (
-    <div style={{ display: "flex", gap: 4 }}>
-      {[1, 2, 3, 4, 5].map((star) => {
-        const filled = star <= (hovered || value);
-
-        return (
-          <button
-            key={star}
-            type="button"
-            onMouseEnter={() => setHovered(star)}
-            onMouseLeave={() => setHovered(0)}
-            onClick={() => onChange(star)}
-            style={{
-              background: "none",
-              border: "none",
-              padding: 2,
-              cursor: "pointer",
-              transform: hovered === star ? "scale(1.2)" : "scale(1)",
-              transition: "transform 0.15s",
-            }}
-          >
-            {filled ? (
-              <StarIcon
-                style={{ width: size, height: size, color: "#C9A96E" }}
-              />
-            ) : (
-              <StarOutline
-                style={{
-                  width: size,
-                  height: size,
-                  color: "rgba(201,169,110,0.3)",
-                }}
-              />
-            )}
-          </button>
-        );
-      })}
-    </div>
+    <span
+      className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border whitespace-nowrap ${s.cls}`}
+    >
+      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" />
+      {s.label}
+    </span>
   );
-}
+};
 
-// Minimal skeleton helper used in the rooms list when loading
-function Sk({ h, rounded }: { h?: string; rounded?: string }) {
-  const height = h === "h-36" ? 144 : undefined;
-  const radius = rounded === "rounded-2xl" ? 16 : 8;
-  return (
-    <div
-      style={{
-        width: "100%",
-        height,
-        borderRadius: radius,
-        background: "rgba(245,240,232,0.04)",
-        marginBottom: 12,
-      }}
-    />
-  );
-}
-
-function SubRating({
+const StatCard = ({
+  icon,
   label,
   value,
-  onChange,
+  delay = 0,
+  sub,
+  accent = "#C9A96E",
 }: {
+  icon: React.ReactNode;
   label: string;
-  value: number;
-  onChange: (v: number) => void;
-}) {
-  return (
+  value: string | number;
+  delay?: number;
+  sub?: string;
+  accent?: string;
+}) => (
+  <div
+    className="bg-white rounded-2xl border border-gray-100 p-5 flex-1 min-w-[140px] shadow-sm hover:shadow-md transition-all duration-200"
+    style={{ animation: `fadeUp 0.4s ease ${delay}ms both` }}
+  >
     <div
+      className="w-10 h-10 rounded-xl flex items-center justify-center mb-3"
+      style={{ background: `${accent}18`, border: `1px solid ${accent}30` }}
+    >
+      {icon}
+    </div>
+    <p className="text-2xl font-bold text-gray-900 font-['Cormorant_Garamond'] leading-none">
+      {value}
+    </p>
+    <p className="text-xs text-gray-400 mt-1">{label}</p>
+    {sub && (
+      <p className="text-[10px] mt-0.5 font-medium" style={{ color: accent }}>
+        {sub}
+      </p>
+    )}
+  </div>
+);
+
+/* ─────────────────────────────────────────────────────────
+   NAV
+───────────────────────────────────────────────────────── */
+const HOST_NAV = [
+  { key: "dashboard" as NavKey, label: "Dashboard", icon: HomeIcon },
+  {
+    key: "properties" as NavKey,
+    label: "My Properties",
+    icon: BuildingOffice2Icon,
+  },
+  { key: "bookings" as NavKey, label: "Bookings", icon: CalendarDaysIcon },
+  { key: "reviews" as NavKey, label: "Reviews", icon: StarIcon },
+  { key: "earnings" as NavKey, label: "Earnings", icon: BanknotesIcon },
+  {
+    key: "messages" as NavKey,
+    label: "Messages",
+    icon: ChatBubbleLeftRightIcon,
+  },
+  { key: "settings" as NavKey, label: "Settings", icon: Cog6ToothIcon },
+];
+
+const GUEST_NAV = [
+  { key: "dashboard" as NavKey, label: "Overview", icon: HomeIcon },
+  { key: "bookings" as NavKey, label: "My Bookings", icon: CalendarDaysIcon },
+  { key: "wishlist" as NavKey, label: "Wishlist", icon: HeartIcon },
+  { key: "history" as NavKey, label: "Travel History", icon: GlobeAltIcon },
+  {
+    key: "messages" as NavKey,
+    label: "Messages",
+    icon: ChatBubbleLeftRightIcon,
+  },
+  { key: "settings" as NavKey, label: "Settings", icon: Cog6ToothIcon },
+];
+
+/* ─────────────────────────────────────────────────────────
+   SIDEBAR
+───────────────────────────────────────────────────────── */
+const Sidebar = ({
+  role,
+  active,
+  onNav,
+  pending,
+  onClose,
+  onLogout,
+  isMobile,
+}: {
+  role: "host" | "guest";
+  active: NavKey;
+  onNav: (k: NavKey) => void;
+  pending: number;
+  onClose?: () => void;
+  onLogout: () => void;
+  isMobile?: boolean;
+}) => {
+  const { user } = useAuth();
+  const nav = role === "guest" ? GUEST_NAV : HOST_NAV;
+  const isGuest = role === "guest";
+  return (
+    <aside
+      className="w-64 h-full flex flex-col relative"
       style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "10px 0",
-        borderBottom: "1px solid rgba(245,240,232,0.06)",
+        background:
+          "linear-gradient(180deg,#160e08 0%,#261508 55%,#160e08 100%)",
       }}
     >
-      <span style={{ fontSize: 13, color: "rgba(245,240,232,0.55)" }}>
-        {label}
-      </span>
-      <StarPicker value={value} onChange={onChange} size={18} />
-    </div>
+      <div
+        className="absolute inset-0 opacity-[0.04]"
+        style={{
+          backgroundImage:
+            "url(\"data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23C9A96E' fill-opacity='1' fill-rule='evenodd'%3E%3Cpath d='M0 40L40 0H20L0 20M40 40V20L20 40'/%3E%3C/g%3E%3C/svg%3E\")",
+        }}
+      />
+      <div className="h-0.5 bg-gradient-to-r from-transparent via-[#C9A96E] to-transparent relative z-10" />
+      <div className="relative z-10 px-5 pt-6 pb-5 border-b border-white/8 flex items-center gap-3">
+        <div
+          className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-base shadow-lg"
+          style={{
+            background: isGuest
+              ? "linear-gradient(135deg,#6EADC9,#4a8aad)"
+              : "linear-gradient(135deg,#C9A96E,#8a6030)",
+          }}
+        >
+          {user?.avatar ?? user?.firstName?.[0] ?? "?"}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-white font-semibold text-sm truncate">
+            {user?.firstName} {user?.lastName}
+          </p>
+          <span
+            className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+            style={{
+              background: isGuest
+                ? "rgba(110,173,201,0.2)"
+                : "rgba(201,169,110,0.2)",
+              color: isGuest ? "#6EADC9" : "#C9A96E",
+            }}
+          >
+            {role}
+          </span>
+        </div>
+        {isMobile && (
+          <button
+            onClick={onClose}
+            className="text-white/40 hover:text-white p-1 transition-colors"
+          >
+            <XMarkIcon className="w-5 h-5" />
+          </button>
+        )}
+      </div>
+      <nav className="flex-1 relative z-10 px-3 pt-3 space-y-0.5 overflow-y-auto">
+        {nav.map(({ key, label, icon: Icon }) => {
+          const isActive = active === key;
+          const hasBadge = key === "bookings" && pending > 0;
+          return (
+            <button
+              key={key}
+              onClick={() => {
+                onNav(key);
+                onClose?.();
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${isActive ? "text-white shadow-md" : "text-white/50 hover:text-white/80 hover:bg-white/5"}`}
+              style={
+                isActive
+                  ? {
+                      background: isGuest
+                        ? "linear-gradient(135deg,#6EADC9,#4a8aad)"
+                        : "linear-gradient(135deg,#C9A96E,#9a7030)",
+                    }
+                  : {}
+              }
+            >
+              <Icon style={{ width: 17, height: 17 }} className="shrink-0" />
+              <span>{label}</span>
+              {hasBadge && (
+                <span className="ml-auto bg-white/20 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                  {pending > 9 ? "9+" : pending}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
+      <div className="relative z-10 px-3 pb-5 pt-3 border-t border-white/8">
+        <button
+          onClick={onLogout}
+          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-white/40 hover:text-red-400 hover:bg-red-500/8 transition-all"
+        >
+          <ArrowRightOnRectangleIcon
+            style={{ width: 17, height: 17 }}
+            className="shrink-0"
+          />
+          Log Out
+        </button>
+      </div>
+    </aside>
   );
-}
+};
 
-function GuestReviewModal({
-  booking,
-  hotel,
-  onClose,
-  onReviewSaved,
+/* ─────────────────────────────────────────────────────────
+   TOP BAR
+───────────────────────────────────────────────────────── */
+const TopBar = ({
+  title,
+  onHamburger,
+  pending,
 }: {
-  booking: Booking;
-  hotel: Hotel;
-  onClose: () => void;
-  onReviewSaved?: () => void;
-}) {
+  title: string;
+  onHamburger: () => void;
+  pending: number;
+}) => {
   const { user } = useAuth();
-  const [alreadyReviewed, setAlreadyReviewed] = useState<boolean | null>(null);
-  const [reviewStep, setReviewStep] = useState<"write" | "done">("write");
-  const [rating, setRating] = useState(0);
-  const [cleanliness, setCleanliness] = useState(0);
-  const [service, setService] = useState(0);
-  const [locationRating, setLocationRating] = useState(0);
-  const [valueRating, setValueRating] = useState(0);
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
+  const isGuest = user?.role === "guest";
+  return (
+    <header className="h-16 bg-white border-b border-gray-100 flex items-center justify-between px-5 shrink-0 sticky top-0 z-20">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onHamburger}
+          className="lg:hidden w-9 h-9 rounded-xl border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-colors"
+        >
+          <Bars3Icon className="w-5 h-5" />
+        </button>
+        <h1 className="text-xl font-bold text-gray-900">{title}</h1>
+      </div>
+      <div className="flex items-center gap-2.5">
+        <div className="hidden md:flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 w-48">
+          <MagnifyingGlassIcon className="w-4 h-4 text-gray-400 shrink-0" />
+          <input
+            placeholder="Search..."
+            className="bg-transparent text-sm text-gray-600 w-full outline-none placeholder:text-gray-400"
+          />
+        </div>
+        <button className="relative w-9 h-9 rounded-xl border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-colors">
+          <BellIcon className="w-4 h-4" />
+          {pending > 0 && (
+            <span
+              className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full"
+              style={{ background: isGuest ? "#6EADC9" : "#C9A96E" }}
+            />
+          )}
+        </button>
+        <div
+          className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm cursor-pointer text-white text-sm font-bold"
+          style={{
+            background: isGuest
+              ? "linear-gradient(135deg,#6EADC9,#4a8aad)"
+              : "linear-gradient(135deg,#C9A96E,#8a6030)",
+          }}
+        >
+          {user?.avatar ?? user?.firstName?.[0] ?? "?"}
+        </div>
+      </div>
+    </header>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   ROOM TYPES MANAGER  — embedded inside ListingForm
+═══════════════════════════════════════════════════════════ */
+const BED_TYPES = [
+  "King Bed",
+  "Queen Bed",
+  "Twin Beds",
+  "Double Bed",
+  "Bunk Beds",
+  "Sofa Bed",
+  "Studio",
+] as const;
+
+type RoomForm = {
+  name: string;
+  description: string;
+  size: string;
+  bedType: string;
+  maxGuests: string;
+  pricePerNight: string;
+  images: string[];
+  amenities: string[];
+};
+
+const BLANK_ROOM: RoomForm = {
+  name: "",
+  description: "",
+  size: "",
+  bedType: "King Bed",
+  maxGuests: "2",
+  pricePerNight: "",
+  images: [],
+  amenities: [],
+};
+
+const ROOM_AMENITY_OPTIONS = [
+  "En-suite Bathroom",
+  "Private Balcony",
+  "Sea View",
+  "Pool Access",
+  "Air Conditioning",
+  "King Bed",
+  "Smart TV",
+  "Mini Bar",
+  "Safe",
+  "Workspace",
+  "Bathtub",
+  "Walk-in Shower",
+  "Coffee Machine",
+  "Room Service",
+  "Blackout Curtains",
+  "Soundproofing",
+];
+
+const RoomTypesManager = ({ listingId }: { listingId: string }) => {
+  const [rooms, setRooms] = useState<RoomType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<RoomType | "new" | null>(null);
+  const [form, setForm] = useState<RoomForm>(BLANK_ROOM);
   const [saving, setSaving] = useState(false);
-  const [reviewError, setReviewError] = useState("");
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [urlInput, setUrlInput] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingImg, setUploadingImg] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const data = await RoomTypesDB.byListing(listingId);
+    setRooms(data);
+    setLoading(false);
+  }, [listingId]);
 
   useEffect(() => {
-    ReviewsDB.existsForBooking(booking.id).then(setAlreadyReviewed);
-  }, [booking.id]);
+    load();
+  }, [load]);
 
-  const handleReviewSubmit = async () => {
-    if (rating === 0) return setReviewError("Please select an overall rating.");
-    if (!body.trim()) return setReviewError("Please write a short review.");
-    if (!user)
-      return setReviewError("You must be signed in to leave a review.");
-    setReviewError("");
-    setSaving(true);
+  const openNew = () => {
+    setForm(BLANK_ROOM);
+    setError("");
+    setEditing("new");
+  };
+
+  const openEdit = (rt: RoomType) => {
+    setForm({
+      name: rt.name,
+      description: rt.description,
+      size: rt.size,
+      bedType: rt.bedType || "King Bed",
+      maxGuests: String(rt.maxGuests),
+      pricePerNight: String(rt.pricePerNight),
+      images: rt.images,
+      amenities: rt.amenities,
+    });
+    setError("");
+    setEditing(rt);
+  };
+
+  const setF = (k: keyof RoomForm) => (v: string | string[]) =>
+    setForm((f) => ({ ...f, [k]: v }));
+
+  const toggleAmenity = (a: string) =>
+    setF("amenities")(
+      form.amenities.includes(a)
+        ? form.amenities.filter((x) => x !== a)
+        : [...form.amenities, a],
+    );
+
+  const addUrl = () => {
+    const t = urlInput.trim();
+    if (!t) return;
+    setF("images")([...form.images, t]);
+    setUrlInput("");
+  };
+
+  const handleFileUpload = async (files: FileList) => {
+    if (!files.length) return;
+    setUploadingImg(true);
     try {
-      await ReviewsDB.add({
-        bookingId: booking.id,
-        listingId: hotel.id,
-        guestId: user.id,
-        hostId: hotel.hostId,
-        guestName: `${user.firstName} ${user.lastName}`.trim() || "Guest",
-        guestAvatar:
-          (
-            (user.firstName?.[0] ?? "") + (user.lastName?.[0] ?? "")
-          ).toUpperCase() || "G",
-        rating,
-        title: title.trim(),
-        body: body.trim(),
-        cleanliness: cleanliness || undefined,
-        service: service || undefined,
-        location: locationRating || undefined,
-        value: valueRating || undefined,
-        guestPhone: user.phone ?? "",
-      });
-      setReviewStep("done");
-      onReviewSaved?.();
-    } catch (err: any) {
-      setReviewError(err.message ?? "Failed to submit review.");
+      const { uploadToCloudinary } = await import("./cloudinary");
+      const urls: string[] = [];
+      for (const file of Array.from(files)) {
+        const url = await uploadToCloudinary(file, "image");
+        urls.push(url);
+      }
+      setF("images")([...form.images, ...urls]);
+    } catch (e: any) {
+      setError(e.message ?? "Image upload failed.");
+    } finally {
+      setUploadingImg(false);
+    }
+  };
+
+  const save = async () => {
+    if (!form.name.trim()) return setError("Room name is required.");
+    if (
+      !form.pricePerNight ||
+      isNaN(Number(form.pricePerNight)) ||
+      Number(form.pricePerNight) <= 0
+    )
+      return setError("A valid price per night is required.");
+    setSaving(true);
+    setError("");
+    const payload = {
+      listingId,
+      name: form.name.trim(),
+      description: form.description.trim(),
+      size: form.size.trim(),
+      bedType: form.bedType,
+      maxGuests: Number(form.maxGuests),
+      pricePerNight: Number(form.pricePerNight),
+      images: form.images,
+      amenities: form.amenities,
+      available: true,
+    };
+    try {
+      if (editing === "new") {
+        await RoomTypesDB.add(payload);
+      } else if (editing) {
+        await RoomTypesDB.update((editing as RoomType).id, payload);
+      }
+      setEditing(null);
+      await load();
+    } catch (e: any) {
+      setError(e.message ?? "Something went wrong.");
     } finally {
       setSaving(false);
     }
   };
 
-  if (alreadyReviewed === null || alreadyReviewed) return null;
-  const ratingLabels = ["", "Poor", "Fair", "Good", "Great", "Exceptional"];
+  const deleteRoom = async (id: string) => {
+    if (!confirm("Delete this room type permanently?")) return;
+    setDeleting(id);
+    await RoomTypesDB.delete(id);
+    setRooms((prev) => prev.filter((r) => r.id !== id));
+    setDeleting(null);
+  };
+
+  const inp =
+    "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#C9A96E] focus:ring-2 focus:ring-[#C9A96E]/10 transition-all bg-white";
+  const lbl =
+    "block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5";
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 70,
-        display: "flex",
-        alignItems: "flex-end",
-        justifyContent: "center",
-      }}
-    >
-      <div
-        onClick={reviewStep === "done" ? onClose : undefined}
-        style={{
-          position: "absolute",
-          inset: 0,
-          background: "rgba(0,0,0,0.82)",
-          backdropFilter: "blur(10px)",
-        }}
-      />
-      <div
-        style={{
-          position: "relative",
-          zIndex: 10,
-          width: "100%",
-          maxWidth: 540,
-          maxHeight: "94dvh",
-          overflowY: "auto",
-          background: "#141210",
-          border: "1px solid rgba(245,240,232,0.1)",
-          borderRadius: "24px 24px 0 0",
-          scrollbarWidth: "none",
-        }}
-      >
-        {reviewStep === "write" && (
-          <>
-            <div
-              style={{
-                position: "sticky",
-                top: 0,
-                background: "#141210",
-                borderBottom: "1px solid rgba(245,240,232,0.08)",
-                padding: "20px 24px 16px",
-                display: "flex",
-                alignItems: "flex-start",
-                justifyContent: "space-between",
-                zIndex: 2,
-              }}
-            >
-              <div>
-                <p
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "0.22em",
-                    color: "#C9A96E",
-                    textTransform: "uppercase",
-                    marginBottom: 5,
-                  }}
-                >
-                  Share Your Experience
-                </p>
-                <h2
-                  style={{
-                    fontFamily: "Cormorant Garamond, serif",
-                    fontSize: 22,
-                    fontWeight: 600,
-                    color: "#f5f0e8",
-                  }}
-                >
-                  Leave a Review
-                </h2>
-              </div>
-              <button
-                onClick={onClose}
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: "50%",
-                  background: "rgba(245,240,232,0.07)",
-                  border: "none",
-                  color: "#f5f0e8",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <XMarkIcon style={{ width: 16, height: 16 }} />
-              </button>
-            </div>
-            <div style={{ padding: "20px 24px 32px" }}>
-              <div
-                style={{
-                  display: "flex",
-                  gap: 14,
-                  alignItems: "center",
-                  background: "rgba(245,240,232,0.04)",
-                  border: "1px solid rgba(245,240,232,0.08)",
-                  borderRadius: 16,
-                  padding: 14,
-                  marginBottom: 28,
-                }}
-              >
-                <img
-                  src={getSafeImage(hotel.images?.[0])}
-                  alt={hotel.name}
-                  style={{
-                    width: 60,
-                    height: 60,
-                    borderRadius: 10,
-                    objectFit: "cover",
-                    flexShrink: 0,
-                  }}
-                  onError={(e) =>
-                    ((e.target as HTMLImageElement).src = DEFAULT_IMAGE)
-                  }
-                />
-                <div style={{ minWidth: 0 }}>
-                  <p
-                    style={{
-                      fontFamily: "Cormorant Garamond, serif",
-                      fontSize: 16,
-                      fontWeight: 600,
-                      color: "#f5f0e8",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {hotel.name}
-                  </p>
-                  <p
-                    style={{
-                      fontSize: 12,
-                      color: "rgba(245,240,232,0.38)",
-                      marginTop: 2,
-                    }}
-                  >
-                    {hotel.location}
-                  </p>
-                  <p
-                    style={{
-                      fontSize: 11,
-                      color: "rgba(245,240,232,0.25)",
-                      marginTop: 3,
-                    }}
-                  >
-                    Ref:{" "}
-                    <span style={{ fontFamily: "monospace", color: "#C9A96E" }}>
-                      {booking.ref}
-                    </span>
-                  </p>
-                </div>
-              </div>
-              <div style={{ marginBottom: 28, textAlign: "center" }}>
-                <p
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    letterSpacing: "0.16em",
-                    color: "rgba(245,240,232,0.35)",
-                    textTransform: "uppercase",
-                    marginBottom: 14,
-                  }}
-                >
-                  Overall Rating
-                </p>
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
-                  <StarPicker value={rating} onChange={setRating} size={36} />
-                  <p
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: rating > 0 ? "#C9A96E" : "rgba(245,240,232,0.2)",
-                      minHeight: 20,
-                    }}
-                  >
-                    {ratingLabels[rating]}
-                  </p>
-                </div>
-              </div>
-              <div
-                style={{
-                  background: "rgba(245,240,232,0.03)",
-                  border: "1px solid rgba(245,240,232,0.07)",
-                  borderRadius: 14,
-                  padding: "4px 16px 0",
-                  marginBottom: 22,
-                }}
-              >
-                <p
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "0.15em",
-                    color: "rgba(245,240,232,0.28)",
-                    textTransform: "uppercase",
-                    paddingTop: 14,
-                    marginBottom: 2,
-                  }}
-                >
-                  Category Ratings (optional)
-                </p>
-                <SubRating
-                  label="Cleanliness"
-                  value={cleanliness}
-                  onChange={setCleanliness}
-                />
-                <SubRating
-                  label="Service"
-                  value={service}
-                  onChange={setService}
-                />
-                <SubRating
-                  label="Location"
-                  value={locationRating}
-                  onChange={setLocationRating}
-                />
-                <SubRating
-                  label="Value for Money"
-                  value={valueRating}
-                  onChange={setValueRating}
-                />
-              </div>
-              <div style={{ marginBottom: 14 }}>
-                <label
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "0.15em",
-                    color: "rgba(245,240,232,0.35)",
-                    textTransform: "uppercase",
-                    display: "block",
-                    marginBottom: 7,
-                  }}
-                >
-                  Review Title (optional)
-                </label>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Summarise your stay…"
-                  maxLength={100}
-                  style={{
-                    width: "100%",
-                    background: "rgba(245,240,232,0.05)",
-                    border: "1px solid rgba(245,240,232,0.1)",
-                    borderRadius: 12,
-                    padding: "11px 14px",
-                    fontSize: 13,
-                    color: "#f5f0e8",
-                    outline: "none",
-                    boxSizing: "border-box",
-                    fontFamily: "inherit",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#C9A96E")}
-                  onBlur={(e) =>
-                    (e.target.style.borderColor = "rgba(245,240,232,0.1)")
-                  }
-                />
-              </div>
-              <div style={{ marginBottom: 22 }}>
-                <label
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "0.15em",
-                    color: "rgba(245,240,232,0.35)",
-                    textTransform: "uppercase",
-                    display: "block",
-                    marginBottom: 7,
-                  }}
-                >
-                  Your Review <span style={{ color: "#C9A96E" }}>*</span>
-                </label>
-                <textarea
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  rows={5}
-                  maxLength={1500}
-                  placeholder="Tell future guests about the property…"
-                  style={{
-                    width: "100%",
-                    background: "rgba(245,240,232,0.05)",
-                    border: "1px solid rgba(245,240,232,0.1)",
-                    borderRadius: 12,
-                    padding: "11px 14px",
-                    fontSize: 13,
-                    color: "#f5f0e8",
-                    outline: "none",
-                    resize: "none",
-                    boxSizing: "border-box",
-                    fontFamily: "inherit",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#C9A96E")}
-                  onBlur={(e) =>
-                    (e.target.style.borderColor = "rgba(245,240,232,0.1)")
-                  }
-                />
-                <p
-                  style={{
-                    fontSize: 11,
-                    color: "rgba(245,240,232,0.2)",
-                    textAlign: "right",
-                    marginTop: 4,
-                  }}
-                >
-                  {body.length}/1500
-                </p>
-              </div>
-              {reviewError && (
-                <div
-                  style={{
-                    background: "rgba(220,60,60,0.1)",
-                    border: "1px solid rgba(220,60,60,0.28)",
-                    borderRadius: 10,
-                    padding: "11px 14px",
-                    fontSize: 13,
-                    color: "#e07070",
-                    marginBottom: 16,
-                  }}
-                >
-                  {reviewError}
-                </div>
-              )}
-              <button
-                onClick={handleReviewSubmit}
-                disabled={saving}
-                style={{
-                  width: "100%",
-                  background: "#C9A96E",
-                  color: "#0e0d0b",
-                  fontWeight: 700,
-                  fontSize: 14,
-                  padding: "16px 0",
-                  borderRadius: 14,
-                  border: "none",
-                  cursor: saving ? "not-allowed" : "pointer",
-                  opacity: saving ? 0.75 : 1,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 8,
-                }}
-              >
-                {saving ? (
-                  <>
-                    <span
-                      style={{
-                        width: 16,
-                        height: 16,
-                        border: "2px solid rgba(0,0,0,0.2)",
-                        borderTopColor: "#0e0d0b",
-                        borderRadius: "50%",
-                        animation: "spin 0.7s linear infinite",
-                        display: "inline-block",
-                      }}
-                    />
-                    Submitting…
-                  </>
-                ) : (
-                  "Submit Review"
-                )}
-              </button>
-            </div>
-          </>
-        )}
-        {reviewStep === "done" && (
-          <div
-            style={{
-              padding: "48px 32px 40px",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              textAlign: "center",
-            }}
+    <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h3 className="font-bold text-gray-800 text-sm flex items-center gap-2">
+            <BuildingOffice2Icon className="w-4 h-4 text-[#C9A96E]" />
+            Room Types
+            <span className="text-xs font-normal text-gray-400">
+              ({rooms.length} added)
+            </span>
+          </h3>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Add individual room types guests can choose from when booking.
+          </p>
+        </div>
+        {!editing && (
+          <button
+            onClick={openNew}
+            className="flex items-center gap-1.5 text-xs font-semibold text-[#C9A96E] border border-[#C9A96E]/30 hover:bg-[#C9A96E]/5 px-3 py-2 rounded-xl transition-all"
           >
-            <div
-              style={{
-                width: 68,
-                height: 68,
-                borderRadius: "50%",
-                background: "rgba(201,169,110,0.1)",
-                border: "2px solid rgba(201,169,110,0.3)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                marginBottom: 22,
-              }}
-            >
-              <CheckCircleIcon
-                style={{ width: 34, height: 34, color: "#C9A96E" }}
-              />
-            </div>
-            <p
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: "0.22em",
-                color: "#C9A96E",
-                textTransform: "uppercase",
-                marginBottom: 10,
-              }}
-            >
-              Thank You
+            <PlusIcon className="w-3.5 h-3.5" /> Add Room
+          </button>
+        )}
+      </div>
+
+      {/* ── Room form ── */}
+      {editing && (
+        <div
+          className="mb-5 bg-gray-50 border border-gray-200 rounded-2xl p-5 space-y-4"
+          style={{ animation: "fadeUp 0.2s ease both" }}
+        >
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-bold text-gray-700">
+              {editing === "new"
+                ? "New Room Type"
+                : `Edit: ${(editing as RoomType).name}`}
             </p>
-            <h2
-              style={{
-                fontFamily: "Cormorant Garamond, serif",
-                fontSize: 28,
-                fontWeight: 600,
-                color: "#f5f0e8",
-                marginBottom: 12,
-              }}
-            >
-              Review Submitted
-            </h2>
             <button
-              onClick={onClose}
-              style={{
-                background: "#C9A96E",
-                color: "#0e0d0b",
-                fontWeight: 700,
-                fontSize: 13,
-                padding: "13px 36px",
-                borderRadius: 14,
-                border: "none",
-                cursor: "pointer",
-              }}
+              onClick={() => setEditing(null)}
+              className="text-gray-400 hover:text-gray-600"
             >
-              Done
+              <XMarkIcon className="w-4 h-4" />
             </button>
           </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
-type ChatMsg = { role: "user" | "concierge"; text: string; time: string };
-const nowTime = () =>
-  new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-const CONCIERGE_RESPONSES = [
-  "Thank you for reaching out! I'd be delighted to assist you.",
-  "Great question! Our team is available 24/7 to ensure your experience is flawless.",
-  "Absolutely, we can arrange that for you. Anything else?",
-  "Of course! We'd be happy to accommodate that.",
-  "I've passed your request to our host team — you'll see their reply here shortly.",
-  "That's a wonderful choice! I'll make sure everything is prepared before your arrival.",
-];
-
-function ConciergeChat({
-  hotel,
-  guestName,
-  guestId,
-  onClose,
-}: {
-  hotel: Hotel;
-  guestName?: string;
-  guestId?: string;
-  onClose: () => void;
-}) {
-  const [messages, setMessages] = useState<ChatMsg[]>([
-    {
-      role: "concierge",
-      text: `Welcome to ${hotel.name}! I'm your personal concierge${guestName ? `, ${guestName.split(" ")[0]}` : ""}. How can I make your stay exceptional?`,
-      time: nowTime(),
-    },
-  ]);
-  const [input, setInput] = useState("");
-  const [typing, setTyping] = useState(false);
-  const [conversation, setConversation] = useState<Conversation | null>(null);
-  const [convLoading, setConvLoading] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (!guestId || !hotel.hostId || convLoading || conversation) return;
-    setConvLoading(true);
-    MessagesDB.getOrCreateConversation({
-      guestId,
-      hostId: hotel.hostId,
-      listingId: hotel.id,
-      listingName: hotel.name,
-      guestName: guestName ?? "Guest",
-      hostName: hotel.hostName ?? "Host",
-    })
-      .then(setConversation)
-      .catch(console.error)
-      .finally(() => setConvLoading(false));
-  }, [guestId, hotel, guestName]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, typing]);
-
-  const send = async () => {
-    const text = input.trim();
-    if (!text) return;
-    setInput("");
-    setMessages((m) => [...m, { role: "user", text, time: nowTime() }]);
-    if (guestId && conversation)
-      MessagesDB.sendMessage({
-        conversationId: conversation.id,
-        senderId: guestId,
-        senderName: guestName ?? "Guest",
-        senderAvatar: guestName?.[0]?.toUpperCase() ?? "G",
-        senderRole: "guest",
-        body: text,
-      }).catch(console.error);
-    setTyping(true);
-    setTimeout(
-      () => {
-        setMessages((m) => [
-          ...m,
-          {
-            role: "concierge",
-            text: CONCIERGE_RESPONSES[
-              Math.floor(Math.random() * CONCIERGE_RESPONSES.length)
-            ],
-            time: nowTime(),
-          },
-        ]);
-        setTyping(false);
-      },
-      1200 + Math.random() * 800,
-    );
-  };
-
-  const QUICK_REPLIES = [
-    "Early check-in?",
-    "Airport transfer",
-    "Special occasion",
-    "Dietary needs",
-  ];
-
-  return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 60,
-        display: "flex",
-        alignItems: "flex-end",
-        justifyContent: "flex-end",
-        pointerEvents: "none",
-      }}
-    >
-      <div
-        onClick={onClose}
-        style={{
-          position: "absolute",
-          inset: 0,
-          background: "rgba(0,0,0,0.5)",
-          pointerEvents: "auto",
-        }}
-        className="md:hidden"
-      />
-      <div
-        style={{
-          position: "relative",
-          pointerEvents: "auto",
-          display: "flex",
-          flexDirection: "column",
-          background: "#141210",
-          border: "1px solid rgba(245,240,232,0.12)",
-          overflow: "hidden",
-          boxShadow: "0 24px 64px rgba(0,0,0,0.7)",
-        }}
-        className="w-full rounded-t-3xl md:w-[390px] md:rounded-3xl md:mr-6 md:mb-6"
-      >
-        <div
-          style={{
-            background: "rgba(201,169,110,0.08)",
-            borderBottom: "1px solid rgba(245,240,232,0.08)",
-            padding: "18px 20px 14px",
-            flexShrink: 0,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 10,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div
-                style={{
-                  width: 38,
-                  height: 38,
-                  borderRadius: "50%",
-                  background: "rgba(201,169,110,0.15)",
-                  border: "1px solid rgba(201,169,110,0.3)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <UserIcon style={{ width: 18, height: 18, color: "#C9A96E" }} />
-              </div>
-              <div>
-                <p style={{ fontSize: 13, fontWeight: 700, color: "#f5f0e8" }}>
-                  {hotel.hostName ?? "Host"} · Concierge
-                </p>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: "50%",
-                      background: "#4ade80",
-                      display: "inline-block",
-                    }}
-                  />
-                  <span
-                    style={{ fontSize: 11, color: "rgba(245,240,232,0.4)" }}
-                  >
-                    {convLoading
-                      ? "Connecting…"
-                      : "Online · messages go to host inbox"}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: "50%",
-                background: "rgba(245,240,232,0.07)",
-                border: "none",
-                color: "#f5f0e8",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <XMarkIcon style={{ width: 16, height: 16 }} />
-            </button>
-          </div>
-        </div>
-        <div
-          style={{
-            flex: 1,
-            overflowY: "auto",
-            padding: 16,
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-            minHeight: 0,
-            height: "min(420px, 55dvh)",
-          }}
-        >
-          {messages.map((m, i) => (
-            <div
-              key={i}
-              style={{
-                display: "flex",
-                gap: 8,
-                flexDirection: m.role === "user" ? "row-reverse" : "row",
-                alignItems: "flex-end",
-              }}
-            >
-              {m.role === "concierge" && (
-                <div
-                  style={{
-                    width: 26,
-                    height: 26,
-                    borderRadius: "50%",
-                    background: "rgba(201,169,110,0.12)",
-                    border: "1px solid rgba(201,169,110,0.2)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                  }}
-                >
-                  <UserIcon
-                    style={{ width: 13, height: 13, color: "#C9A96E" }}
-                  />
-                </div>
-              )}
-              <div
-                style={{
-                  maxWidth: "75%",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 4,
-                  alignItems: m.role === "user" ? "flex-end" : "flex-start",
-                }}
-              >
-                <div
-                  style={{
-                    padding: "10px 14px",
-                    borderRadius:
-                      m.role === "user"
-                        ? "18px 18px 4px 18px"
-                        : "18px 18px 18px 4px",
-                    fontSize: 13,
-                    lineHeight: 1.5,
-                    background:
-                      m.role === "user" ? "#C9A96E" : "rgba(245,240,232,0.07)",
-                    color: m.role === "user" ? "#0e0d0b" : "#f5f0e8",
-                  }}
-                >
-                  {m.text}
-                </div>
-                <span style={{ fontSize: 10, color: "rgba(245,240,232,0.25)" }}>
-                  {m.time}
-                </span>
-              </div>
-            </div>
-          ))}
-          {typing && (
-            <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-              <div
-                style={{
-                  width: 26,
-                  height: 26,
-                  borderRadius: "50%",
-                  background: "rgba(201,169,110,0.12)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <UserIcon style={{ width: 13, height: 13, color: "#C9A96E" }} />
-              </div>
-              <div
-                style={{
-                  padding: "12px 16px",
-                  borderRadius: "18px 18px 18px 4px",
-                  background: "rgba(245,240,232,0.07)",
-                  display: "flex",
-                  gap: 4,
-                }}
-              >
-                {[0, 1, 2].map((i) => (
-                  <span
-                    key={i}
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: "50%",
-                      background: "rgba(245,240,232,0.4)",
-                      display: "inline-block",
-                      animation: "bounce 1.2s ease infinite",
-                      animationDelay: `${i * 0.2}s`,
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-          <div ref={bottomRef} />
-        </div>
-        <div
-          style={{
-            padding: "8px 16px",
-            display: "flex",
-            gap: 6,
-            overflowX: "auto",
-            flexShrink: 0,
-            borderTop: "1px solid rgba(245,240,232,0.05)",
-          }}
-        >
-          {QUICK_REPLIES.map((q) => (
-            <button
-              key={q}
-              onClick={() => {
-                setInput(q);
-                inputRef.current?.focus();
-              }}
-              style={{
-                fontSize: 11,
-                color: "#C9A96E",
-                border: "1px solid rgba(201,169,110,0.3)",
-                background: "rgba(201,169,110,0.05)",
-                borderRadius: 99,
-                padding: "5px 12px",
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-                flexShrink: 0,
-              }}
-            >
-              {q}
-            </button>
-          ))}
-        </div>
-        <div
-          style={{
-            padding: "12px 16px",
-            borderTop: "1px solid rgba(245,240,232,0.08)",
-            display: "flex",
-            gap: 8,
-            flexShrink: 0,
-            paddingBottom: "max(12px, env(safe-area-inset-bottom))",
-          }}
-        >
-          <input
-            ref={inputRef}
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && send()}
-            placeholder="Ask about your stay…"
-            style={{
-              flex: 1,
-              background: "rgba(245,240,232,0.06)",
-              border: "1px solid rgba(245,240,232,0.1)",
-              borderRadius: 12,
-              padding: "10px 14px",
-              fontSize: 13,
-              color: "#f5f0e8",
-              outline: "none",
-              minWidth: 0,
-            }}
-            onFocus={(e) => (e.target.style.borderColor = "#C9A96E")}
-            onBlur={(e) =>
-              (e.target.style.borderColor = "rgba(245,240,232,0.1)")
-            }
-          />
-          <button
-            onClick={send}
-            disabled={!input.trim()}
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 12,
-              background: input.trim() ? "#C9A96E" : "rgba(201,169,110,0.2)",
-              border: "none",
-              cursor: input.trim() ? "pointer" : "not-allowed",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            <PaperAirplaneIcon
-              style={{
-                width: 16,
-                height: 16,
-                color: input.trim() ? "#0e0d0b" : "rgba(14,13,11,0.4)",
-              }}
-            />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MiniCalendar({
-  value,
-  onChange,
-  min,
-  label,
-  isDisabledDate,
-}: {
-  value: string;
-  onChange: (d: string) => void;
-  min?: string;
-  label: string;
-  isDisabledDate?: (iso: string) => boolean;
-}) {
-  const today = new Date();
-  const initial = value ? new Date(value + "T00:00:00") : today;
-  const [viewYear, setViewYear] = useState(initial.getFullYear());
-  const [viewMonth, setViewMonth] = useState(initial.getMonth());
-  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-  const minDate = min ? new Date(min + "T00:00:00") : today;
-  const MONTHS = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-  ];
-  const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-  const selected = value ? new Date(value + "T00:00:00") : null;
-  const toISO = (y: number, m: number, d: number) =>
-    `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-  const prev = () => {
-    if (viewMonth === 0) {
-      setViewYear((y) => y - 1);
-      setViewMonth(11);
-    } else setViewMonth((m) => m - 1);
-  };
-  const next = () => {
-    if (viewMonth === 11) {
-      setViewYear((y) => y + 1);
-      setViewMonth(0);
-    } else setViewMonth((m) => m + 1);
-  };
-  const navBtn: React.CSSProperties = {
-    width: 28,
-    height: 28,
-    borderRadius: "50%",
-    background: "rgba(245,240,232,0.06)",
-    border: "none",
-    color: "#f5f0e8",
-    fontSize: 16,
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  };
-  return (
-    <div style={{ width: "100%" }}>
-      <p
-        style={{
-          fontSize: 10,
-          fontWeight: 700,
-          letterSpacing: "0.15em",
-          color: "rgba(245,240,232,0.4)",
-          textTransform: "uppercase",
-          marginBottom: 8,
-        }}
-      >
-        {label}
-      </p>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 10,
-        }}
-      >
-        <button onClick={prev} style={navBtn}>
-          ‹
-        </button>
-        <span style={{ fontSize: 13, fontWeight: 600, color: "#f5f0e8" }}>
-          {MONTHS[viewMonth]} {viewYear}
-        </span>
-        <button onClick={next} style={navBtn}>
-          ›
-        </button>
-      </div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(7,1fr)",
-          marginBottom: 4,
-        }}
-      >
-        {DAYS.map((d) => (
-          <div
-            key={d}
-            style={{
-              textAlign: "center",
-              fontSize: 10,
-              color: "rgba(245,240,232,0.3)",
-              fontWeight: 600,
-              padding: "2px 0",
-            }}
-          >
-            {d}
-          </div>
-        ))}
-      </div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(7,1fr)",
-          gap: 2,
-        }}
-      >
-        {Array.from({ length: firstDay }).map((_, i) => (
-          <div key={`e${i}`} />
-        ))}
-        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
-          const iso = toISO(viewYear, viewMonth, day);
-          const isSelected = selected && iso === value;
-          const isDisabled =
-            new Date(iso + "T00:00:00") < minDate || !!isDisabledDate?.(iso);
-          const isToday =
-            iso ===
-            toISO(today.getFullYear(), today.getMonth(), today.getDate());
-          return (
-            <button
-              key={day}
-              disabled={isDisabled}
-              onClick={() => onChange(iso)}
-              style={{
-                padding: "5px 0",
-                borderRadius: 6,
-                fontSize: 12,
-                fontWeight: isSelected ? 700 : 400,
-                border:
-                  isToday && !isSelected
-                    ? "1px solid rgba(201,169,110,0.4)"
-                    : "1px solid transparent",
-                background: isSelected ? "#C9A96E" : "transparent",
-                color: isSelected
-                  ? "#0e0d0b"
-                  : isDisabled
-                    ? "rgba(245,240,232,0.18)"
-                    : "#f5f0e8",
-                cursor: isDisabled ? "not-allowed" : "pointer",
-              }}
-              onMouseEnter={(e) => {
-                if (!isSelected && !isDisabled)
-                  (e.target as HTMLButtonElement).style.background =
-                    "rgba(201,169,110,0.15)";
-              }}
-              onMouseLeave={(e) => {
-                if (!isSelected)
-                  (e.target as HTMLButtonElement).style.background =
-                    "transparent";
-              }}
-            >
-              {day}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function Gallery({
-  hotel,
-  activeImg,
-  setActiveImg,
-  setGalleryOpen,
-  prevImg,
-  nextImg,
-}: {
-  hotel: Hotel;
-  activeImg: number;
-  setActiveImg: (i: number) => void;
-  setGalleryOpen: (b: boolean) => void;
-  prevImg: () => void;
-  nextImg: () => void;
-}) {
-  const circleBtn: React.CSSProperties = {
-    width: 40,
-    height: 40,
-    borderRadius: "50%",
-    border: "none",
-    color: "#fff",
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  };
-  return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 60,
-        background: "rgba(0,0,0,0.97)",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "20px 24px",
-        }}
-      >
-        <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>
-          {activeImg + 1} / {hotel.images.length}
-        </span>
-        <button
-          onClick={() => setGalleryOpen(false)}
-          style={{ ...circleBtn, background: "rgba(255,255,255,0.1)" }}
-        >
-          <XMarkIcon style={{ width: 18, height: 18 }} />
-        </button>
-      </div>
-      <div
-        style={{
-          flex: 1,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          position: "relative",
-          padding: "0 56px",
-          minHeight: 0,
-        }}
-      >
-        <button
-          onClick={prevImg}
-          style={{
-            ...circleBtn,
-            position: "absolute",
-            left: 12,
-            background: "rgba(255,255,255,0.08)",
-          }}
-        >
-          <ChevronLeftIcon style={{ width: 20, height: 20 }} />
-        </button>
-        <img
-          src={getSafeImage(hotel.images[activeImg])}
-          alt=""
-          style={{
-            maxHeight: "70vh",
-            maxWidth: "100%",
-            objectFit: "contain",
-            borderRadius: 12,
-          }}
-        />
-        <button
-          onClick={nextImg}
-          style={{
-            ...circleBtn,
-            position: "absolute",
-            right: 12,
-            background: "rgba(255,255,255,0.08)",
-          }}
-        >
-          <ChevronRightIcon style={{ width: 20, height: 20 }} />
-        </button>
-      </div>
-      <div
-        style={{
-          display: "flex",
-          gap: 12,
-          justifyContent: "center",
-          padding: "0 16px 24px",
-          overflowX: "auto",
-        }}
-      >
-        {hotel.images.map((img, i) => (
-          <button
-            key={i}
-            onClick={() => setActiveImg(i)}
-            style={{
-              width: 64,
-              height: 44,
-              borderRadius: 8,
-              overflow: "hidden",
-              flexShrink: 0,
-              border: `2px solid ${i === activeImg ? "#C9A96E" : "transparent"}`,
-              opacity: i === activeImg ? 1 : 0.4,
-              cursor: "pointer",
-              padding: 0,
-            }}
-          >
-            <img
-              src={getSafeImage(img)}
-              alt=""
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            />
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** Shape the UI expects for a room type card */
-type RoomCard = {
-  id: string;
-  name: string;
-  size: string;
-  guests: number;
-  bed: string;
-  price: number;
-  features: string[];
-  image: string;
-  badge: string | null;
-  // compatibility fields expected elsewhere in the file
-  images: string[];
-  bedType: string;
-  maxGuests: number;
-  pricePerNight: number;
-  description?: string;
-  amenities: string[];
-};
-
-/** Convert a Supabase RoomType to a RoomCard */
-const toRoomCard = (rt: RoomType, hotelImage: string): RoomCard => ({
-  id: rt.id,
-  name: rt.name,
-  size: rt.size || `${rt.maxGuests * 22} m²`,
-  guests: rt.maxGuests,
-  bed: rt.bedType || "1 Bedroom",
-  price: rt.pricePerNight,
-  features: rt.amenities.length ? rt.amenities : [],
-  image: rt.images[0] || hotelImage,
-  badge: null,
-  // keep original shape properties for compatibility with other UI code
-  images: rt.images,
-  bedType: rt.bedType,
-  maxGuests: rt.maxGuests,
-  pricePerNight: rt.pricePerNight,
-  description: rt.description,
-  amenities: rt.amenities,
-});
-
-/** Fallback single room derived from the listing itself */
-const fallbackRoom = (hotel: Hotel): RoomCard => ({
-  id: "default",
-  name: `${hotel.category.charAt(0).toUpperCase() + hotel.category.slice(1)} Suite`,
-  size: `${Math.max(hotel.bedrooms * 28, 60)} m²`,
-  guests: hotel.maxGuests,
-  bed: hotel.bedrooms > 1 ? `${hotel.bedrooms} Bedrooms` : "1 Bedroom",
-  price: hotel.pricePerNight,
-  features: hotel.amenities.slice(0, 5),
-  image: hotel.images[0],
-  badge: hotel.featured ? "Featured" : null,
-  images: hotel.images,
-  bedType: hotel.bedrooms > 1 ? `${hotel.bedrooms} Bedrooms` : "1 Bedroom",
-  maxGuests: hotel.maxGuests,
-  pricePerNight: hotel.pricePerNight,
-  description: hotel.description ?? "",
-  amenities: hotel.amenities,
-});
-
-/** Fetch room types from Supabase; fall back to derived room while loading */
-function useRoomTypes(hotel: Hotel) {
-  const [roomTypes, setRoomTypes] = useState<RoomCard[]>([fallbackRoom(hotel)]);
-  const [loadingRooms, setLoadingRooms] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    RoomTypesDB.byListing(hotel.id).then((rows) => {
-      if (cancelled) return;
-      setRoomTypes(
-        rows.length
-          ? rows.map((rt) => toRoomCard(rt, hotel.images[0]))
-          : [fallbackRoom(hotel)],
-      );
-      setLoadingRooms(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [hotel.id]);
-
-  return { roomTypes, loadingRooms };
-}
-
-type Props = {
-  hotel: Hotel;
-  onBack?: () => void;
-  onBookingComplete?: () => void;
-};
-
-export default function BookingPage({
-  hotel,
-  onBack,
-  onBookingComplete,
-}: Props) {
-  const { user } = useAuth();
-  const { roomTypes, loadingRooms: roomsLoading } = useRoomTypes(hotel);
-
-  const [activeImg, setActiveImg] = useState(0);
-  const [galleryOpen, setGalleryOpen] = useState(false);
-  const [wishlisted, setWishlisted] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
-  const [selectedRoom, setSelectedRoom] = useState<RoomCard | null>(null);
-  const [selectedRoomId, setSelectedRoomId] = useState<string>("");
-  // Sync selectedRoom once rooms load (keep selecting the first room by default)
-  useEffect(() => {
-    if (roomTypes.length && !selectedRoom) {
-      setSelectedRoom(roomTypes[0]);
-      setSelectedRoomId(roomTypes[0].id);
-    }
-  }, [roomTypes, selectedRoom]);
-  const [checkIn, setCheckIn] = useState("");
-  const [checkOut, setCheckOut] = useState("");
-  const [guests, setGuests] = useState(2);
-  const [step, setStep] = useState<"idle" | "form" | "confirm" | "done">(
-    "idle",
-  );
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState("");
-  const [bookingRef, setBookingRef] = useState("");
-  const [showAllAmenities, setShowAllAmenities] = useState(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "rooms" | "reviews">(
-    "overview",
-  );
-  const [scrolled, setScrolled] = useState(false);
-  const [showCheckInCal, setShowCheckInCal] = useState(false);
-  const [showCheckOutCal, setShowCheckOutCal] = useState(false);
-  const [imgErrors, setImgErrors] = useState<Record<number, boolean>>({});
-  const [showReviewModal, setShowReviewModal] = useState(false);
-  const [completedBooking, setCompletedBooking] = useState<Booking | null>(
-    null,
-  );
-  const [listingReviews, setListingReviews] = useState<
-    import("../index").Review[]
-  >([]);
-  const [reviewsLoading, setReviewsLoading] = useState(false);
-  const [bookedRanges, setBookedRanges] = useState<
-    { checkIn: string; checkOut: string }[]
-  >([]);
-
-  const [guestInfo, setGuestInfo] = useState({
-    name: user ? `${user.firstName} ${user.lastName}`.trim() : "",
-    email: user?.email ?? "",
-    phone: user?.phone ?? "",
-    requests: "",
-  });
-
-  const today = new Date().toISOString().split("T")[0];
-
-  useEffect(() => {
-    if (activeTab !== "reviews") return;
-    setReviewsLoading(true);
-    ReviewsDB.byListing(hotel.id)
-      .then(setListingReviews)
-      .catch(console.error)
-      .finally(() => setReviewsLoading(false));
-  }, [activeTab, hotel.id]);
-  useEffect(() => {
-    BookingsDB.getBookedRanges(hotel.id).then(setBookedRanges);
-  }, [hotel.id]);
-
-  const isDateBooked = (iso: string) =>
-    bookedRanges.some((r) => iso >= r.checkIn && iso < r.checkOut);
-  useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 60);
-    window.addEventListener("scroll", handler, { passive: true });
-    return () => window.removeEventListener("scroll", handler);
-  }, []);
-
-  useEffect(() => {
-    document.body.style.overflow =
-      step !== "idle" || chatOpen || showReviewModal ? "hidden" : "";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [step, chatOpen, showReviewModal]);
-
-  const nights = (() => {
-    if (!checkIn || !checkOut) return 0;
-    return Math.max(
-      0,
-      Math.round(
-        (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000,
-      ),
-    );
-  })();
-
-  const room = selectedRoom ?? roomTypes[0];
-  const selectRoom = (room: RoomCard) => {
-    setSelectedRoom(room);
-    setSelectedRoomId(room.id);
-  };
-  const pricePerNight = room?.price ?? hotel.pricePerNight;
-  const subtotal = nights * (room?.price ?? hotel.pricePerNight);
-  const taxes = Math.round(subtotal * 0.12);
-  const total = subtotal + taxes;
-
-  const nextImg = () => setActiveImg((i) => (i + 1) % hotel.images.length);
-  const prevImg = () =>
-    setActiveImg((i) => (i - 1 + hotel.images.length) % hotel.images.length);
-
-  const formatDate = (iso: string) => {
-    if (!iso) return "Select date";
-    return new Date(iso + "T00:00:00").toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
-
-  const generateRef = () =>
-    `ZB-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
-
-  const handlePayWithPaystack = () => {
-    if (!window.PaystackPop) {
-      setSaveError("Paystack script not loaded. Check your index.html.");
-      return;
-    }
-    if (!PAYSTACK_KEY) {
-      setSaveError("Missing VITE_PAYSTACK_PUBLIC_KEY in .env.local");
-      return;
-    }
-
-    setSaveError("");
-
-    const handler = window.PaystackPop.setup({
-      key: PAYSTACK_KEY,
-      email: guestInfo.email,
-      amount: total * 100,
-      currency: "NGN",
-      ref: generateRef(),
-      metadata: {
-        listingId: hotel.id,
-        listingName: hotel.name,
-        guestName: guestInfo.name,
-        guestPhone: guestInfo.phone,
-        checkIn,
-        checkOut,
-        nights,
-        guests,
-        roomType: room.name,
-      },
-      onClose: () => {
-        setSaving(false);
-        setSaveError("Payment was cancelled. Please try again.");
-      },
-      callback: (response: any) => {
-        if (response.status !== "success") {
-          setSaving(false);
-          setSaveError("Payment was not completed. Please try again.");
-          return;
-        }
-
-        setSaving(true);
-
-        supabase.functions
-          .invoke("confirm-booking", {
-            body: {
-              reference: response.reference,
-              guestId: user?.id ?? "guest_anonymous",
-              guestName: guestInfo.name,
-              guestEmail: guestInfo.email,
-              guestPhone: guestInfo.phone,
-              listingId: hotel.id,
-              listingName: hotel.name,
-              roomTypeId: selectedRoom?.id ?? null,
-              roomTypeName: selectedRoom?.name ?? null,
-              hostId: hotel.hostId,
-              checkIn: checkIn || today,
-              checkOut:
-                checkOut ||
-                new Date(Date.now() + 86400000).toISOString().split("T")[0],
-              guests,
-              nights: Math.max(nights, 1),
-              totalAmount: total,
-              specialRequests: guestInfo.requests,
-            },
-          })
-          .then(({ data, error }) => {
-            if (error || !data?.data?.booking) {
-              setSaveError(
-                error?.message ??
-                  "Payment succeeded but the booking could not be confirmed. If you were not refunded, contact support with reference " +
-                    response.reference,
-              );
-              return;
-            }
-            const booking = data.data.booking;
-            setBookingRef(response.reference);
-            setCompletedBooking({
-              id: booking.id,
-              ref: booking.ref,
-              guestId: booking.guest_id,
-              guestName: booking.guest_name,
-              guestEmail: booking.guest_email,
-              guestPhone: booking.guest_phone,
-              listingId: booking.listing_id,
-              listingName: booking.listing_name,
-              hostId: booking.host_id,
-              checkIn: booking.check_in,
-              checkOut: booking.check_out,
-              guests: booking.guests,
-              nights: booking.nights,
-              totalAmount: Number(booking.total_amount),
-              status: booking.status,
-              specialRequests: booking.special_requests,
-              createdAt: booking.created_at,
-            });
-            setStep("done");
-          })
-          .finally(() => {
-            setSaving(false);
-          });
-      },
-    });
-
-    handler.openIframe();
-  };
-
-  const calInRef = useRef<HTMLDivElement>(null);
-  const calOutRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (calInRef.current && !calInRef.current.contains(e.target as Node))
-        setShowCheckInCal(false);
-      if (calOutRef.current && !calOutRef.current.contains(e.target as Node))
-        setShowCheckOutCal(false);
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
-
-  const bookingModalJSX = (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 50,
-        display: "flex",
-        alignItems: "flex-end",
-        justifyContent: "center",
-      }}
-      className="sm:items-center"
-    >
-      <div
-        onClick={() => step !== "done" && setStep("idle")}
-        style={{
-          position: "absolute",
-          inset: 0,
-          background: "rgba(0,0,0,0.75)",
-          backdropFilter: "blur(8px)",
-        }}
-      />
-      <div
-        style={{
-          position: "relative",
-          zIndex: 10,
-          background: "#141210",
-          border: "1px solid rgba(245,240,232,0.1)",
-          width: "100%",
-          maxWidth: 520,
-          borderRadius: "24px 24px 0 0",
-          maxHeight: "92dvh",
-          overflowY: "auto",
-        }}
-        className="sm:rounded-3xl"
-      >
-        {/* FORM */}
-        {step === "form" && (
-          <>
-            <div
-              style={{
-                position: "sticky",
-                top: 0,
-                background: "#141210",
-                borderBottom: "1px solid rgba(245,240,232,0.08)",
-                padding: "20px 24px 16px",
-                display: "flex",
-                alignItems: "flex-start",
-                justifyContent: "space-between",
-                zIndex: 2,
-              }}
-            >
-              <div>
-                <p
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "0.2em",
-                    color: "#C9A96E",
-                    textTransform: "uppercase",
-                    marginBottom: 4,
-                  }}
-                >
-                  Your Reservation
-                </p>
-                <h2
-                  style={{
-                    fontFamily: "Cormorant Garamond, serif",
-                    fontSize: 22,
-                    color: "#f5f0e8",
-                    fontWeight: 600,
-                  }}
-                >
-                  {room.name}
-                </h2>
-                <p
-                  style={{
-                    fontSize: 12,
-                    color: "rgba(245,240,232,0.4)",
-                    marginTop: 2,
-                  }}
-                >
-                  {nights > 0
-                    ? `${nights} night${nights > 1 ? "s" : ""}`
-                    : "Select dates below"}{" "}
-                  · {hotel.location}
-                </p>
-              </div>
-              <button
-                onClick={() => setStep("idle")}
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: "50%",
-                  background: "rgba(245,240,232,0.07)",
-                  border: "none",
-                  color: "#f5f0e8",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                  marginTop: 4,
-                }}
-              >
-                <XMarkIcon style={{ width: 16, height: 16 }} />
-              </button>
-            </div>
-            <div
-              style={{
-                padding: "20px 24px",
-                display: "flex",
-                flexDirection: "column",
-                gap: 16,
-              }}
-            >
-              <div
-                style={{
-                  background: "rgba(245,240,232,0.04)",
-                  borderRadius: 16,
-                  border: "1px solid rgba(245,240,232,0.08)",
-                  padding: 16,
-                  display: "flex",
-                  gap: 14,
-                  alignItems: "center",
-                }}
-              >
-                <img
-                  src={getSafeImage(room.image)}
-                  alt=""
-                  style={{
-                    width: 64,
-                    height: 64,
-                    borderRadius: 10,
-                    objectFit: "cover",
-                    flexShrink: 0,
-                  }}
-                />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p
-                    style={{
-                      fontFamily: "Cormorant Garamond, serif",
-                      fontSize: 15,
-                      color: "#f5f0e8",
-                      fontWeight: 600,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {hotel.name}
-                  </p>
-                  <p
-                    style={{
-                      fontSize: 12,
-                      color: "rgba(245,240,232,0.4)",
-                      marginTop: 2,
-                    }}
-                  >
-                    {room.name}
-                  </p>
-                  <p
-                    style={{
-                      fontSize: 14,
-                      fontWeight: 700,
-                      color: "#C9A96E",
-                      marginTop: 4,
-                    }}
-                  >
-                    ₦{total.toLocaleString()}{" "}
-                    <span
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 400,
-                        color: "rgba(245,240,232,0.35)",
-                      }}
-                    >
-                      total est.
-                    </span>
-                  </p>
-                </div>
-              </div>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 10,
-                }}
-              >
-                {[
-                  {
-                    label: "Check-in",
-                    val: checkIn,
-                    setVal: setCheckIn,
-                    minVal: today,
-                  },
-                  {
-                    label: "Check-out",
-                    val: checkOut,
-                    setVal: setCheckOut,
-                    minVal: checkIn || today,
-                  },
-                ].map(({ label, val, setVal, minVal }) => (
-                  <div key={label}>
-                    <label
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 700,
-                        letterSpacing: "0.15em",
-                        color: "rgba(245,240,232,0.35)",
-                        textTransform: "uppercase",
-                        display: "block",
-                        marginBottom: 6,
-                      }}
-                    >
-                      {label}
-                    </label>
-                    <input
-                      type="date"
-                      min={minVal}
-                      value={val}
-                      onChange={(e) => setVal(e.target.value)}
-                      style={{
-                        width: "100%",
-                        background: "rgba(245,240,232,0.05)",
-                        border: "1px solid rgba(245,240,232,0.1)",
-                        borderRadius: 10,
-                        padding: "10px 12px",
-                        fontSize: 13,
-                        color: "#f5f0e8",
-                        outline: "none",
-                        boxSizing: "border-box",
-                        colorScheme: "dark",
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
-              {[
-                {
-                  label: "Full Name",
-                  key: "name",
-                  type: "text",
-                  placeholder: "Your full name",
-                },
-                {
-                  label: "Email Address",
-                  key: "email",
-                  type: "email",
-                  placeholder: "your@email.com",
-                },
-                {
-                  label: "Phone (optional)",
-                  key: "phone",
-                  type: "tel",
-                  placeholder: "+1 234 567 8900",
-                },
-              ].map(({ label, key, type, placeholder }) => (
-                <div key={key}>
-                  <label
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 700,
-                      letterSpacing: "0.15em",
-                      color: "rgba(245,240,232,0.35)",
-                      textTransform: "uppercase",
-                      display: "block",
-                      marginBottom: 6,
-                    }}
-                  >
-                    {label}
-                  </label>
-                  <input
-                    type={type}
-                    value={guestInfo[key as keyof typeof guestInfo]}
-                    onChange={(e) =>
-                      setGuestInfo((g) => ({ ...g, [key]: e.target.value }))
-                    }
-                    placeholder={placeholder}
-                    style={{
-                      width: "100%",
-                      background: "rgba(245,240,232,0.05)",
-                      border: "1px solid rgba(245,240,232,0.1)",
-                      borderRadius: 10,
-                      padding: "10px 14px",
-                      fontSize: 13,
-                      color: "#f5f0e8",
-                      outline: "none",
-                      boxSizing: "border-box",
-                    }}
-                    onFocus={(e) => (e.target.style.borderColor = "#C9A96E")}
-                    onBlur={(e) =>
-                      (e.target.style.borderColor = "rgba(245,240,232,0.1)")
-                    }
-                  />
-                </div>
-              ))}
-              <div>
-                <label
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "0.15em",
-                    color: "rgba(245,240,232,0.35)",
-                    textTransform: "uppercase",
-                    display: "block",
-                    marginBottom: 6,
-                  }}
-                >
-                  Special Requests
-                </label>
-                <textarea
-                  value={guestInfo.requests}
-                  onChange={(e) =>
-                    setGuestInfo((g) => ({ ...g, requests: e.target.value }))
-                  }
-                  rows={3}
-                  placeholder="Early check-in, dietary requirements…"
-                  style={{
-                    width: "100%",
-                    background: "rgba(245,240,232,0.05)",
-                    border: "1px solid rgba(245,240,232,0.1)",
-                    borderRadius: 10,
-                    padding: "10px 14px",
-                    fontSize: 13,
-                    color: "#f5f0e8",
-                    outline: "none",
-                    resize: "none",
-                    boxSizing: "border-box",
-                    fontFamily: "inherit",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#C9A96E")}
-                  onBlur={(e) =>
-                    (e.target.style.borderColor = "rgba(245,240,232,0.1)")
-                  }
-                />
-              </div>
-              <div
-                style={{
-                  borderTop: "1px solid rgba(245,240,232,0.08)",
-                  paddingTop: 14,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 8,
-                }}
-              >
-                {[
-                  [
-                    `₦${room.price.toLocaleString()} × ${Math.max(nights, 1)} nights`,
-                    `₦${subtotal.toLocaleString()}`,
-                  ],
-                  ["Taxes & resort fees (12%)", `₦${taxes.toLocaleString()}`],
-                ].map(([k, v]) => (
-                  <div
-                    key={k}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      fontSize: 13,
-                      color: "rgba(245,240,232,0.45)",
-                    }}
-                  >
-                    <span>{k}</span>
-                    <span>{v}</span>
-                  </div>
-                ))}
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    fontSize: 16,
-                    fontWeight: 700,
-                    color: "#f5f0e8",
-                    paddingTop: 10,
-                    borderTop: "1px solid rgba(245,240,232,0.08)",
-                  }}
-                >
-                  <span>Total</span>
-                  <span style={{ color: "#C9A96E" }}>
-                    ₦{total.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-              {saveError && (
-                <div
-                  style={{
-                    background: "rgba(220,60,60,0.12)",
-                    border: "1px solid rgba(220,60,60,0.3)",
-                    borderRadius: 10,
-                    padding: "12px 16px",
-                    fontSize: 13,
-                    color: "#e07070",
-                  }}
-                >
-                  {saveError}
-                </div>
-              )}
-              <button
-                onClick={async () => {
-                  if (!user) {
-                    sessionStorage.setItem(
-                      "zb_redirect_after_login",
-                      `/listing/${hotel.id}`,
-                    );
-                    window.location.href = "/login";
-                    return;
-                  }
-                  if (checkIn && checkOut) {
-                    const available = await BookingsDB.checkAvailability(
-                      hotel.id,
-                      checkIn,
-                      checkOut,
-                    );
-                    if (!available) {
-                      setSaveError(
-                        "Sorry, these dates were just booked. Please choose different dates.",
-                      );
-                      return;
-                    }
-                  }
-                  setStep("confirm");
-                }}
-                disabled={
-                  !guestInfo.name ||
-                  !guestInfo.email ||
-                  !checkIn ||
-                  !checkOut ||
-                  nights < 1 ||
-                  !selectedRoom
-                }
-                style={{
-                  width: "100%",
-                  background:
-                    guestInfo.name && guestInfo.email && checkIn && checkOut && selectedRoom
-                      ? "#C9A96E"
-                      : "rgba(201,169,110,0.3)",
-                  color:
-                   guestInfo.name && guestInfo.email && checkIn && checkOut && selectedRoom
-                      ? "#0e0d0b"
-                      : "rgba(14,13,11,0.5)",
-                  fontWeight: 700,
-                  fontSize: 14,
-                  padding: "16px 0",
-                  borderRadius: 14,
-                  border: "none",
-                  cursor:
-                    guestInfo.name && guestInfo.email && checkIn && checkOut && selectedRoom
-                      ? "pointer"
-                      : "not-allowed",
-                  letterSpacing: "0.04em",
-                }}
-              >
-                Continue to Payment →
-              </button>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  justifyContent: "center",
-                  fontSize: 12,
-                  color: "rgba(245,240,232,0.3)",
-                }}
-              >
-                <ShieldCheckIcon
-                  style={{ width: 14, height: 14, color: "#C9A96E" }}
-                />
-                Free cancellation · No charge until confirmed
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* CONFIRM — PAYSTACK */}
-        {step === "confirm" && (
-          <>
-            <div
-              style={{
-                position: "sticky",
-                top: 0,
-                background: "#141210",
-                borderBottom: "1px solid rgba(245,240,232,0.08)",
-                padding: "20px 24px 16px",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <div>
-                <p
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "0.2em",
-                    color: "#C9A96E",
-                    textTransform: "uppercase",
-                    marginBottom: 4,
-                  }}
-                >
-                  Final Step
-                </p>
-                <h2
-                  style={{
-                    fontFamily: "Cormorant Garamond, serif",
-                    fontSize: 22,
-                    color: "#f5f0e8",
-                    fontWeight: 600,
-                  }}
-                >
-                  Confirm & Pay
-                </h2>
-              </div>
-              <button
-                onClick={() => setStep("form")}
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "#C9A96E",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                }}
-              >
-                ← Edit details
-              </button>
-            </div>
-            <div
-              style={{
-                padding: "20px 24px",
-                display: "flex",
-                flexDirection: "column",
-                gap: 16,
-              }}
-            >
-              <div
-                style={{
-                  background: "rgba(245,240,232,0.04)",
-                  border: "1px solid rgba(245,240,232,0.08)",
-                  borderRadius: 16,
-                  padding: 20,
-                }}
-              >
-                <p
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    letterSpacing: "0.12em",
-                    color: "rgba(245,240,232,0.35)",
-                    textTransform: "uppercase",
-                    marginBottom: 14,
-                  }}
-                >
-                  Reservation Summary
-                </p>
-                {[
-                  ["Property", hotel.name],
-                  ["Room", room.name],
-                  ["Guest", guestInfo.name],
-                  ["Email", guestInfo.email],
-                  ["Check-in", checkIn ? formatDate(checkIn) : "—"],
-                  ["Check-out", checkOut ? formatDate(checkOut) : "—"],
-                  ["Nights", nights || "—"],
-                  ["Guests", guests],
-                ].map(([k, v]) => (
-                  <div
-                    key={String(k)}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      fontSize: 13,
-                      marginBottom: 10,
-                    }}
-                  >
-                    <span style={{ color: "rgba(245,240,232,0.4)" }}>{k}</span>
-                    <span
-                      style={{
-                        color: "#f5f0e8",
-                        fontWeight: 500,
-                        textAlign: "right",
-                        maxWidth: "55%",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {v}
-                    </span>
-                  </div>
-                ))}
-                <div
-                  style={{
-                    borderTop: "1px solid rgba(245,240,232,0.08)",
-                    paddingTop: 14,
-                    display: "flex",
-                    justifyContent: "space-between",
-                    fontSize: 16,
-                    fontWeight: 700,
-                  }}
-                >
-                  <span style={{ color: "#f5f0e8" }}>Total Charge</span>
-                  <span style={{ color: "#C9A96E" }}>
-                    ₦{total.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  background: "rgba(0,100,50,0.08)",
-                  border: "1px solid rgba(0,180,80,0.2)",
-                  borderRadius: 16,
-                  padding: "18px 20px",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 12,
-                    marginBottom: 10,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 10,
-                      background: "rgba(0,180,80,0.12)",
-                      border: "1px solid rgba(0,180,80,0.25)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <span style={{ fontSize: 20 }}>🔐</span>
-                  </div>
-                  <div>
-                    <p
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: "#f5f0e8",
-                      }}
-                    >
-                      Pay with Paystack
-                    </p>
-                    <p
-                      style={{
-                        fontSize: 11,
-                        color: "rgba(245,240,232,0.4)",
-                        marginTop: 2,
-                      }}
-                    >
-                      Cards, bank transfer, USSD, mobile money & more
-                    </p>
-                  </div>
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {[
-                    "Visa",
-                    "Mastercard",
-                    "Verve",
-                    "Bank Transfer",
-                    "USSD",
-                    "Mobile Money",
-                  ].map((m) => (
-                    <span
-                      key={m}
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 600,
-                        color: "rgba(245,240,232,0.5)",
-                        background: "rgba(245,240,232,0.05)",
-                        border: "1px solid rgba(245,240,232,0.08)",
-                        borderRadius: 6,
-                        padding: "3px 8px",
-                      }}
-                    >
-                      {m}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {saveError && (
-                <div
-                  style={{
-                    background: "rgba(220,60,60,0.12)",
-                    border: "1px solid rgba(220,60,60,0.3)",
-                    borderRadius: 10,
-                    padding: "12px 16px",
-                    fontSize: 13,
-                    color: "#e07070",
-                  }}
-                >
-                  {saveError}
-                </div>
-              )}
-
-              {/* ✅ PAY BUTTON — direct onClick, no wrapper, no disabled during payment */}
-              <button
-                onClick={handlePayWithPaystack}
-                style={{
-                  width: "100%",
-                  background: "#00b451",
-                  color: "#fff",
-                  fontWeight: 700,
-                  fontSize: 14,
-                  padding: "16px 0",
-                  borderRadius: 14,
-                  border: "none",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 8,
-                  letterSpacing: "0.04em",
-                }}
-              >
-                {saving ? (
-                  <>
-                    <span
-                      style={{
-                        width: 16,
-                        height: 16,
-                        border: "2px solid rgba(255,255,255,0.3)",
-                        borderTopColor: "#fff",
-                        borderRadius: "50%",
-                        animation: "spin 0.7s linear infinite",
-                        display: "inline-block",
-                      }}
-                    />
-                    Processing…
-                  </>
-                ) : (
-                  <>🔐 Pay ₦{total.toLocaleString()} securely</>
-                )}
-              </button>
-
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  justifyContent: "center",
-                  fontSize: 11,
-                  color: "rgba(245,240,232,0.28)",
-                }}
-              >
-                <ShieldCheckIcon
-                  style={{ width: 13, height: 13, color: "#00b451" }}
-                />
-                Secured by Paystack · PCI DSS compliant
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* DONE */}
-        {step === "done" && (
-          <div
-            style={{
-              padding: 40,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              textAlign: "center",
-            }}
-          >
-            <div
-              style={{
-                width: 64,
-                height: 64,
-                borderRadius: "50%",
-                background: "rgba(201,169,110,0.12)",
-                border: "2px solid rgba(201,169,110,0.3)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                marginBottom: 20,
-              }}
-            >
-              <CheckCircleIcon
-                style={{ width: 32, height: 32, color: "#C9A96E" }}
+          {/* Name + price */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={lbl}>Room Name *</label>
+              <input
+                className={inp}
+                value={form.name}
+                onChange={(e) => setF("name")(e.target.value)}
+                placeholder="e.g. Ocean Suite"
               />
             </div>
-            <p
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: "0.2em",
-                color: "#C9A96E",
-                textTransform: "uppercase",
-                marginBottom: 10,
-              }}
-            >
-              Booking Confirmed
-            </p>
-            <h2
-              style={{
-                fontFamily: "Cormorant Garamond, serif",
-                fontSize: 28,
-                color: "#f5f0e8",
-                fontWeight: 600,
-                marginBottom: 10,
-              }}
-            >
-              Payment Successful!
-            </h2>
-            <p
-              style={{
-                fontSize: 13,
-                color: "rgba(245,240,232,0.45)",
-                lineHeight: 1.7,
-                maxWidth: 320,
-                marginBottom: 24,
-              }}
-            >
-              Your reservation at{" "}
-              <strong style={{ color: "#f5f0e8" }}>{hotel.name}</strong> is
-              confirmed and paid. A confirmation has been sent to{" "}
-              <strong style={{ color: "#f5f0e8" }}>{guestInfo.email}</strong>.
-            </p>
-            <div
-              style={{
-                background: "rgba(201,169,110,0.06)",
-                border: "1px solid rgba(201,169,110,0.2)",
-                borderRadius: 16,
-                padding: "16px 32px",
-                width: "100%",
-                marginBottom: 16,
-              }}
-            >
-              <p
-                style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  letterSpacing: "0.2em",
-                  color: "rgba(245,240,232,0.4)",
-                  textTransform: "uppercase",
-                  marginBottom: 8,
-                }}
-              >
-                Payment Reference
-              </p>
-              <p
-                style={{
-                  fontSize: 22,
-                  fontWeight: 700,
-                  letterSpacing: "0.15em",
-                  color: "#C9A96E",
-                  fontFamily: "monospace",
-                }}
-              >
-                {bookingRef}
-              </p>
-            </div>
-            <div
-              style={{
-                background: "rgba(0,180,80,0.06)",
-                border: "1px solid rgba(0,180,80,0.2)",
-                borderRadius: 12,
-                padding: "10px 20px",
-                marginBottom: 24,
-                width: "100%",
-              }}
-            >
-              <p style={{ fontSize: 12, color: "rgba(245,240,232,0.5)" }}>
-                Status:{" "}
-                <strong style={{ color: "#4ade80" }}>✓ Confirmed & Paid</strong>
-              </p>
-            </div>
-            {completedBooking && user && (
-              <button
-                onClick={() => {
-                  setStep("idle");
-                  setShowReviewModal(true);
-                }}
-                style={{
-                  marginBottom: 12,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  background: "rgba(201,169,110,0.08)",
-                  border: "1px solid rgba(201,169,110,0.25)",
-                  borderRadius: 14,
-                  padding: "13px 24px",
-                  cursor: "pointer",
-                  width: "100%",
-                  justifyContent: "center",
-                }}
-              >
-                <StarIcon style={{ width: 16, height: 16, color: "#C9A96E" }} />
-                <span
-                  style={{ fontSize: 13, fontWeight: 700, color: "#C9A96E" }}
-                >
-                  Leave a Review
-                </span>
-              </button>
-            )}
-            <button
-              onClick={() => {
-                setStep("idle");
-                setGuestInfo({
-                  name: user ? `${user.firstName} ${user.lastName}`.trim() : "",
-                  email: user?.email ?? "",
-                  phone: user?.phone ?? "",
-                  requests: "",
-                });
-                if (onBookingComplete) onBookingComplete();
-                else if (onBack) onBack();
-              }}
-              style={{
-                marginTop: 4,
-                fontSize: 13,
-                fontWeight: 700,
-                color: "#C9A96E",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                textDecoration: "underline",
-                textUnderlineOffset: 4,
-              }}
-            >
-              Back to Explore →
-            </button>
-          </div>
-        )}
-      </div>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </div>
-  );
-
-  return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#0e0d0b",
-        color: "#f5f0e8",
-        fontFamily: "sans-serif",
-      }}
-    >
-      <SEO
-        url={`https://lux-d1ok.vercel.app/listing/${hotel.id}`}
-        listing={{
-          name: hotel.name,
-          location: hotel.location,
-          city: hotel.city,
-          country: hotel.country,
-          category: hotel.category,
-          pricePerNight: hotel.pricePerNight,
-          rating: hotel.rating,
-          images: hotel.images,
-        }}
-      />
-
-      <style>{`
-        @keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
-        @keyframes spin { to { transform:rotate(360deg); } }
-        @keyframes bounce { 0%,80%,100% { transform:translateY(0); } 40% { transform:translateY(-6px); } }
-        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
-        .tab-btn { background:none; border:none; cursor:pointer; padding:12px 16px; font-size:13px; font-weight:600; color:rgba(245,240,232,0.4); border-bottom:2px solid transparent; transition:all 0.2s; margin-bottom:-1px; white-space:nowrap; }
-        .tab-btn.active { color:#C9A96E; border-bottom-color:#C9A96E; }
-        .tab-btn:hover:not(.active) { color:rgba(245,240,232,0.7); }
-        .room-card { cursor:pointer; transition:all 0.2s; }
-        .room-card:hover { border-color:rgba(201,169,110,0.3) !important; }
-        input[type="date"]::-webkit-calendar-picker-indicator { filter:invert(1); opacity:0.4; cursor:pointer; }
-        textarea::placeholder, input::placeholder { color:rgba(245,240,232,0.2); }
-        @media (max-width: 767px) {
-          .hero-grid { display:none !important; } .hero-mobile { display:block !important; }
-          .main-grid { grid-template-columns:1fr !important; } .booking-widget-col { display:none !important; }
-          .quick-stats-grid { grid-template-columns:1fr 1fr !important; } .amenities-grid { grid-template-columns:1fr 1fr !important; }
-          .policies-grid { grid-template-columns:1fr !important; } .reviews-grid { grid-template-columns:1fr !important; }
-          .reviews-summary { flex-direction:column !important; gap:16px !important; } .room-card-inner { flex-direction:column !important; }
-          .room-card-img { width:100% !important; height:180px !important; } .title-h1 { font-size:28px !important; }
-          .tabs-row { overflow-x:auto; -webkit-overflow-scrolling:touch; } .page-padding { padding-left:16px !important; padding-right:16px !important; }
-          .hero-grid-wrap { padding:12px 16px 16px !important; } .content-wrap { padding:0 16px 140px !important; }
-        }
-        @media (min-width: 768px) { .hero-mobile { display:none !important; } .hero-grid { display:grid !important; } }
-      `}</style>
-      {galleryOpen && (
-        <Gallery
-          hotel={hotel}
-          activeImg={activeImg}
-          setActiveImg={setActiveImg}
-          setGalleryOpen={setGalleryOpen}
-          prevImg={prevImg}
-          nextImg={nextImg}
-        />
-      )}
-      {step !== "idle" && bookingModalJSX}
-      {chatOpen && (
-        <ConciergeChat
-          hotel={hotel}
-          guestName={guestInfo.name || user?.firstName}
-          guestId={user?.id}
-          onClose={() => setChatOpen(false)}
-        />
-      )}
-      {showReviewModal && completedBooking && user && (
-        <GuestReviewModal
-          booking={completedBooking}
-          hotel={hotel}
-          onClose={() => setShowReviewModal(false)}
-        />
-      )}
-
-      {/* STICKY NAV */}
-      <header
-        style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 40,
-          background: scrolled ? "rgba(14,13,11,0.97)" : "transparent",
-          borderBottom: scrolled
-            ? "1px solid rgba(245,240,232,0.07)"
-            : "1px solid transparent",
-          backdropFilter: scrolled ? "blur(12px)" : "none",
-          transition: "all 0.3s",
-        }}
-      >
-        <div
-          style={{
-            maxWidth: 1200,
-            margin: "0 auto",
-            padding: "0 24px",
-            height: 64,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              minWidth: 0,
-            }}
-          >
-            <button
-              onClick={onBack}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: "50%",
-                background: "rgba(245,240,232,0.08)",
-                border: "1px solid rgba(245,240,232,0.1)",
-                color: "#f5f0e8",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-            >
-              <ChevronLeftIcon style={{ width: 16, height: 16 }} />
-            </button>
-            <div
-              style={{
-                opacity: scrolled ? 1 : 0,
-                transition: "opacity 0.3s",
-                pointerEvents: scrolled ? "auto" : "none",
-                minWidth: 0,
-              }}
-            >
-              <p
-                style={{
-                  fontFamily: "Cormorant Garamond, serif",
-                  fontSize: 15,
-                  fontWeight: 600,
-                  color: "#f5f0e8",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {hotel.name}
-              </p>
-              <p style={{ fontSize: 11, color: "rgba(245,240,232,0.4)" }}>
-                ₦{room.price.toLocaleString()} / night
-              </p>
-            </div>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              flexShrink: 0,
-            }}
-          >
-            <button
-              onClick={() => setWishlisted((w) => !w)}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: "50%",
-                background: "rgba(245,240,232,0.06)",
-                border: "1px solid rgba(245,240,232,0.1)",
-                color: wishlisted ? "#e05c6e" : "#f5f0e8",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              {wishlisted ? (
-                <HeartSolid style={{ width: 16, height: 16 }} />
-              ) : (
-                <HeartIcon style={{ width: 16, height: 16 }} />
-              )}
-            </button>
-            <button
-              onClick={() => {
-                const shareUrl = `https://lux-d1ok.vercel.app/api/og-listings?id=${hotel.id}`;
-                const message = `Check out ${hotel.name} in ${hotel.city} on LuxStay!\n₦${hotel.pricePerNight.toLocaleString()}/night 🏡\n${shareUrl}`;
-                if (navigator.share) {
-                  navigator
-                    .share({ title: hotel.name, text: message, url: shareUrl })
-                    .catch(() => {});
-                } else {
-                  window.open(
-                    `https://wa.me/?text=${encodeURIComponent(message)}`,
-                    "_blank",
-                  );
-                }
-              }}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: "50%",
-                background: "rgba(245,240,232,0.06)",
-                border: "1px solid rgba(245,240,232,0.1)",
-                color: "#f5f0e8",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <ShareIcon style={{ width: 16, height: 16 }} />
-            </button>
-            <button
-              onClick={() => {
-                if (!user) {
-                  sessionStorage.setItem(
-                    "zb_redirect_after_login",
-                    `/listing/${hotel.id}`,
-                  );
-                  window.location.href = "/login";
-                  return;
-                }
-                setStep("form");
-              }}
-              style={{
-                display: "none",
-                background: "#C9A96E",
-                color: "#0e0d0b",
-                fontWeight: 700,
-                fontSize: 13,
-                padding: "10px 22px",
-                borderRadius: 99,
-                border: "none",
-                cursor: "pointer",
-              }}
-              className="md:flex"
-            >
-              Reserve Now
-            </button>
-          </div>
-        </div>
-      </header>
-      {/* HERO mobile */}
-      <div
-        className="hero-mobile"
-        style={{ display: "none", position: "relative" }}
-      >
-        <div style={{ position: "relative", height: 280, overflow: "hidden" }}>
-          <img
-            src={
-              imgErrors[activeImg]
-                ? DEFAULT_IMAGE
-                : getSafeImage(hotel.images[activeImg])
-            }
-            alt={hotel.name}
-            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            onError={() => setImgErrors((e) => ({ ...e, [activeImg]: true }))}
-          />
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              background:
-                "linear-gradient(to top, rgba(14,13,11,0.6) 0%, transparent 50%)",
-            }}
-          />
-          <button
-            onClick={prevImg}
-            style={{
-              position: "absolute",
-              left: 12,
-              top: "50%",
-              transform: "translateY(-50%)",
-              width: 36,
-              height: 36,
-              borderRadius: "50%",
-              background: "rgba(14,13,11,0.6)",
-              border: "none",
-              color: "#f5f0e8",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <ChevronLeftIcon style={{ width: 16, height: 16 }} />
-          </button>
-          <button
-            onClick={nextImg}
-            style={{
-              position: "absolute",
-              right: 12,
-              top: "50%",
-              transform: "translateY(-50%)",
-              width: 36,
-              height: 36,
-              borderRadius: "50%",
-              background: "rgba(14,13,11,0.6)",
-              border: "none",
-              color: "#f5f0e8",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <ChevronRightIcon style={{ width: 16, height: 16 }} />
-          </button>
-          <div
-            style={{
-              position: "absolute",
-              bottom: 14,
-              left: "50%",
-              transform: "translateX(-50%)",
-              display: "flex",
-              gap: 6,
-            }}
-          >
-            {hotel.images.slice(0, 6).map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setActiveImg(i)}
-                style={{
-                  width: i === activeImg ? 18 : 6,
-                  height: 6,
-                  borderRadius: 99,
-                  background:
-                    i === activeImg ? "#C9A96E" : "rgba(255,255,255,0.4)",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: 0,
-                  transition: "all 0.2s",
-                }}
+            <div>
+              <label className={lbl}>Price Per Night (₦) *</label>
+              <input
+                className={inp}
+                type="number"
+                min="1"
+                value={form.pricePerNight}
+                onChange={(e) => setF("pricePerNight")(e.target.value)}
+                placeholder="50000"
               />
-            ))}
+            </div>
           </div>
-        </div>
-      </div>
-      {/* HERO desktop */}
-      <div
-        className="hero-grid-wrap page-padding"
-        style={{ maxWidth: 1200, margin: "0 auto", padding: "16px 24px 24px" }}
-      >
-        <div
-          className="hero-grid"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gridTemplateRows: "1fr 1fr",
-            gap: 4,
-            borderRadius: 20,
-            overflow: "hidden",
-            height: 460,
-          }}
-        >
-          <button
-            onClick={() => setGalleryOpen(true)}
-            style={{
-              gridRow: "1 / 3",
-              position: "relative",
-              overflow: "hidden",
-              cursor: "pointer",
-              border: "none",
-              padding: 0,
-            }}
-          >
-            <img
-              src={imgErrors[0] ? DEFAULT_IMAGE : getSafeImage(hotel.images[0])}
-              alt={hotel.name}
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                transition: "transform 0.6s",
-              }}
-              onError={() => setImgErrors((e) => ({ ...e, 0: true }))}
-              onMouseOver={(e) =>
-                ((e.target as HTMLImageElement).style.transform = "scale(1.04)")
-              }
-              onMouseOut={(e) =>
-                ((e.target as HTMLImageElement).style.transform = "scale(1)")
-              }
+
+          {/* Description */}
+          <div>
+            <label className={lbl}>Short Description</label>
+            <textarea
+              className={inp + " resize-none"}
+              rows={2}
+              value={form.description}
+              onChange={(e) => setF("description")(e.target.value)}
+              placeholder="What makes this room special..."
             />
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                background:
-                  "linear-gradient(to top, rgba(14,13,11,0.5) 0%, transparent 40%)",
-              }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                top: 16,
-                left: 16,
-                display: "flex",
-                gap: 8,
-              }}
-            >
-              <span
-                style={{
-                  background: "rgba(14,13,11,0.75)",
-                  backdropFilter: "blur(10px)",
-                  border: "1px solid rgba(245,240,232,0.1)",
-                  borderRadius: 99,
-                  padding: "6px 14px",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: "#C9A96E",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.12em",
-                }}
-              >
-                {hotel.category}
-              </span>
-              {hotel.featured && (
-                <span
-                  style={{
-                    background: "#C9A96E",
-                    borderRadius: 99,
-                    padding: "6px 14px",
-                    fontSize: 10,
-                    fontWeight: 900,
-                    color: "#0e0d0b",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Featured
-                </span>
-              )}
-            </div>
-            <div
-              style={{
-                position: "absolute",
-                bottom: 16,
-                left: 16,
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                background: "rgba(14,13,11,0.75)",
-                backdropFilter: "blur(10px)",
-                borderRadius: 99,
-                padding: "6px 12px",
-              }}
-            >
-              <StarIcon style={{ width: 13, height: 13, color: "#C9A96E" }} />
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#f5f0e8" }}>
-                {hotel.rating}
-              </span>
-              <span style={{ fontSize: 11, color: "rgba(245,240,232,0.4)" }}>
-                ({hotel.reviewCount.toLocaleString()})
-              </span>
-            </div>
-          </button>
-          {hotel.images.slice(1, 5).map((img, i) => (
-            <button
-              key={i}
-              onClick={() => {
-                setActiveImg(i + 1);
-                setGalleryOpen(true);
-              }}
-              style={{
-                position: "relative",
-                overflow: "hidden",
-                cursor: "pointer",
-                border: "none",
-                padding: 0,
-              }}
-            >
-              <img
-                src={imgErrors[i + 1] ? DEFAULT_IMAGE : getSafeImage(img)}
-                alt=""
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                  transition: "transform 0.5s",
-                }}
-                onError={() => setImgErrors((e) => ({ ...e, [i + 1]: true }))}
-                onMouseOver={(e) =>
-                  ((e.target as HTMLImageElement).style.transform =
-                    "scale(1.06)")
-                }
-                onMouseOut={(e) =>
-                  ((e.target as HTMLImageElement).style.transform = "scale(1)")
-                }
+          </div>
+
+          {/* Size, Bed, Guests */}
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className={lbl}>Size</label>
+              <input
+                className={inp}
+                value={form.size}
+                onChange={(e) => setF("size")(e.target.value)}
+                placeholder="e.g. 45 m²"
               />
-              {i === 3 && hotel.images.length > 5 && (
-                <div
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    background: "rgba(14,13,11,0.6)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <span
-                    style={{ color: "#f5f0e8", fontWeight: 700, fontSize: 14 }}
-                  >
-                    +{hotel.images.length - 5} more
-                  </span>
-                </div>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-      {/* MAIN CONTENT */}
-      <div
-        className="content-wrap page-padding"
-        style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px 120px" }}
-      >
-        <div
-          className="main-grid"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 380px",
-            gap: 40,
-            alignItems: "start",
-          }}
-        >
-          {/* LEFT */}
-          <div style={{ animation: "fadeUp 0.5s ease both", minWidth: 0 }}>
-            <div style={{ marginBottom: 24 }}>
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 8,
-                  marginBottom: 12,
-                }}
+            </div>
+            <div>
+              <label className={lbl}>Bed Type</label>
+              <select
+                className={inp}
+                value={form.bedType}
+                onChange={(e) => setF("bedType")(e.target.value)}
               >
-                {hotel.tags.slice(0, 3).map((t) => (
-                  <span
-                    key={t}
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: "#C9A96E",
-                      background: "rgba(201,169,110,0.1)",
-                      border: "1px solid rgba(201,169,110,0.2)",
-                      borderRadius: 99,
-                      padding: "4px 12px",
-                    }}
-                  >
-                    {t}
-                  </span>
+                {BED_TYPES.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
                 ))}
-              </div>
-              <h1
-                className="title-h1"
-                style={{
-                  fontFamily: "Cormorant Garamond, serif",
-                  fontSize: 38,
-                  fontWeight: 600,
-                  color: "#f5f0e8",
-                  lineHeight: 1.1,
-                  marginBottom: 12,
-                }}
-              >
-                {hotel.name}
-              </h1>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 16,
-                  flexWrap: "wrap",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <StarIcon
-                      key={i}
-                      style={{
-                        width: 14,
-                        height: 14,
-                        color:
-                          i < Math.floor(hotel.rating)
-                            ? "#C9A96E"
-                            : "rgba(245,240,232,0.15)",
-                      }}
-                    />
-                  ))}
-                  <span
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: "#f5f0e8",
-                      marginLeft: 6,
-                    }}
-                  >
-                    {hotel.rating}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 12,
-                      color: "rgba(245,240,232,0.4)",
-                      marginLeft: 2,
-                    }}
-                  >
-                    ({hotel.reviewCount.toLocaleString()} reviews)
-                  </span>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 13,
-                    color: "rgba(245,240,232,0.5)",
-                  }}
-                >
-                  <MapPinIcon
-                    style={{ width: 14, height: 14, color: "#C9A96E" }}
-                  />
-                  {hotel.location}
-                </div>
-              </div>
+              </select>
             </div>
-
-            <div
-              className="quick-stats-grid"
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(4,1fr)",
-                gap: 10,
-                marginBottom: 28,
-              }}
-            >
-              {[
-                { icon: "🛏", label: "Bedrooms", val: hotel.bedrooms },
-                { icon: "🚿", label: "Bathrooms", val: hotel.bathrooms },
-                { icon: "👥", label: "Max Guests", val: hotel.maxGuests },
-                {
-                  icon: "✦",
-                  label: "Per Night",
-                  val: `₦${pricePerNight.toLocaleString()}`,
-                },
-              ].map((s) => (
-                <div
-                  key={s.label}
-                  style={{
-                    background: "rgba(245,240,232,0.04)",
-                    border: "1px solid rgba(245,240,232,0.07)",
-                    borderRadius: 14,
-                    padding: "14px 12px",
-                    textAlign: "center",
-                  }}
-                >
-                  <div style={{ fontSize: 20, marginBottom: 6 }}>{s.icon}</div>
-                  <div
-                    style={{ fontSize: 15, fontWeight: 700, color: "#f5f0e8" }}
-                  >
-                    {s.val}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 11,
-                      color: "rgba(245,240,232,0.35)",
-                      marginTop: 2,
-                    }}
-                  >
-                    {s.label}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div
-              className="tabs-row"
-              style={{
-                borderBottom: "1px solid rgba(245,240,232,0.08)",
-                marginBottom: 28,
-                display: "flex",
-                gap: 0,
-              }}
-            >
-              {(["overview", "rooms", "reviews"] as const).map((tab) => (
+            <div>
+              <label className={lbl}>Max Guests</label>
+              <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden bg-white">
                 <button
-                  key={tab}
-                  className={`tab-btn${activeTab === tab ? " active" : ""}`}
-                  onClick={() => setActiveTab(tab)}
-                  style={{ textTransform: "capitalize" }}
+                  type="button"
+                  onClick={() =>
+                    setF("maxGuests")(
+                      String(Math.max(1, Number(form.maxGuests) - 1)),
+                    )
+                  }
+                  className="px-3 py-2.5 text-gray-400 hover:bg-gray-50 font-bold"
                 >
-                  {tab}
+                  −
                 </button>
-              ))}
-            </div>
-
-            {activeTab === "overview" && (
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: 32 }}
-              >
-                <div>
-                  <h2
-                    style={{
-                      fontFamily: "Cormorant Garamond, serif",
-                      fontSize: 22,
-                      fontWeight: 600,
-                      color: "#f5f0e8",
-                      marginBottom: 12,
-                    }}
-                  >
-                    About this property
-                  </h2>
-                  <p
-                    style={{
-                      fontSize: 14,
-                      color: "rgba(245,240,232,0.6)",
-                      lineHeight: 1.8,
-                    }}
-                  >
-                    {hotel.description}
-                  </p>
-                </div>
-                <div>
-                  <h2
-                    style={{
-                      fontFamily: "Cormorant Garamond, serif",
-                      fontSize: 22,
-                      fontWeight: 600,
-                      color: "#f5f0e8",
-                      marginBottom: 14,
-                    }}
-                  >
-                    Amenities
-                  </h2>
-                  <div
-                    className="amenities-grid"
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(3,1fr)",
-                      gap: 10,
-                    }}
-                  >
-                    {(showAllAmenities
-                      ? hotel.amenities
-                      : hotel.amenities.slice(0, 6)
-                    ).map((a) => (
-                      <div
-                        key={a}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                          background: "rgba(245,240,232,0.04)",
-                          border: "1px solid rgba(245,240,232,0.07)",
-                          borderRadius: 12,
-                          padding: "10px 14px",
-                          fontSize: 13,
-                          color: "rgba(245,240,232,0.7)",
-                        }}
-                      >
-                        <span style={{ fontSize: 16 }}>
-                          {AMENITY_ICONS[a] || "✦"}
-                        </span>
-                        {a}
-                      </div>
-                    ))}
-                  </div>
-                  {hotel.amenities.length > 6 && (
-                    <button
-                      onClick={() => setShowAllAmenities((s) => !s)}
-                      style={{
-                        marginTop: 12,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: "#C9A96E",
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                      }}
-                    >
-                      {showAllAmenities
-                        ? "Show less"
-                        : `Show all ${hotel.amenities.length} amenities`}
-                      <ChevronDownIcon
-                        style={{
-                          width: 14,
-                          height: 14,
-                          transform: showAllAmenities
-                            ? "rotate(180deg)"
-                            : "none",
-                        }}
-                      />
-                    </button>
-                  )}
-                </div>
-                <div>
-                  <h2
-                    style={{
-                      fontFamily: "Cormorant Garamond, serif",
-                      fontSize: 22,
-                      fontWeight: 600,
-                      color: "#f5f0e8",
-                      marginBottom: 14,
-                    }}
-                  >
-                    Policies
-                  </h2>
-                  <div
-                    className="policies-grid"
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: 10,
-                    }}
-                  >
-                    {[
-                      {
-                        icon: "🕐",
-                        title: "Check-in",
-                        desc: "From 3:00 PM · Early check-in on request",
-                      },
-                      {
-                        icon: "🧳",
-                        title: "Check-out",
-                        desc: "Until 12:00 PM · Late check-out available",
-                      },
-                      {
-                        icon: "❌",
-                        title: "Cancellation",
-                        desc: "Free cancellation up to 48h before arrival",
-                      },
-                      {
-                        icon: "🐾",
-                        title: "Pets",
-                        desc: "Not permitted at this property",
-                      },
-                      {
-                        icon: "🚭",
-                        title: "Smoking",
-                        desc: "Non-smoking property throughout",
-                      },
-                      {
-                        icon: "💳",
-                        title: "Payment",
-                        desc: "Paystack — cards, bank transfer, USSD, mobile money",
-                      },
-                    ].map((p) => (
-                      <div
-                        key={p.title}
-                        style={{
-                          background: "rgba(245,240,232,0.04)",
-                          border: "1px solid rgba(245,240,232,0.07)",
-                          borderRadius: 14,
-                          padding: "14px 16px",
-                          display: "flex",
-                          gap: 12,
-                          alignItems: "flex-start",
-                        }}
-                      >
-                        <span style={{ fontSize: 20, marginTop: 1 }}>
-                          {p.icon}
-                        </span>
-                        <div>
-                          <p
-                            style={{
-                              fontSize: 13,
-                              fontWeight: 700,
-                              color: "#f5f0e8",
-                              marginBottom: 4,
-                            }}
-                          >
-                            {p.title}
-                          </p>
-                          <p
-                            style={{
-                              fontSize: 12,
-                              color: "rgba(245,240,232,0.4)",
-                              lineHeight: 1.5,
-                            }}
-                          >
-                            {p.desc}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <span className="flex-1 text-center text-sm font-bold text-gray-900">
+                  {form.maxGuests}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setF("maxGuests")(String(Number(form.maxGuests) + 1))
+                  }
+                  className="px-3 py-2.5 text-gray-400 hover:bg-gray-50 font-bold"
+                >
+                  +
+                </button>
               </div>
-            )}
+            </div>
+          </div>
 
-            {activeTab === "rooms" && (
-              <div className="space-y-4 mt-4">
-                {roomsLoading ? (
-                  [...Array(2)].map((_, i) => (
-                    <Sk key={i} h="h-36" rounded="rounded-2xl" />
-                  ))
-                ) : roomTypes.length === 0 ? (
-                  <div className="text-center py-12 text-gray-400 text-sm">
-                    No room types listed yet.
-                  </div>
-                ) : (
-                  roomTypes.map((room) => (
+          {/* Room amenities */}
+          <div>
+            <label className={lbl}>
+              Room Features{" "}
+              <span className="normal-case font-normal text-gray-400">
+                ({form.amenities.length} selected)
+              </span>
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {ROOM_AMENITY_OPTIONS.map((a) => {
+                const on = form.amenities.includes(a);
+                return (
+                  <button
+                    key={a}
+                    type="button"
+                    onClick={() => toggleAmenity(a)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border transition-all text-left ${on ? "bg-[#C9A96E]/8 border-[#C9A96E]/40 text-[#C9A96E]" : "bg-gray-50 border-gray-100 text-gray-500 hover:border-gray-300"}`}
+                  >
                     <div
-                      key={room.id}
-                      onClick={() => selectRoom(room)}
-                      className={`border-2 rounded-2xl p-4 cursor-pointer transition-all ${
-                        selectedRoom?.id === room.id
-                          ? "border-[#C9A96E] bg-amber-50/40"
-                          : "border-gray-100 hover:border-gray-300"
-                      }`}
+                      className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 transition-all ${on ? "bg-[#C9A96E] border-[#C9A96E]" : "border-gray-300"}`}
                     >
-                      <div className="flex gap-4">
-                        {room.images[0] && (
-                          <img
-                            src={room.images[0]}
-                            alt={room.name}
-                            className="w-28 h-20 object-cover rounded-xl shrink-0"
-                          />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <h4 className="font-bold text-gray-900">
-                                {room.name}
-                              </h4>
-                              <p className="text-xs text-gray-400 mt-0.5">
-                                {room.bedType} · {room.size} · Up to{" "}
-                                {room.maxGuests} guests
-                              </p>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <p className="font-bold text-gray-900">
-                                ₦{room.price.toLocaleString()}
-                              </p>
-                              <p className="text-[11px] text-gray-400">
-                                / night
-                              </p>
-                            </div>
-                          </div>
-                          {room.description && (
-                            <p className="text-xs text-gray-500 mt-1.5 line-clamp-2">
-                              {room.description}
-                            </p>
-                          )}
-                          <div className="flex flex-wrap gap-1.5 mt-2">
-                            {room.amenities.slice(0, 4).map((a) => (
-                              <span
-                                key={a}
-                                className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full"
-                              >
-                                {a}
-                              </span>
-                            ))}
-                            {room.amenities.length > 4 && (
-                              <span className="text-[10px] text-gray-400">
-                                +{room.amenities.length - 4} more
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      {selectedRoom?.id === room.id && (
-                        <div className="mt-3 pt-3 border-t border-amber-200 flex items-center gap-1.5 text-[#C9A96E] text-xs font-bold">
-                          <CheckCircleIcon className="w-4 h-4" /> Selected
-                        </div>
+                      {on && (
+                        <span className="text-white text-[8px] font-bold">
+                          ✓
+                        </span>
                       )}
                     </div>
-                  ))
-                )}
-              </div>
-            )}
-
-            {activeTab === "reviews" &&
-              (() => {
-                const avgRating = listingReviews.length
-                  ? listingReviews.reduce((s, r) => s + r.rating, 0) /
-                    listingReviews.length
-                  : hotel.rating;
-                const subAvg = (
-                  key: "cleanliness" | "service" | "location" | "value",
-                ) => {
-                  const vals = listingReviews
-                    .map((r) => r[key] as number | undefined)
-                    .filter((v): v is number => typeof v === "number");
-                  return vals.length
-                    ? vals.reduce((s, v) => s + v, 0) / vals.length
-                    : null;
-                };
-                const fmtDate = (iso: string) =>
-                  new Date(iso).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  });
-                return (
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 20,
-                    }}
-                  >
-                    <div
-                      className="reviews-summary"
-                      style={{
-                        background: "rgba(245,240,232,0.04)",
-                        border: "1px solid rgba(245,240,232,0.07)",
-                        borderRadius: 18,
-                        padding: 24,
-                        display: "flex",
-                        gap: 32,
-                        alignItems: "center",
-                        flexWrap: "wrap",
-                      }}
-                    >
-                      <div style={{ textAlign: "center", flexShrink: 0 }}>
-                        <p
-                          style={{
-                            fontFamily: "Cormorant Garamond, serif",
-                            fontSize: 52,
-                            fontWeight: 700,
-                            color: "#f5f0e8",
-                            lineHeight: 1,
-                          }}
-                        >
-                          {avgRating.toFixed(1)}
-                        </p>
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: 3,
-                            justifyContent: "center",
-                            margin: "8px 0",
-                          }}
-                        >
-                          {Array.from({ length: 5 }).map((_, i) => (
-                            <StarIcon
-                              key={i}
-                              style={{
-                                width: 14,
-                                height: 14,
-                                color:
-                                  i < Math.floor(avgRating)
-                                    ? "#C9A96E"
-                                    : "rgba(245,240,232,0.15)",
-                              }}
-                            />
-                          ))}
-                        </div>
-                        <p
-                          style={{
-                            fontSize: 12,
-                            color: "rgba(245,240,232,0.4)",
-                          }}
-                        >
-                          {listingReviews.length} review
-                          {listingReviews.length !== 1 ? "s" : ""}
-                        </p>
-                      </div>
-                      <div
-                        style={{
-                          flex: 1,
-                          minWidth: 200,
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 8,
-                        }}
-                      >
-                        {(
-                          [
-                            ["Cleanliness", "cleanliness"],
-                            ["Service", "service"],
-                            ["Location", "location"],
-                            ["Value", "value"],
-                          ] as [
-                            string,
-                            "cleanliness" | "service" | "location" | "value",
-                          ][]
-                        ).map(([label, key]) => {
-                          const val = subAvg(key);
-                          return (
-                            <div
-                              key={label}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 12,
-                              }}
-                            >
-                              <span
-                                style={{
-                                  fontSize: 12,
-                                  color: "rgba(245,240,232,0.45)",
-                                  width: 80,
-                                  flexShrink: 0,
-                                }}
-                              >
-                                {label}
-                              </span>
-                              <div
-                                style={{
-                                  flex: 1,
-                                  height: 4,
-                                  background: "rgba(245,240,232,0.08)",
-                                  borderRadius: 99,
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    height: "100%",
-                                    borderRadius: 99,
-                                    background: "#C9A96E",
-                                    width: `${val !== null ? (val / 5) * 100 : 0}%`,
-                                    transition: "width 0.6s ease",
-                                  }}
-                                />
-                              </div>
-                              <span
-                                style={{
-                                  fontSize: 12,
-                                  fontWeight: 700,
-                                  color: "rgba(245,240,232,0.6)",
-                                  width: 28,
-                                  textAlign: "right",
-                                }}
-                              >
-                                {val !== null ? val.toFixed(1) : "—"}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    {reviewsLoading ? (
-                      <div
-                        className="reviews-grid"
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "1fr 1fr",
-                          gap: 14,
-                        }}
-                      >
-                        {[1, 2, 3, 4].map((i) => (
-                          <div
-                            key={i}
-                            style={{
-                              background: "rgba(245,240,232,0.04)",
-                              border: "1px solid rgba(245,240,232,0.07)",
-                              borderRadius: 16,
-                              padding: 20,
-                              height: 140,
-                              animation: "pulse 1.4s ease infinite",
-                            }}
-                          />
-                        ))}
-                      </div>
-                    ) : listingReviews.length === 0 ? (
-                      <div
-                        style={{
-                          textAlign: "center",
-                          padding: "48px 24px",
-                          background: "rgba(245,240,232,0.03)",
-                          border: "1px solid rgba(245,240,232,0.07)",
-                          borderRadius: 18,
-                        }}
-                      >
-                        <p
-                          style={{
-                            fontFamily: "Cormorant Garamond, serif",
-                            fontSize: 20,
-                            fontWeight: 600,
-                            color: "#f5f0e8",
-                            marginBottom: 8,
-                          }}
-                        >
-                          No reviews yet
-                        </p>
-                        <p
-                          style={{
-                            fontSize: 13,
-                            color: "rgba(245,240,232,0.35)",
-                          }}
-                        >
-                          Be the first to share your experience at {hotel.name}.
-                        </p>
-                      </div>
-                    ) : (
-                      <div
-                        className="reviews-grid"
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "1fr 1fr",
-                          gap: 14,
-                        }}
-                      >
-                        {listingReviews.map((r) => (
-                          <div
-                            key={r.id}
-                            style={{
-                              background: "rgba(245,240,232,0.04)",
-                              border: "1px solid rgba(245,240,232,0.07)",
-                              borderRadius: 16,
-                              padding: 20,
-                            }}
-                          >
-                            <div
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 12,
-                                marginBottom: 12,
-                              }}
-                            >
-                              <div
-                                style={{
-                                  width: 38,
-                                  height: 38,
-                                  borderRadius: "50%",
-                                  background: "rgba(201,169,110,0.12)",
-                                  border: "1px solid rgba(201,169,110,0.2)",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  fontSize: 12,
-                                  fontWeight: 700,
-                                  color: "#C9A96E",
-                                  flexShrink: 0,
-                                }}
-                              >
-                                {r.guestAvatar ||
-                                  r.guestName?.[0]?.toUpperCase() ||
-                                  "G"}
-                              </div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <p
-                                  style={{
-                                    fontSize: 13,
-                                    fontWeight: 600,
-                                    color: "#f5f0e8",
-                                  }}
-                                >
-                                  {r.guestName || "Guest"}
-                                </p>
-                                <p
-                                  style={{
-                                    fontSize: 11,
-                                    color: "rgba(245,240,232,0.35)",
-                                  }}
-                                >
-                                  {fmtDate(r.createdAt)}
-                                </p>
-                              </div>
-                              <div
-                                style={{
-                                  display: "flex",
-                                  gap: 2,
-                                  flexShrink: 0,
-                                }}
-                              >
-                                {Array.from({ length: 5 }).map((_, i) => (
-                                  <StarIcon
-                                    key={i}
-                                    style={{
-                                      width: 11,
-                                      height: 11,
-                                      color:
-                                        i < Math.round(r.rating)
-                                          ? "#C9A96E"
-                                          : "rgba(245,240,232,0.15)",
-                                    }}
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                            {r.title && (
-                              <p
-                                style={{
-                                  fontSize: 13,
-                                  fontWeight: 600,
-                                  color: "rgba(245,240,232,0.85)",
-                                  marginBottom: 6,
-                                }}
-                              >
-                                {r.title}
-                              </p>
-                            )}
-                            <p
-                              style={{
-                                fontSize: 12,
-                                color: "rgba(245,240,232,0.45)",
-                                lineHeight: 1.65,
-                              }}
-                            >
-                              {r.body}
-                            </p>
-                            {r.hostReply && (
-                              <div
-                                style={{
-                                  marginTop: 14,
-                                  background: "rgba(201,169,110,0.06)",
-                                  border: "1px solid rgba(201,169,110,0.15)",
-                                  borderRadius: 12,
-                                  padding: "12px 14px",
-                                }}
-                              >
-                                <p
-                                  style={{
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                    color: "#C9A96E",
-                                    marginBottom: 4,
-                                  }}
-                                >
-                                  {hotel.hostName ?? "Host"} replied
-                                </p>
-                                <p
-                                  style={{
-                                    fontSize: 12,
-                                    color: "rgba(245,240,232,0.5)",
-                                    lineHeight: 1.6,
-                                  }}
-                                >
-                                  {r.hostReply}
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                    {a}
+                  </button>
                 );
-              })()}
+              })}
+            </div>
           </div>
 
-          {/* RIGHT — Booking widget */}
-          <div
-            className="booking-widget-col"
-            style={{
-              position: "sticky",
-              top: 88,
-              alignSelf: "start",
-              animation: "fadeUp 0.5s ease 100ms both",
-            }}
-          >
-            <div
-              style={{
-                background: "#141210",
-                border: "1px solid rgba(245,240,232,0.1)",
-                borderRadius: 24,
-                overflow: "hidden",
-                boxShadow: "0 32px 64px rgba(0,0,0,0.5)",
-              }}
-            >
-              <div
-                style={{
-                  background: "rgba(201,169,110,0.06)",
-                  borderBottom: "1px solid rgba(245,240,232,0.08)",
-                  padding: "22px 24px",
-                }}
+          {/* Images */}
+          <div>
+            <label className={lbl}>Room Photos</label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) =>
+                e.target.files && handleFileUpload(e.target.files)
+              }
+            />
+            <div className="flex gap-2 mb-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className={`flex items-center gap-2 px-4 py-2 border-2 border-dashed rounded-xl text-xs font-medium transition-all ${uploadingImg ? "border-[#C9A96E]/40 text-[#C9A96E] cursor-wait" : "border-gray-200 text-gray-500 hover:border-[#C9A96E]/40 hover:text-[#C9A96E]"}`}
               >
-                <p
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "0.2em",
-                    color: "#C9A96E",
-                    textTransform: "uppercase",
-                    marginBottom: 6,
-                  }}
-                >
-                  Selected Room
-                </p>
-                <h3
-                  style={{
-                    fontFamily: "Cormorant Garamond, serif",
-                    fontSize: 20,
-                    fontWeight: 600,
-                    color: "#f5f0e8",
-                    marginBottom: 2,
-                  }}
-                >
-                  {room.name}
-                </h3>
-                <p
-                  style={{
-                    fontSize: 12,
-                    color: "rgba(245,240,232,0.35)",
-                    marginBottom: 14,
-                  }}
-                >
-                  {room.size} · {room.bed} · Up to {room.guests} guests
-                </p>
-                <div
-                  style={{ display: "flex", alignItems: "baseline", gap: 4 }}
-                >
-                  <span
-                    style={{
-                      fontFamily: "Cormorant Garamond, serif",
-                      fontSize: 32,
-                      fontWeight: 700,
-                      color: "#f5f0e8",
-                    }}
+                {uploadingImg ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-[#C9A96E]/30 border-t-[#C9A96E] rounded-full animate-spin" />
+                    Uploading…
+                  </>
+                ) : (
+                  <>
+                    <PhotoIcon className="w-4 h-4" />
+                    Upload Photos
+                  </>
+                )}
+              </button>
+              <input
+                className={inp + " flex-1 min-w-0"}
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                placeholder="Or paste image URL…"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addUrl();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={addUrl}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-xl text-xs font-semibold text-gray-600 transition-colors whitespace-nowrap"
+              >
+                Add
+              </button>
+            </div>
+            {form.images.length > 0 && (
+              <div className="flex gap-2 flex-wrap">
+                {form.images.map((url, i) => (
+                  <div
+                    key={i}
+                    className="relative w-20 h-16 rounded-xl overflow-hidden border border-gray-200 bg-gray-100 group"
                   >
-                    ₦{room.price.toLocaleString()}
-                  </span>
-                  <span
-                    style={{ fontSize: 13, color: "rgba(245,240,232,0.35)" }}
-                  >
-                    / night
+                    <img
+                      src={url}
+                      alt=""
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (
+                          e.target as HTMLImageElement
+                        ).parentElement!.style.opacity = "0.35";
+                      }}
+                    />
+                    {i === 0 && (
+                      <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[9px] text-center py-0.5 font-bold">
+                        MAIN
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setF("images")(form.images.filter((_, j) => j !== i))
+                      }
+                      className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
+                    >
+                      <XMarkIcon className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {error && (
+            <p className="text-xs text-red-500 flex items-center gap-1">
+              <XMarkIcon className="w-3 h-3 shrink-0" />
+              {error}
+            </p>
+          )}
+
+          <div className="flex gap-3 pt-1">
+            <button
+              onClick={save}
+              disabled={saving}
+              className="flex-1 bg-[#C9A96E] disabled:opacity-50 text-white font-bold py-2.5 rounded-xl text-sm hover:bg-[#b8935a] transition-all flex items-center justify-center gap-2"
+            >
+              {saving ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Saving…
+                </>
+              ) : editing === "new" ? (
+                "Add Room Type"
+              ) : (
+                "Save Changes"
+              )}
+            </button>
+            <button
+              onClick={() => setEditing(null)}
+              className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 bg-white transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Room list ── */}
+      {loading ? (
+        <div className="space-y-2">
+          {[1, 2].map((i) => (
+            <Sk key={i} h="h-16" />
+          ))}
+        </div>
+      ) : rooms.length === 0 && !editing ? (
+        <div className="py-8 text-center border-2 border-dashed border-gray-100 rounded-2xl">
+          <BuildingOffice2Icon className="w-8 h-8 text-gray-200 mx-auto mb-2" />
+          <p className="text-sm text-gray-400 mb-1">No room types added yet</p>
+          <p className="text-xs text-gray-300">
+            Guests will see a single room based on your listing details until
+            you add specific room types.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {rooms.map((rt, i) => (
+            <div
+              key={rt.id}
+              className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-100 rounded-xl group hover:border-[#C9A96E]/30 transition-all"
+              style={{ animation: `fadeUp 0.3s ease ${i * 40}ms both` }}
+            >
+              {rt.images[0] ? (
+                <img
+                  src={rt.images[0]}
+                  alt={rt.name}
+                  className="w-14 h-12 rounded-lg object-cover shrink-0 border border-gray-200"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = "none";
+                  }}
+                />
+              ) : (
+                <div className="w-14 h-12 rounded-lg bg-gray-100 shrink-0 flex items-center justify-center border border-gray-200">
+                  <BuildingOffice2Icon className="w-5 h-5 text-gray-300" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-800 truncate">
+                  {rt.name}
+                </p>
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                  {rt.bedType && (
+                    <span className="text-xs text-gray-400">{rt.bedType}</span>
+                  )}
+                  {rt.size && (
+                    <>
+                      <span className="text-gray-200">·</span>
+                      <span className="text-xs text-gray-400">{rt.size}</span>
+                    </>
+                  )}
+                  <span className="text-gray-200">·</span>
+                  <span className="text-xs text-gray-400">
+                    Up to {rt.maxGuests} guests
                   </span>
                 </div>
               </div>
+              <div className="text-right shrink-0">
+                <p className="text-sm font-bold text-gray-900">
+                  {fmt$(rt.pricePerNight)}
+                  <span className="text-xs text-gray-400 font-normal">/n</span>
+                </p>
+                {rt.amenities.length > 0 && (
+                  <p className="text-[10px] text-gray-400">
+                    {rt.amenities.length} features
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-1 shrink-0">
+                <button
+                  onClick={() => openEdit(rt)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-[#C9A96E] hover:bg-[#C9A96E]/8 border border-transparent hover:border-[#C9A96E]/20 transition-all"
+                >
+                  <PencilSquareIcon className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  disabled={deleting === rt.id}
+                  onClick={() => deleteRoom(rt.id)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all disabled:opacity-40"
+                >
+                  {deleting === rt.id ? (
+                    <span className="w-3 h-3 border border-red-400 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <TrashIcon className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
+            </div>
+          ))}
+          {!editing && (
+            <button
+              onClick={openNew}
+              className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-xs font-medium text-gray-400 hover:border-[#C9A96E]/40 hover:text-[#C9A96E] transition-all mt-1"
+            >
+              <PlusIcon className="w-3.5 h-3.5" /> Add Another Room Type
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
-              {selectedRoom && (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "0 24px 14px",
-                    borderBottom: "1px solid rgba(245,240,232,0.07)",
-                    marginBottom: 4,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: 11,
-                      color: "rgba(245,240,232,0.35)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.12em",
-                      fontWeight: 700,
-                    }}
-                  >
-                    Room
-                  </span>
-                  <span
-                    style={{ fontSize: 13, fontWeight: 600, color: "#f5f0e8" }}
-                  >
-                    {selectedRoom.name}
-                  </span>
-                </div>
-              )}
+/* ═══════════════════════════════════════════════════════════
+   ADD / EDIT LISTING FORM
+═══════════════════════════════════════════════════════════ */
+const AMENITIES_LIST = [
+  "Free WiFi",
+  "Private Pool",
+  "Butler Service",
+  "Sea View",
+  "Air Conditioning",
+  "Concierge",
+  "Fine Dining",
+  "Spa Island",
+  "Airport Transfer",
+  "BBQ",
+  "Wine Cellar",
+  "Netflix",
+  "Daily Cleaning",
+  "Water Sports",
+  "Kids Club",
+  "Gym",
+  "Parking",
+  "Fireplace",
+  "Hot Tub",
+  "Pet Friendly",
+  "Mountain View",
+  "Ocean Front",
+  "Rooftop Terrace",
+  "Helipad",
+];
 
-              <div
-                style={{
-                  padding: "20px 24px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 14,
-                }}
-              >
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: 8,
-                  }}
-                >
-                  <div style={{ position: "relative" }} ref={calInRef}>
-                    <button
-                      onClick={() => {
-                        setShowCheckInCal((s) => !s);
-                        setShowCheckOutCal(false);
-                      }}
-                      style={{
-                        width: "100%",
-                        background: "rgba(245,240,232,0.05)",
-                        border: `1px solid ${showCheckInCal ? "#C9A96E" : "rgba(245,240,232,0.1)"}`,
-                        borderRadius: 12,
-                        padding: "10px 12px",
-                        textAlign: "left",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <p
-                        style={{
-                          fontSize: 9,
-                          fontWeight: 700,
-                          letterSpacing: "0.15em",
-                          color: "rgba(245,240,232,0.35)",
-                          textTransform: "uppercase",
-                          marginBottom: 4,
-                        }}
-                      >
-                        Check-in
-                      </p>
-                      <p
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: checkIn ? "#f5f0e8" : "rgba(245,240,232,0.3)",
-                        }}
-                      >
-                        {checkIn ? formatDate(checkIn) : "Select date"}
-                      </p>
-                    </button>
-                    {showCheckInCal && (
-                      <div
-                        style={{
-                          position: "absolute",
-                          top: "calc(100% + 8px)",
-                          left: 0,
-                          zIndex: 50,
-                          background: "#1a1712",
-                          border: "1px solid rgba(245,240,232,0.12)",
-                          borderRadius: 16,
-                          padding: 16,
-                          minWidth: 260,
-                          boxShadow: "0 16px 40px rgba(0,0,0,0.6)",
-                        }}
-                      >
-                        <MiniCalendar
-                          value={checkIn}
-                          onChange={(d) => {
-                            setCheckIn(d);
-                            setShowCheckInCal(false);
-                            if (checkOut && d >= checkOut) setCheckOut("");
-                          }}
-                          min={today}
-                          label="Check-in date"
-                          isDisabledDate={isDateBooked}
-                        />
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ position: "relative" }} ref={calOutRef}>
-                    <button
-                      onClick={() => {
-                        setShowCheckOutCal((s) => !s);
-                        setShowCheckInCal(false);
-                      }}
-                      style={{
-                        width: "100%",
-                        background: "rgba(245,240,232,0.05)",
-                        border: `1px solid ${showCheckOutCal ? "#C9A96E" : "rgba(245,240,232,0.1)"}`,
-                        borderRadius: 12,
-                        padding: "10px 12px",
-                        textAlign: "left",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <p
-                        style={{
-                          fontSize: 9,
-                          fontWeight: 700,
-                          letterSpacing: "0.15em",
-                          color: "rgba(245,240,232,0.35)",
-                          textTransform: "uppercase",
-                          marginBottom: 4,
-                        }}
-                      >
-                        Check-out{" "}
-                        {nights > 0 && (
-                          <span style={{ color: "#C9A96E" }}>· {nights}n</span>
-                        )}
-                      </p>
-                      <p
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: checkOut ? "#f5f0e8" : "rgba(245,240,232,0.3)",
-                        }}
-                      >
-                        {checkOut ? formatDate(checkOut) : "Select date"}
-                      </p>
-                    </button>
-                    {showCheckOutCal && (
-                      <div
-                        style={{
-                          position: "absolute",
-                          top: "calc(100% + 8px)",
-                          right: 0,
-                          zIndex: 50,
-                          background: "#1a1712",
-                          border: "1px solid rgba(245,240,232,0.12)",
-                          borderRadius: 16,
-                          padding: 16,
-                          minWidth: 260,
-                          boxShadow: "0 16px 40px rgba(0,0,0,0.6)",
-                        }}
-                      >
-                        <MiniCalendar
-                          value={checkOut}
-                          onChange={(d) => {
-                            setCheckOut(d);
-                            setShowCheckOutCal(false);
-                          }}
-                          min={checkIn || today}
-                          label="Check-out date"
-                          isDisabledDate={isDateBooked}
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div
-                  style={{
-                    background: "rgba(245,240,232,0.05)",
-                    border: "1px solid rgba(245,240,232,0.1)",
-                    borderRadius: 12,
-                    padding: "12px 16px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <div>
-                    <p
-                      style={{
-                        fontSize: 9,
-                        fontWeight: 700,
-                        letterSpacing: "0.15em",
-                        color: "rgba(245,240,232,0.35)",
-                        textTransform: "uppercase",
-                        marginBottom: 4,
-                      }}
-                    >
-                      Guests
-                    </p>
-                    <p
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 600,
-                        color: "#f5f0e8",
-                      }}
-                    >
-                      {guests} {guests === 1 ? "guest" : "guests"}
-                    </p>
-                  </div>
-                  <div
-                    style={{ display: "flex", alignItems: "center", gap: 10 }}
+type LForm = {
+  name: string;
+  description: string;
+  location: string;
+  city: string;
+  country: string;
+  category: Listing["category"];
+  pricePerNight: string;
+  bedrooms: string;
+  bathrooms: string;
+  maxGuests: string;
+  amenities: string[];
+  tags: string;
+  images: string[];
+  featured: boolean;
+  available: boolean;
+};
+
+const BLANK: LForm = {
+  name: "",
+  description: "",
+  location: "",
+  city: "",
+  country: "",
+  category: "villa",
+  pricePerNight: "",
+  bedrooms: "1",
+  bathrooms: "1",
+  maxGuests: "2",
+  amenities: [],
+  tags: "",
+  images: [],
+  featured: false,
+  available: true,
+};
+
+const ListingForm = ({
+  editing,
+  onSave,
+  onCancel,
+  hostId,
+  hostName,
+}: {
+  editing: Hotel | null;
+  onSave: (h: Hotel) => void;
+  onCancel: () => void;
+  hostId: string;
+  hostName: string;
+}) => {
+  const [form, setForm] = useState<LForm>(
+    editing
+      ? {
+          name: editing.name,
+          description: editing.description,
+          location: editing.location,
+          city: editing.city,
+          country: editing.country,
+          category: editing.category,
+          pricePerNight: String(editing.pricePerNight),
+          bedrooms: String(editing.bedrooms),
+          bathrooms: String(editing.bathrooms),
+          maxGuests: String(editing.maxGuests),
+          amenities: editing.amenities,
+          tags: editing.tags.join(", "),
+          images: editing.images,
+          featured: editing.featured,
+          available: editing.available,
+        }
+      : BLANK,
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [savedListingId, setSavedListingId] = useState<string | null>(
+    editing?.id ?? null,
+  );
+  const [showVerif, setShowVerif] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [urlInput, setUrlInput] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const set = (k: keyof LForm) => (v: string | boolean | string[]) =>
+    setForm((f) => ({ ...f, [k]: v }));
+
+  const counter = (
+    k: "bedrooms" | "bathrooms" | "maxGuests",
+    delta: number,
+  ) => {
+    const min = k === "maxGuests" ? 1 : 0;
+    set(k)(String(Math.max(min, Number(form[k]) + delta)));
+  };
+
+  const toggleAmenity = (a: string) =>
+    set("amenities")(
+      form.amenities.includes(a)
+        ? form.amenities.filter((x) => x !== a)
+        : [...form.amenities, a],
+    );
+
+  const handleFileUpload = async (files: FileList) => {
+    if (!files.length) return;
+    setUploadingImages(true);
+    setUploadError("");
+    try {
+      const { uploadToCloudinary } = await import("./cloudinary");
+      const urls: string[] = [];
+      for (const file of Array.from(files)) {
+        const url = await uploadToCloudinary(file, "image");
+        urls.push(url);
+        set("images")([...form.images, ...urls]);
+      }
+    } catch (err: any) {
+      setUploadError(err.message ?? "Upload failed. Please try again.");
+    } finally {
+      setUploadingImages(false);
+    }
+  };
+
+  const addUrlManually = () => {
+    const trimmed = urlInput.trim();
+    if (!trimmed) return;
+    set("images")([...form.images, trimmed]);
+    setUrlInput("");
+  };
+
+  const removeImage = (i: number) =>
+    set("images")(form.images.filter((_, j) => j !== i));
+
+  const save = async () => {
+    if (!form.name.trim() || !form.city.trim() || !form.pricePerNight) {
+      setError("Name, city and price per night are required.");
+      return;
+    }
+    if (isNaN(Number(form.pricePerNight)) || Number(form.pricePerNight) <= 0) {
+      setError("Price must be a positive number.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    const tags = form.tags
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    try {
+      const payload = {
+        name: form.name.trim(),
+        description: form.description.trim(),
+        location: form.location.trim(),
+        city: form.city.trim(),
+        country: form.country.trim(),
+        category: form.category,
+        pricePerNight: Number(form.pricePerNight),
+        bedrooms: Number(form.bedrooms),
+        bathrooms: Number(form.bathrooms),
+        maxGuests: Number(form.maxGuests),
+        amenities: form.amenities,
+        tags,
+        images: form.images,
+        featured: form.featured,
+        available: form.available,
+      };
+      if (editing) {
+        const u = await ListingsDB.update(editing.id, payload);
+        if (!u)
+          throw new Error("Update failed — check your Supabase connection.");
+        onSave(listingToHotel(u));
+      } else {
+        const result = await ListingsDB.add({ hostId, hostName, ...payload });
+        setSavedListingId(result.id);
+      }
+    } catch (e: any) {
+      setError(e.message ?? "Something went wrong.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (showVerif && savedListingId) {
+    return (
+      <PropertyVerificationForm
+        listingId={savedListingId}
+        onComplete={() => {
+          onSave(listingToHotel({ id: savedListingId } as Listing));
+          onCancel();
+        }}
+      />
+    );
+  }
+
+  const inp =
+    "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#C9A96E] focus:ring-2 focus:ring-[#C9A96E]/10 transition-all bg-white";
+  const lbl =
+    "block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5";
+
+  return (
+    <div
+      className="flex-1 overflow-y-auto bg-gray-50"
+      style={{ animation: "fadeUp 0.3s ease both" }}
+    >
+      <div className="max-w-2xl mx-auto p-6 pb-16">
+        <div className="flex items-center gap-4 mb-7">
+          <button
+            onClick={onCancel}
+            className="w-9 h-9 rounded-xl border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors bg-white"
+          >
+            <XMarkIcon className="w-4 h-4" />
+          </button>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">
+              {editing ? "Edit Listing" : "Add New Listing"}
+            </h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {editing
+                ? "Update your property details"
+                : "Fill in the details below to publish your property"}
+            </p>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mb-5 bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3 flex items-start gap-2">
+            <XMarkIcon className="w-4 h-4 shrink-0 mt-0.5" /> {error}
+          </div>
+        )}
+
+        <div className="space-y-5">
+          {/* Basic info */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+            <h3 className="font-bold text-gray-800 text-sm mb-4 flex items-center gap-2">
+              <BuildingOffice2Icon className="w-4 h-4 text-[#C9A96E]" /> Basic
+              Information
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className={lbl}>Property Name *</label>
+                <input
+                  className={inp}
+                  value={form.name}
+                  onChange={(e) => set("name")(e.target.value)}
+                  placeholder="e.g. Villa Lumière Côte d'Azur"
+                />
+              </div>
+              <div>
+                <label className={lbl}>Description</label>
+                <textarea
+                  className={inp + " resize-none"}
+                  rows={3}
+                  value={form.description}
+                  onChange={(e) => set("description")(e.target.value)}
+                  placeholder="What makes this property special..."
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={lbl}>Category *</label>
+                  <select
+                    className={inp}
+                    value={form.category}
+                    onChange={(e) =>
+                      set("category")(e.target.value as Listing["category"])
+                    }
                   >
+                    {(
+                      [
+                        "villa",
+                        "apartment",
+                        "resort",
+                        "boutique",
+                        "penthouse",
+                      ] as const
+                    ).map((c) => (
+                      <option key={c} value={c}>
+                        {c.charAt(0).toUpperCase() + c.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={lbl}>Base Price Per Night (₦) *</label>
+                  <input
+                    className={inp}
+                    type="number"
+                    min="1"
+                    value={form.pricePerNight}
+                    onChange={(e) => set("pricePerNight")(e.target.value)}
+                    placeholder="500"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-5">
+                {(["featured", "available"] as const).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => set(k)(!form[k])}
+                    className="flex items-center gap-2 group"
+                  >
+                    <div
+                      className={`rounded border-2 flex items-center justify-center transition-all ${form[k] ? "bg-[#C9A96E] border-[#C9A96E]" : "border-gray-300 group-hover:border-[#C9A96E]"}`}
+                      style={{ width: 18, height: 18 }}
+                    >
+                      {form[k] && (
+                        <CheckCircleIcon
+                          className="w-3 h-3 text-white"
+                          style={{ width: 11, height: 11 }}
+                        />
+                      )}
+                    </div>
+                    <span className="text-sm text-gray-600 capitalize">
+                      {k === "featured"
+                        ? "Featured property"
+                        : "Available / Live"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Location */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+            <h3 className="font-bold text-gray-800 text-sm mb-4 flex items-center gap-2">
+              <MapPinIcon className="w-4 h-4 text-[#C9A96E]" /> Location
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className={lbl}>Full Address / Area</label>
+                <input
+                  className={inp}
+                  value={form.location}
+                  onChange={(e) => set("location")(e.target.value)}
+                  placeholder="e.g. Èze-sur-Mer, Côte d'Azur"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={lbl}>City *</label>
+                  <input
+                    className={inp}
+                    value={form.city}
+                    onChange={(e) => set("city")(e.target.value)}
+                    placeholder="Paris"
+                  />
+                </div>
+                <div>
+                  <label className={lbl}>Country</label>
+                  <input
+                    className={inp}
+                    value={form.country}
+                    onChange={(e) => set("country")(e.target.value)}
+                    placeholder="France"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Capacity */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+            <h3 className="font-bold text-gray-800 text-sm mb-4 flex items-center gap-2">
+              <UserIcon className="w-4 h-4 text-[#C9A96E]" /> Capacity
+            </h3>
+            <div className="grid grid-cols-3 gap-4">
+              {(
+                [
+                  ["bedrooms", "Bedrooms"],
+                  ["bathrooms", "Bathrooms"],
+                  ["maxGuests", "Max Guests"],
+                ] as const
+              ).map(([k, lbl2]) => (
+                <div key={k}>
+                  <label className={lbl}>{lbl2}</label>
+                  <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden bg-white">
                     <button
-                      onClick={() => setGuests((g) => Math.max(1, g - 1))}
-                      style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: "50%",
-                        background: "rgba(245,240,232,0.08)",
-                        border: "1px solid rgba(245,240,232,0.1)",
-                        color: "#f5f0e8",
-                        cursor: "pointer",
-                        fontSize: 16,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
+                      type="button"
+                      onClick={() => counter(k, -1)}
+                      className="px-3 py-2.5 text-gray-400 hover:bg-gray-50 font-bold transition-colors"
                     >
                       −
                     </button>
-                    <span
-                      style={{
-                        fontSize: 14,
-                        fontWeight: 700,
-                        color: "#f5f0e8",
-                        minWidth: 20,
-                        textAlign: "center",
-                      }}
-                    >
-                      {guests}
+                    <span className="flex-1 text-center text-sm font-bold text-gray-900">
+                      {form[k]}
                     </span>
                     <button
-                      onClick={() =>
-                        setGuests((g) => Math.min(room.guests, g + 1))
-                      }
-                      style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: "50%",
-                        background: "rgba(245,240,232,0.08)",
-                        border: "1px solid rgba(245,240,232,0.1)",
-                        color: "#f5f0e8",
-                        cursor: "pointer",
-                        fontSize: 16,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
+                      type="button"
+                      onClick={() => counter(k, 1)}
+                      className="px-3 py-2.5 text-gray-400 hover:bg-gray-50 font-bold transition-colors"
                     >
                       +
                     </button>
                   </div>
                 </div>
-                <div
-                  style={{ display: "flex", flexDirection: "column", gap: 6 }}
-                >
-                  {roomsLoading
-                    ? [1, 2].map((i) => (
-                        <div
-                          key={i}
-                          style={{
-                            height: 40,
-                            borderRadius: 10,
-                            background: "rgba(245,240,232,0.05)",
-                            border: "1px solid rgba(245,240,232,0.07)",
-                            animation: "pulse 1.5s ease-in-out infinite",
-                          }}
-                        />
-                      ))
-                    : roomTypes.map((rt) => (
-                        <button
-                          key={rt.id}
-                          onClick={() => {
-                            const found = roomTypes.find((r) => r.id === rt.id);
-                            if (found) selectRoom(found);
-                          }}
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            padding: "10px 14px",
-                            borderRadius: 10,
-                            background:
-                              selectedRoomId === rt.id
-                                ? "rgba(201,169,110,0.1)"
-                                : "rgba(245,240,232,0.03)",
-                            border: `1px solid ${selectedRoomId === rt.id ? "rgba(201,169,110,0.35)" : "rgba(245,240,232,0.07)"}`,
-                            cursor: "pointer",
-                          }}
-                        >
-                          <span
-                            style={{
-                              fontSize: 13,
-                              fontWeight: 500,
-                              color: "#f5f0e8",
-                            }}
-                          >
-                            {rt.name}
-                          </span>
-                          <span
-                            style={{
-                              fontSize: 13,
-                              fontWeight: 700,
-                              color:
-                                selectedRoomId === rt.id
-                                  ? "#C9A96E"
-                                  : "rgba(245,240,232,0.4)",
-                              flexShrink: 0,
-                              marginLeft: 8,
-                            }}
-                          >
-                            ₦{rt.price.toLocaleString()}
-                          </span>
-                        </button>
-                      ))}
-                </div>
-              </div>
-              <div
-                style={{
-                  borderTop: "1px solid rgba(245,240,232,0.07)",
-                  paddingTop: 14,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 8,
-                }}
-              >
-                {[
-                  [
-                    `₦${room.price.toLocaleString()} × ${nights} nights`,
-                    `₦${subtotal.toLocaleString()}`,
-                  ],
-                  ["Taxes & resort fees", `₦${taxes.toLocaleString()}`],
-                ].map(([k, v]) => (
-                  <div
-                    key={k}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      fontSize: 12,
-                      color: "rgba(245,240,232,0.4)",
-                    }}
-                  >
-                    <span>{k}</span>
-                    <span>{v}</span>
-                  </div>
-                ))}
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    fontSize: 15,
-                    fontWeight: 700,
-                    color: "#f5f0e8",
-                    paddingTop: 10,
-                    borderTop: "1px solid rgba(245,240,232,0.07)",
-                  }}
-                >
-                  <span>Total</span>
-                  <span style={{ color: "#C9A96E" }}>
-                    ₦{total.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={() => setStep("form")}
-                style={{
-                  width: "100%",
-                  background: "#C9A96E",
-                  color: "#0e0d0b",
-                  fontWeight: 700,
-                  fontSize: 14,
-                  padding: "16px 0",
-                  borderRadius: 14,
-                  border: "none",
-                  cursor: "pointer",
-                  letterSpacing: "0.04em",
-                }}
-                onMouseOver={(e) =>
-                  ((e.target as HTMLButtonElement).style.background = "#dfc08a")
-                }
-                onMouseOut={(e) =>
-                  ((e.target as HTMLButtonElement).style.background = "#C9A96E")
-                }
-                disabled={!checkIn || !checkOut || nights < 0 || !selectedRoom}
-              >
-                Reserve ·{" "}
-                {nights > 1
-                  ? `₦${total.toLocaleString()}`
-                  : `From ₦${room.price.toLocaleString()}`}
-              </button>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  justifyContent: "center",
-                  fontSize: 12,
-                  color: "rgba(245,240,232,0.3)",
-                }}
-              >
-                <ShieldCheckIcon
-                  style={{ width: 14, height: 14, color: "#C9A96E" }}
-                />
-                Free cancellation · No charge until confirmed
-              </div>
-              <div
-                style={{
-                  borderTop: "1px solid rgba(245,240,232,0.07)",
-                  paddingTop: 14,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                }}
-              >
-                <div
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: "50%",
-                    background: "rgba(245,240,232,0.08)",
-                    border: "1px solid rgba(245,240,232,0.1)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                  }}
-                >
-                  <UserIcon
-                    style={{ width: 16, height: 16, color: "#C9A96E" }}
-                  />
-                </div>
-                <div>
-                  <p
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: "#f5f0e8",
-                    }}
-                  >
-                    Speak to a Concierge
-                  </p>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      marginTop: 2,
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: "50%",
-                        background: "#4ade80",
-                        display: "inline-block",
-                      }}
-                    />
-                    <p
-                      style={{
-                        fontSize: 11,
-                        color: "rgba(245,240,232,0.35)",
-                      }}
-                    >
-                      Available 24/7 · Avg reply 4 min
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setChatOpen(true)}
-                  style={{
-                    marginLeft: "auto",
-                    fontSize: 12,
-                    fontWeight: 700,
-                    color: "#C9A96E",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    flexShrink: 0,
-                  }}
-                >
-                  Chat →
-                </button>
-              </div>
+              ))}
             </div>
           </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr 1fr",
-              gap: 8,
-              marginTop: 10,
-            }}
-          >
-            {[
-              ["🔒", "Secure", "256-bit SSL"],
-              ["✓", "Verified", "Official listing"],
-              ["🏅", "Best Price", "Guaranteed"],
-            ].map(([icon, title, sub]) => (
-              <div
-                key={String(title)}
-                style={{
-                  background: "#141210",
-                  border: "1px solid rgba(245,240,232,0.08)",
-                  borderRadius: 14,
-                  padding: "12px 8px",
-                  textAlign: "center",
-                }}
-              >
-                <div style={{ fontSize: 18, marginBottom: 4 }}>{icon}</div>
-                <p style={{ fontSize: 11, fontWeight: 700, color: "#f5f0e8" }}>
-                  {title}
+
+          {/* Amenities */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+            <h3 className="font-bold text-gray-800 text-sm mb-1 flex items-center gap-2">
+              <CheckCircleIcon className="w-4 h-4 text-[#C9A96E]" /> Property
+              Amenities
+              <span className="text-xs font-normal text-gray-400">
+                ({form.amenities.length} selected)
+              </span>
+            </h3>
+            <p className="text-xs text-gray-400 mb-4">
+              Select everything available at your property
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {AMENITIES_LIST.map((a) => {
+                const on = form.amenities.includes(a);
+                return (
+                  <button
+                    key={a}
+                    type="button"
+                    onClick={() => toggleAmenity(a)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border transition-all text-left ${on ? "bg-[#C9A96E]/8 border-[#C9A96E]/40 text-[#C9A96E]" : "bg-gray-50 border-gray-100 text-gray-500 hover:border-gray-300 hover:bg-gray-100"}`}
+                  >
+                    <div
+                      className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 transition-all ${on ? "bg-[#C9A96E] border-[#C9A96E]" : "border-gray-300"}`}
+                    >
+                      {on && (
+                        <span className="text-white text-[8px] font-bold">
+                          ✓
+                        </span>
+                      )}
+                    </div>
+                    {a}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Tags & Photos */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+            <h3 className="font-bold text-gray-800 text-sm mb-4 flex items-center gap-2">
+              <PhotoIcon className="w-4 h-4 text-[#C9A96E]" /> Tags & Property
+              Photos
+            </h3>
+            <div className="space-y-5">
+              <div>
+                <label className={lbl}>Tags (comma-separated)</label>
+                <input
+                  className={inp}
+                  value={form.tags}
+                  onChange={(e) => set("tags")(e.target.value)}
+                  placeholder="Romantic, Sea View, Private, Luxury"
+                />
+              </div>
+              <div>
+                <label className={lbl}>Upload Photos from Device</label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) =>
+                    e.target.files && handleFileUpload(e.target.files)
+                  }
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl p-8 transition-all ${uploadingImages ? "border-[#C9A96E]/40 bg-[#C9A96E]/5 cursor-wait" : "border-gray-200 hover:border-[#C9A96E]/50 hover:bg-amber-50/30 cursor-pointer"}`}
+                >
+                  {uploadingImages ? (
+                    <>
+                      <span className="w-7 h-7 border-2 border-[#C9A96E]/30 border-t-[#C9A96E] rounded-full animate-spin" />
+                      <span className="text-sm text-[#C9A96E] font-semibold">
+                        Uploading…
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-12 h-12 rounded-2xl bg-[#C9A96E]/10 border border-[#C9A96E]/20 flex items-center justify-center">
+                        <PhotoIcon className="w-6 h-6 text-[#C9A96E]" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm font-semibold text-gray-700">
+                          Click to upload photos
+                        </p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          JPG, PNG, WEBP — multiple files allowed
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </button>
+                {uploadError && (
+                  <p className="text-xs text-red-500 mt-2 flex items-center gap-1">
+                    <XMarkIcon className="w-3 h-3 shrink-0" />
+                    {uploadError}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className={lbl}>Or Paste an Image URL</label>
+                <div className="flex gap-2">
+                  <input
+                    className={inp}
+                    value={urlInput}
+                    onChange={(e) => setUrlInput(e.target.value)}
+                    placeholder="https://images.unsplash.com/…"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addUrlManually();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={addUrlManually}
+                    className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 transition-colors whitespace-nowrap"
+                  >
+                    Add URL
+                  </button>
+                </div>
+              </div>
+              {form.images.length > 0 && (
+                <div>
+                  <label className={lbl}>
+                    Photos ({form.images.length}) — hover to remove
+                  </label>
+                  <div className="flex gap-2 flex-wrap">
+                    {form.images.map((url, i) => (
+                      <div
+                        key={i}
+                        className="relative w-24 h-20 rounded-xl overflow-hidden border border-gray-200 bg-gray-100 group shadow-sm"
+                      >
+                        <img
+                          src={url}
+                          alt=""
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (
+                              e.target as HTMLImageElement
+                            ).parentElement!.style.opacity = "0.35";
+                          }}
+                        />
+                        {i === 0 && (
+                          <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[9px] text-center py-0.5 font-bold">
+                            MAIN
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeImage(i)}
+                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
+                        >
+                          <XMarkIcon className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1.5">
+                    First image is the main thumbnail. Hover a photo to remove
+                    it.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── Room Types Manager ── only shown after listing is saved ── */}
+          {savedListingId ? (
+            <RoomTypesManager listingId={savedListingId} />
+          ) : (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex items-start gap-3">
+              <BuildingOffice2Icon className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-amber-800">
+                  Room types can be added after saving
                 </p>
-                <p style={{ fontSize: 10, color: "rgba(245,240,232,0.3)" }}>
-                  {sub}
+                <p className="text-xs text-amber-600 mt-0.5">
+                  Publish or update this listing first, then add individual room
+                  types for guests to choose from.
                 </p>
               </div>
-            ))}
-          </div>
-        </div>
-      </div>
-      {/* Mobile CTA */}
-      <div
-        style={{
-          position: "fixed",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          background: "rgba(14,13,11,0.97)",
-          backdropFilter: "blur(12px)",
-          borderTop: "1px solid rgba(245,240,232,0.08)",
-          padding: "12px 20px",
-          paddingBottom: "max(12px, env(safe-area-inset-bottom))",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          zIndex: 30,
-          gap: 12,
-        }}
-        className="lg:hidden"
-      >
-        <div>
-          <p
-            style={{
-              fontFamily: "Cormorant Garamond, serif",
-              fontSize: 20,
-              fontWeight: 700,
-              color: "#f5f0e8",
-            }}
-          >
-            ₦{room.price.toLocaleString()}{" "}
-            <span
-              style={{
-                fontSize: 13,
-                fontWeight: 400,
-                color: "rgba(245,240,232,0.4)",
-              }}
+            </div>
+          )}
+
+          {/* Save / Publish */}
+          <div className="flex gap-3">
+            <button
+              onClick={save}
+              disabled={saving}
+              className="flex-1 bg-[#C9A96E] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-2xl text-sm hover:bg-[#b8935a] transition-all hover:scale-[1.01] active:scale-[0.99] shadow-lg shadow-[#C9A96E]/20 flex items-center justify-center gap-2"
             >
-              / night
-            </span>
-          </p>
-          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <StarIcon style={{ width: 12, height: 12, color: "#C9A96E" }} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: "#f5f0e8" }}>
-              {hotel.rating}
-            </span>
-            <span style={{ fontSize: 11, color: "rgba(245,240,232,0.4)" }}>
-              ({hotel.reviewCount.toLocaleString()})
-            </span>
+              {saving ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Saving…
+                </>
+              ) : editing ? (
+                "Update Listing"
+              ) : savedListingId ? (
+                "Saved ✓"
+              ) : (
+                "Publish Listing"
+              )}
+            </button>
+            {savedListingId && !editing && (
+              <button
+                onClick={() => setShowVerif(true)}
+                className="px-5 py-3.5 rounded-2xl border border-[#C9A96E]/40 text-sm font-semibold text-[#C9A96E] hover:bg-[#C9A96E]/5 bg-white transition-colors flex items-center gap-2"
+              >
+                <ShieldCheckIcon className="w-4 h-4" /> Verify →
+              </button>
+            )}
+            <button
+              onClick={onCancel}
+              className="px-6 py-3.5 rounded-2xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 bg-white transition-colors"
+            >
+              {savedListingId ? "Done" : "Cancel"}
+            </button>
           </div>
-        </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            flexShrink: 0,
-          }}
-        >
-          <button
-            onClick={() => setChatOpen(true)}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 12,
-              background: "rgba(245,240,232,0.07)",
-              border: "1px solid rgba(245,240,232,0.12)",
-              color: "#f5f0e8",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              position: "relative",
-            }}
-          >
-            <ChatBubbleLeftRightIcon style={{ width: 20, height: 20 }} />
-            <span
-              style={{
-                position: "absolute",
-                top: 8,
-                right: 8,
-                width: 7,
-                height: 7,
-                borderRadius: "50%",
-                background: "#4ade80",
-                border: "1.5px solid #0e0d0b",
-              }}
-            />
-          </button>
-          <button
-            onClick={() => setStep("form")}
-            style={{
-              background: "#C9A96E",
-              color: "#0e0d0b",
-              fontWeight: 700,
-              fontSize: 14,
-              padding: "12px 24px",
-              borderRadius: 14,
-              border: "none",
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-            }}
-          >
-            Reserve{nights > 0 ? ` · ₦${total.toLocaleString()}` : ""}
-          </button>
         </div>
       </div>
     </div>
   );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   HOST: PROPERTIES SECTION
+═══════════════════════════════════════════════════════════ */
+const PropertiesSection = ({ onBook }: { onBook?: (h: Hotel) => void }) => {
+  const { user } = useAuth();
+  const [hotels, setHotels] = useState<Hotel[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<Hotel | null | "new">(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [verifyId, setVerifyId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    setHotels((await ListingsDB.byHost(user.id)).map(listingToHotel));
+    setLoading(false);
+  }, [user]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (verifyId) {
+    return (
+      <PropertyVerificationForm
+        listingId={verifyId}
+        onComplete={() => {
+          setVerifyId(null);
+          load();
+        }}
+      />
+    );
+  }
+
+  if (editing !== null) {
+    return (
+      <ListingForm
+        editing={editing === "new" ? null : editing}
+        hostId={user!.id}
+        hostName={`${user!.firstName} ${user!.lastName}`}
+        onSave={(saved) => {
+          setHotels((prev) =>
+            editing === "new"
+              ? [saved, ...prev]
+              : prev.map((h) => (h.id === saved.id ? saved : h)),
+          );
+          setEditing(null);
+        }}
+        onCancel={() => setEditing(null)}
+      />
+    );
+  }
+
+  return (
+    <div
+      className="flex-1 overflow-y-auto bg-gray-50 p-6"
+      style={{ animation: "fadeUp 0.3s ease both" }}
+    >
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">My Properties</h2>
+          <p className="text-gray-400 text-sm mt-0.5">
+            {loading
+              ? "Loading…"
+              : `${hotels.length} listing${hotels.length !== 1 ? "s" : ""}`}
+          </p>
+        </div>
+        <button
+          onClick={() => setEditing("new")}
+          className="flex items-center gap-2 bg-[#C9A96E] text-white font-semibold text-sm px-5 py-2.5 rounded-xl hover:bg-[#b8935a] transition-all hover:scale-105 shadow-md shadow-[#C9A96E]/20"
+        >
+          <PlusIcon className="w-4 h-4" /> Add Listing
+        </button>
+      </div>
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {[...Array(3)].map((_, i) => (
+            <Sk key={i} h="h-72" rounded="rounded-2xl" />
+          ))}
+        </div>
+      ) : hotels.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-28 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-[#C9A96E]/10 border border-[#C9A96E]/20 flex items-center justify-center mb-4">
+            <BuildingOffice2Icon className="w-7 h-7 text-[#C9A96E]" />
+          </div>
+          <h3 className="text-lg font-bold text-gray-700 mb-1">
+            No listings yet
+          </h3>
+          <p className="text-gray-400 text-sm mb-6 max-w-xs">
+            Add your first property to start receiving bookings from guests.
+          </p>
+          <button
+            onClick={() => setEditing("new")}
+            className="flex items-center gap-2 bg-[#C9A96E] text-white font-semibold text-sm px-6 py-3 rounded-xl hover:bg-[#b8935a] transition-all"
+          >
+            <PlusIcon className="w-4 h-4" /> Add Your First Listing
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {hotels.map((hotel, i) => {
+            const verifStatus: VerificationStatus =
+              hotel.verificationStatus ?? "unverified";
+            const needsVerif =
+              verifStatus === "unverified" || verifStatus === "rejected";
+            return (
+              <div
+                key={hotel.id}
+                className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 group"
+                style={{ animation: `fadeUp 0.4s ease ${i * 55}ms both` }}
+              >
+                <div
+                  className="relative h-44 overflow-hidden cursor-pointer"
+                  onClick={() => onBook?.(hotel)}
+                >
+                  <img
+                    src={
+                      hotel.thumbnail ||
+                      "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400"
+                    }
+                    alt={hotel.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src =
+                        "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400";
+                    }}
+                  />
+                  <div className="absolute top-2 left-2 flex gap-1.5 flex-wrap">
+                    {hotel.featured && (
+                      <span className="bg-[#C9A96E] text-white text-[10px] font-bold px-2.5 py-1 rounded-full">
+                        Featured
+                      </span>
+                    )}
+                    <span
+                      className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${hotel.available ? "bg-emerald-500 text-white" : "bg-gray-400 text-white"}`}
+                    >
+                      {hotel.available ? "Live" : "Hidden"}
+                    </span>
+                  </div>
+                </div>
+                <div className="p-4">
+                  <p className="font-bold text-gray-800 text-sm truncate mb-0.5">
+                    {hotel.name}
+                  </p>
+                  <div className="flex items-center gap-1 mb-2">
+                    <MapPinIcon className="w-3 h-3 text-[#C9A96E] shrink-0" />
+                    <p className="text-xs text-gray-400 truncate">
+                      {hotel.city}, {hotel.country}
+                    </p>
+                  </div>
+                  <div className="mb-3">
+                    <VerifBadge status={verifStatus} />
+                    {verifStatus === "rejected" && hotel.verificationNote && (
+                      <p className="text-[11px] text-red-500 mt-1.5 leading-snug">
+                        Reason: {hotel.verificationNote}
+                      </p>
+                    )}
+                    {needsVerif && (
+                      <button
+                        onClick={() => setVerifyId(hotel.id)}
+                        className="mt-2 flex items-center gap-1 text-[11px] font-bold text-[#C9A96E] hover:underline"
+                      >
+                        <ShieldCheckIcon className="w-3 h-3" />
+                        {verifStatus === "rejected"
+                          ? "Resubmit Verification →"
+                          : "Submit for Verification →"}
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="font-bold text-gray-900">
+                      {fmt$(hotel.pricePerNight)}
+                      <span className="text-xs text-gray-400 font-normal">
+                        /night
+                      </span>
+                    </p>
+                    {hotel.rating > 0 && (
+                      <div className="flex items-center gap-1">
+                        <StarSolid className="w-3 h-3 text-[#C9A96E]" />
+                        <span className="text-xs font-semibold text-gray-600">
+                          {hotel.rating.toFixed(1)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setEditing(hotel)}
+                      className="flex-1 flex items-center justify-center gap-1 text-xs font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-200 py-2 rounded-xl transition-colors"
+                    >
+                      <PencilSquareIcon className="w-3.5 h-3.5" /> Edit
+                    </button>
+                    <button
+                      onClick={async () => {
+                        const u = await ListingsDB.update(hotel.id, {
+                          available: !hotel.available,
+                        });
+                        if (u)
+                          setHotels((prev) =>
+                            prev.map((h) =>
+                              h.id === hotel.id ? listingToHotel(u) : h,
+                            ),
+                          );
+                      }}
+                      className={`flex-1 text-xs font-semibold py-2 rounded-xl border transition-colors ${hotel.available ? "text-amber-600 bg-amber-50 border-amber-200 hover:bg-amber-100" : "text-emerald-600 bg-emerald-50 border-emerald-200 hover:bg-emerald-100"}`}
+                    >
+                      {hotel.available ? "Hide" : "Publish"}
+                    </button>
+                    <button
+                      disabled={deleting === hotel.id}
+                      onClick={async () => {
+                        if (!confirm("Delete this listing permanently?"))
+                          return;
+                        setDeleting(hotel.id);
+                        await ListingsDB.delete(hotel.id);
+                        setHotels((prev) =>
+                          prev.filter((h) => h.id !== hotel.id),
+                        );
+                        setDeleting(null);
+                      }}
+                      className="w-9 flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 border border-gray-200 hover:border-red-200 rounded-xl transition-colors disabled:opacity-40"
+                    >
+                      {deleting === hotel.id ? (
+                        <span className="w-3.5 h-3.5 border border-red-400 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <TrashIcon className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => {
+                        const url = `https://lux-d1ok.vercel.app/api/og-listings?id=${hotel.id}`;
+                        navigator.clipboard.writeText(url);
+                        alert("Link copied! Share this on WhatsApp.");
+                      }}
+                      className="flex-1 flex items-center justify-center gap-1 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 py-2 rounded-xl transition-colors"
+                    >
+                      📋 Share
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   HOST: BOOKINGS SECTION
+═══════════════════════════════════════════════════════════ */
+const HostBookings = () => {
+  const { user } = useAuth();
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<"all" | Booking["status"]>("all");
+  const [actions, setActions] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    BookingsDB.byHost(user.id)
+      .then(setBookings)
+      .finally(() => setLoading(false));
+  }, [user]);
+
+  const changeStatus = async (id: string, s: Booking["status"]) => {
+    await BookingsDB.updateStatus(id, s);
+    setBookings((p) => p.map((b) => (b.id === id ? { ...b, status: s } : b)));
+    setActions(null);
+  };
+
+  const counts = {
+    all: bookings.length,
+    confirmed: bookings.filter((b) => b.status === "confirmed").length,
+    pending: bookings.filter((b) => b.status === "pending").length,
+    cancelled: bookings.filter((b) => b.status === "cancelled").length,
+  };
+  const filtered =
+    filter === "all" ? bookings : bookings.filter((b) => b.status === filter);
+
+  return (
+    <div
+      className="flex-1 overflow-y-auto bg-gray-50 p-6"
+      style={{ animation: "fadeUp 0.3s ease both" }}
+    >
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">Bookings</h2>
+        <p className="text-gray-400 text-sm mt-0.5">
+          {bookings.length} total reservation{bookings.length !== 1 ? "s" : ""}
+        </p>
+      </div>
+      <div className="flex gap-2 flex-wrap mb-5">
+        {(["all", "confirmed", "pending", "cancelled"] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`text-xs font-semibold px-4 py-2 rounded-full border transition-all ${filter === f ? "bg-[#C9A96E] border-[#C9A96E] text-white shadow-sm" : "border-gray-200 text-gray-500 bg-white hover:border-[#C9A96E]"}`}
+          >
+            {f.charAt(0).toUpperCase() + f.slice(1)} ({counts[f]})
+          </button>
+        ))}
+      </div>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        {loading ? (
+          <div className="p-6 space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <Sk key={i} h="h-11" />
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="p-14 text-center">
+            <CalendarDaysIcon className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+            <p className="text-gray-400 text-sm">No bookings</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {[
+                    "Guest",
+                    "Property",
+                    "Check-in",
+                    "Check-out",
+                    "Nights",
+                    "Total",
+                    "Status",
+                    "Actions",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((b, i) => (
+                  <tr
+                    key={b.id}
+                    className="border-b border-gray-50 hover:bg-gray-50/60 transition-colors"
+                    style={{ animation: `fadeUp 0.3s ease ${i * 30}ms both` }}
+                  >
+                    <td className="px-5 py-3">
+                      <p className="text-sm font-medium text-gray-800">
+                        {b.guestName}
+                      </p>
+                      <p className="text-xs text-gray-400">{b.guestEmail}</p>
+                    </td>
+                    <td className="px-5 py-3 text-sm text-gray-600 max-w-[120px] truncate">
+                      {b.listingName}
+                    </td>
+                    <td className="px-5 py-3 text-sm text-gray-500 whitespace-nowrap">
+                      {fmtDate(b.checkIn)}
+                    </td>
+                    <td className="px-5 py-3 text-sm text-gray-500 whitespace-nowrap">
+                      {fmtDate(b.checkOut)}
+                    </td>
+                    <td className="px-5 py-3 text-sm text-gray-500">
+                      {b.nights}
+                    </td>
+                    <td className="px-5 py-3 text-sm font-bold text-gray-800">
+                      {fmt$(b.totalAmount)}
+                    </td>
+                    <td className="px-5 py-3">
+                      <StatusPill status={b.status} />
+                    </td>
+                    <td className="px-5 py-3 relative">
+                      <button
+                        onClick={() =>
+                          setActions(actions === b.id ? null : b.id)
+                        }
+                        className="w-7 h-7 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400 transition-colors"
+                      >
+                        <EllipsisHorizontalIcon className="w-4 h-4" />
+                      </button>
+                      {actions === b.id && (
+                        <div
+                          className="absolute right-3 top-10 bg-white border border-gray-100 rounded-xl shadow-xl z-30 overflow-hidden min-w-[148px]"
+                          onMouseLeave={() => setActions(null)}
+                        >
+                          {b.status !== "confirmed" && (
+                            <button
+                              onClick={() => changeStatus(b.id, "confirmed")}
+                              className="w-full text-left px-4 py-2.5 text-sm text-emerald-600 hover:bg-emerald-50 font-medium"
+                            >
+                              ✓ Confirm
+                            </button>
+                          )}
+                          {b.status !== "cancelled" && (
+                            <button
+                              onClick={() => changeStatus(b.id, "cancelled")}
+                              className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 font-medium"
+                            >
+                              ✕ Decline
+                            </button>
+                          )}
+                          {b.status !== "pending" && (
+                            <button
+                              onClick={() => changeStatus(b.id, "pending")}
+                              className="w-full text-left px-4 py-2.5 text-sm text-amber-600 hover:bg-amber-50 font-medium"
+                            >
+                              ⏳ Set Pending
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   HOST: EARNINGS + WALLET + WITHDRAWALS
+═══════════════════════════════════════════════════════════ */
+const EarningsSection = () => {
+  const { user } = useAuth();
+  const [wallet, setWallet] = useState<import("./index").Wallet | null>(null);
+  const [transactions, setTransactions] = useState<
+    import("./index").WalletTransaction[]
+  >([]);
+  const [withdrawals, setWithdrawals] = useState<
+    import("./index").WithdrawalRequest[]
+  >([]);
+  const [loading, setLoading] = useState(true);
+  const [showWithdrawForm, setShowWithdrawForm] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [withdrawError, setWithdrawError] = useState("");
+  const [withdrawSuccess, setWithdrawSuccess] = useState(false);
+  const [form, setForm] = useState({ amount: "" });
+  const [resolved, setResolved] = useState<ResolvedAccount | null>(null);
+
+  const load = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    const [w, tx, wr] = await Promise.all([
+      WalletDB.get(user.id),
+      WalletDB.transactions(user.id),
+      WalletDB.withdrawalsByHost(user.id),
+    ]);
+    setWallet(w);
+    setTransactions(tx);
+    setWithdrawals(wr);
+    setLoading(false);
+  }, [user]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const handleWithdraw = async () => {
+    setWithdrawError("");
+    const amount = Number(form.amount);
+    if (!amount || amount <= 0)
+      return setWithdrawError("Enter a valid amount.");
+    if (!resolved)
+      return setWithdrawError(
+        "Select a bank and enter a valid account number.",
+      );
+    if (wallet && amount > wallet.balance)
+      return setWithdrawError(
+        `Insufficient balance. Available: ₦${wallet.balance.toLocaleString()}`,
+      );
+    setWithdrawing(true);
+    try {
+      await WalletDB.requestWithdrawal({
+        hostId: user!.id,
+        amount,
+        bankName: resolved.bankName,
+        bankCode: resolved.bankCode,
+        accountNumber: resolved.accountNumber,
+        accountName: resolved.accountName,
+      });
+      setWithdrawSuccess(true);
+      setShowWithdrawForm(false);
+      setForm({ amount: "" });
+      setResolved(null);
+      await load();
+    } catch (e: any) {
+      setWithdrawError(e.message ?? "Withdrawal failed.");
+    } finally {
+      setWithdrawing(false);
+    }
+  };
+
+  const inp =
+    "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#C9A96E] focus:ring-2 focus:ring-[#C9A96E]/10 transition-all bg-white";
+  const lbl =
+    "block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5";
+  const pendingWithdrawals = withdrawals.filter(
+    (w) => w.status === "pending",
+  ).length;
+
+  return (
+    <div
+      className="flex-1 overflow-y-auto bg-gray-50 p-6 space-y-6"
+      style={{ animation: "fadeUp 0.3s ease both" }}
+    >
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">
+            Earnings & Wallet
+          </h2>
+          <p className="text-gray-400 text-sm mt-0.5">
+            Your 90% share of every confirmed booking
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            setShowWithdrawForm(true);
+            setWithdrawSuccess(false);
+            setWithdrawError("");
+          }}
+          className="flex items-center gap-2 bg-[#C9A96E] text-white font-semibold text-sm px-5 py-2.5 rounded-xl hover:bg-[#b8935a] transition-all hover:scale-105 shadow-md shadow-[#C9A96E]/20"
+        >
+          <BanknotesIcon className="w-4 h-4" /> Withdraw Funds
+        </button>
+      </div>
+      {loading ? (
+        <Sk h="h-28" rounded="rounded-2xl" />
+      ) : (
+        <div className="bg-gradient-to-br from-[#1a1208] to-[#2d1f0a] rounded-2xl p-6 border border-[#C9A96E]/20 shadow-lg relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-48 h-48 rounded-full bg-[#C9A96E]/5 -translate-y-1/2 translate-x-1/2" />
+          <p className="text-[#C9A96E] text-xs font-bold uppercase tracking-widest mb-1">
+            Available Balance
+          </p>
+          <p className="font-['Cormorant_Garamond'] text-5xl font-bold text-white mb-4">
+            ₦{(wallet?.balance ?? 0).toLocaleString()}
+          </p>
+          <div className="flex gap-6 flex-wrap">
+            <div>
+              <p className="text-white/40 text-xs">Total Earned</p>
+              <p className="text-white font-bold">
+                ₦{(wallet?.totalEarned ?? 0).toLocaleString()}
+              </p>
+            </div>
+            <div>
+              <p className="text-white/40 text-xs">Total Withdrawn</p>
+              <p className="text-white font-bold">
+                ₦{(wallet?.totalWithdrawn ?? 0).toLocaleString()}
+              </p>
+            </div>
+            <div>
+              <p className="text-white/40 text-xs">Pending Withdrawals</p>
+              <p className="text-amber-400 font-bold">{pendingWithdrawals}</p>
+            </div>
+          </div>
+        </div>
+      )}
+      {withdrawSuccess && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center gap-3 text-emerald-700 text-sm font-semibold">
+          <CheckCircleIcon className="w-5 h-5 shrink-0" /> Withdrawal request
+          submitted! Admin will process it within 24–48 hours.
+        </div>
+      )}
+      {showWithdrawForm && (
+        <div
+          className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6"
+          style={{ animation: "fadeUp 0.2s ease both" }}
+        >
+          <div className="flex items-center justify-between mb-5">
+            <h3 className="font-bold text-gray-900">
+              Withdraw to Bank Account
+            </h3>
+            <button
+              onClick={() => setShowWithdrawForm(false)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <XMarkIcon className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label className={lbl}>Amount (₦)</label>
+              <input
+                className={inp}
+                type="number"
+                min="1"
+                placeholder={`Max: ₦${(wallet?.balance ?? 0).toLocaleString()}`}
+                value={form.amount}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, amount: e.target.value }))
+                }
+              />
+            </div>
+            <BankAccountPicker onResolved={setResolved} />
+            {withdrawError && (
+              <p className="text-sm text-red-500 flex items-center gap-1.5">
+                <XMarkIcon className="w-4 h-4 shrink-0" />
+                {withdrawError}
+              </p>
+            )}
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={handleWithdraw}
+                disabled={withdrawing || !resolved}
+                className="flex-1 bg-[#C9A96E] disabled:opacity-50 text-white font-bold py-3 rounded-xl text-sm hover:bg-[#b8935a] transition-all flex items-center justify-center gap-2"
+              >
+                {withdrawing ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Processing…
+                  </>
+                ) : (
+                  "Submit Withdrawal"
+                )}
+              </button>
+              <button
+                onClick={() => setShowWithdrawForm(false)}
+                className="px-5 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100">
+          <h3 className="font-bold text-gray-900">Transaction History</h3>
+        </div>
+        {loading ? (
+          <div className="p-6 space-y-3">
+            {[...Array(4)].map((_, i) => (
+              <Sk key={i} h="h-10" />
+            ))}
+          </div>
+        ) : transactions.length === 0 ? (
+          <div className="p-12 text-center">
+            <BanknotesIcon className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+            <p className="text-gray-400 text-sm">No transactions yet</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {transactions.map((tx, i) => (
+              <div
+                key={tx.id}
+                className="flex items-center justify-between px-6 py-3.5 hover:bg-gray-50/60 transition-colors"
+                style={{ animation: `fadeUp 0.3s ease ${i * 25}ms both` }}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold ${tx.type === "credit" ? "bg-emerald-500" : "bg-red-400"}`}
+                  >
+                    {tx.type === "credit" ? "+" : "−"}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">
+                      {tx.description}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {fmtDate(tx.createdAt)}
+                    </p>
+                  </div>
+                </div>
+                <p
+                  className={`font-bold text-sm ${tx.type === "credit" ? "text-emerald-600" : "text-red-500"}`}
+                >
+                  {tx.type === "credit" ? "+" : "−"}₦
+                  {tx.amount.toLocaleString()}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      {withdrawals.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h3 className="font-bold text-gray-900">Withdrawal Requests</h3>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {withdrawals.map((wr, i) => (
+              <div
+                key={wr.id}
+                className="flex items-center justify-between px-6 py-3.5 hover:bg-gray-50/60"
+                style={{ animation: `fadeUp 0.3s ease ${i * 25}ms both` }}
+              >
+                <div>
+                  <p className="text-sm font-medium text-gray-800">
+                    {wr.bankName} · {wr.accountNumber}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {wr.accountName} · {fmtDate(wr.createdAt)}
+                  </p>
+                  {wr.adminNote && (
+                    <p className="text-xs text-red-500 mt-0.5">
+                      {wr.adminNote}
+                    </p>
+                  )}
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-gray-800">
+                    ₦{wr.amount.toLocaleString()}
+                  </p>
+                  <span
+                    className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${wr.status === "approved" ? "text-emerald-600 bg-emerald-50 border-emerald-200" : wr.status === "rejected" ? "text-red-500 bg-red-50 border-red-200" : "text-amber-600 bg-amber-50 border-amber-200"}`}
+                  >
+                    {wr.status.charAt(0).toUpperCase() + wr.status.slice(1)}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   SETTINGS
+═══════════════════════════════════════════════════════════ */
+const SettingsSection = () => {
+  const { user, updateUser } = useAuth();
+  const [form, setForm] = useState({
+    firstName: user?.firstName ?? "",
+    lastName: user?.lastName ?? "",
+    phone: user?.phone ?? "",
+    company: user?.company ?? "",
+    country: user?.country ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const isGuest = user?.role === "guest";
+  const accent = isGuest ? "#6EADC9" : "#C9A96E";
+
+  const save = async () => {
+    setSaving(true);
+    await updateUser(form);
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+  };
+
+  const inp =
+    "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#C9A96E] focus:ring-2 focus:ring-[#C9A96E]/10 transition-all bg-white";
+  const lbl =
+    "block text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5";
+
+  return (
+    <div
+      className="flex-1 overflow-y-auto bg-gray-50 p-6"
+      style={{ animation: "fadeUp 0.3s ease both" }}
+    >
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">Settings</h2>
+        <p className="text-gray-400 text-sm mt-0.5">
+          Manage your account profile
+        </p>
+      </div>
+      <div className="max-w-lg space-y-5">
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+          <div className="flex items-center gap-4 mb-6 pb-5 border-b border-gray-100">
+            <div
+              className="w-16 h-16 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg"
+              style={{
+                background: isGuest
+                  ? "linear-gradient(135deg,#6EADC9,#4a8aad)"
+                  : "linear-gradient(135deg,#C9A96E,#8a6030)",
+              }}
+            >
+              {user?.avatar ?? user?.firstName?.[0] ?? "?"}
+            </div>
+            <div>
+              <p className="font-bold text-gray-800">
+                {user?.firstName} {user?.lastName}
+              </p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {isGuest ? "Guest Traveller" : "Property Host"}
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: accent }}>
+                {user?.emailVerified
+                  ? "✓ Email verified"
+                  : "⚠ Email not verified"}
+              </p>
+            </div>
+          </div>
+          <h3 className="font-bold text-gray-800 text-sm mb-4">
+            Profile Information
+          </h3>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={lbl}>First Name</label>
+                <input
+                  className={inp}
+                  value={form.firstName}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, firstName: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className={lbl}>Last Name</label>
+                <input
+                  className={inp}
+                  value={form.lastName}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, lastName: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+            <div>
+              <label className={lbl}>Email (cannot change)</label>
+              <input
+                className={inp + " bg-gray-50 text-gray-400 cursor-not-allowed"}
+                value={user?.email ?? ""}
+                disabled
+              />
+            </div>
+            <div>
+              <label className={lbl}>Phone</label>
+              <input
+                className={inp}
+                value={form.phone}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, phone: e.target.value }))
+                }
+                placeholder="+1 234 567 8900"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              {!isGuest && (
+                <div>
+                  <label className={lbl}>Company / Property</label>
+                  <input
+                    className={inp}
+                    value={form.company}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, company: e.target.value }))
+                    }
+                  />
+                </div>
+              )}
+              <div>
+                <label className={lbl}>Country</label>
+                <input
+                  className={inp}
+                  value={form.country}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, country: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+        <button
+          onClick={save}
+          disabled={saving}
+          className="w-full text-white font-bold py-3.5 rounded-2xl text-sm transition-all hover:scale-[1.01] shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+          style={{ background: accent, boxShadow: `0 8px 24px ${accent}30` }}
+        >
+          {saving ? (
+            <>
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              Saving…
+            </>
+          ) : saved ? (
+            "✓ Changes Saved!"
+          ) : (
+            "Save Changes"
+          )}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   HOST DASHBOARD HOME
+═══════════════════════════════════════════════════════════ */
+const HostHome = ({
+  onNavigate,
+  onBook,
+}: {
+  onNavigate: (k: NavKey) => void;
+  onBook?: (h: Hotel) => void;
+}) => {
+  const { user } = useAuth();
+  const [hotels, setHotels] = useState<Hotel[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actions, setActions] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    Promise.all([
+      ListingsDB.byHost(user.id).then((l) => l.map(listingToHotel)),
+      BookingsDB.byHost(user.id),
+    ])
+      .then(([h, b]) => {
+        setHotels(h);
+        setBookings(b);
+      })
+      .finally(() => setLoading(false));
+  }, [user]);
+
+  const changeStatus = async (id: string, s: Booking["status"]) => {
+    await BookingsDB.updateStatus(id, s);
+    setBookings((p) => p.map((b) => (b.id === id ? { ...b, status: s } : b)));
+    setActions(null);
+  };
+
+  const earnings = bookings
+    .filter((b) => b.status === "confirmed")
+    .reduce((s, b) => s + b.totalAmount, 0);
+  const active = bookings.filter((b) => b.status === "confirmed").length;
+  const pending = bookings.filter((b) => b.status === "pending").length;
+  const recent = [...bookings]
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    )
+    .slice(0, 8);
+
+  return (
+    <div
+      className="flex-1 overflow-y-auto bg-gray-50 p-6 space-y-6"
+      style={{ animation: "fadeUp 0.3s ease both" }}
+    >
+      <div>
+        <h2 className="text-3xl font-bold text-gray-900">
+          Welcome, {user?.firstName} {user?.lastName}
+        </h2>
+        <p className="text-gray-400 mt-1 text-sm">
+          Here is an overview of your property performance
+        </p>
+      </div>
+      <div className="flex gap-4 flex-wrap">
+        {loading ? (
+          [...Array(4)].map((_, i) => (
+            <div
+              key={i}
+              className="flex-1 min-w-[140px] bg-white rounded-2xl p-5 border border-gray-100 h-24 animate-pulse"
+            />
+          ))
+        ) : (
+          <>
+            <StatCard
+              icon={<BuildingOffice2Icon className="w-5 h-5 text-[#C9A96E]" />}
+              label="Total Listings"
+              value={hotels.length}
+              delay={0}
+            />
+            <StatCard
+              icon={<CalendarDaysIcon className="w-5 h-5 text-[#C9A96E]" />}
+              label="Active Bookings"
+              value={active}
+              delay={60}
+            />
+            <StatCard
+              icon={<BanknotesIcon className="w-5 h-5 text-[#C9A96E]" />}
+              label="Earnings"
+              value={fmt$(earnings)}
+              delay={120}
+            />
+            <StatCard
+              icon={<ClockIcon className="w-5 h-5 text-[#C9A96E]" />}
+              label="Pending Requests"
+              value={pending}
+              delay={180}
+            />
+          </>
+        )}
+      </div>
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_260px] gap-6">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+            <h3 className="font-bold text-gray-900">Recent Bookings</h3>
+            <button
+              onClick={() => onNavigate("bookings")}
+              className="text-xs font-semibold text-[#C9A96E] hover:underline flex items-center gap-1"
+            >
+              View all <ChevronRightIcon className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          {loading ? (
+            <div className="p-6 space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <Sk key={i} h="h-10" />
+              ))}
+            </div>
+          ) : recent.length === 0 ? (
+            <div className="p-12 text-center">
+              <CalendarDaysIcon className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+              <p className="text-gray-400 text-sm">No bookings yet</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100">
+                    {["Guests", "Property", "Date", "Status", "Actions"].map(
+                      (h) => (
+                        <th
+                          key={h}
+                          className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3"
+                        >
+                          {h}
+                        </th>
+                      ),
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {recent.map((b, i) => (
+                    <tr
+                      key={b.id}
+                      className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
+                      style={{ animation: `fadeUp 0.3s ease ${i * 35}ms both` }}
+                    >
+                      <td className="px-5 py-3">
+                        <p className="text-sm font-medium text-gray-800">
+                          {b.guestName}
+                        </p>
+                        <p className="text-xs text-gray-400">{b.guestEmail}</p>
+                      </td>
+                      <td className="px-5 py-3 text-sm text-gray-600 max-w-[120px] truncate">
+                        {b.listingName}
+                      </td>
+                      <td className="px-5 py-3 text-sm text-gray-500 whitespace-nowrap">
+                        {fmtDate(b.checkIn)}
+                      </td>
+                      <td className="px-5 py-3">
+                        <StatusPill status={b.status} />
+                      </td>
+                      <td className="px-5 py-3 relative">
+                        <button
+                          onClick={() =>
+                            setActions(actions === b.id ? null : b.id)
+                          }
+                          className="w-7 h-7 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400 transition-colors"
+                        >
+                          <EllipsisHorizontalIcon className="w-4 h-4" />
+                        </button>
+                        {actions === b.id && (
+                          <div
+                            className="absolute right-2 top-9 bg-white border border-gray-100 rounded-xl shadow-xl z-30 overflow-hidden min-w-[148px]"
+                            onMouseLeave={() => setActions(null)}
+                          >
+                            {b.status !== "confirmed" && (
+                              <button
+                                onClick={() => changeStatus(b.id, "confirmed")}
+                                className="w-full text-left px-4 py-2.5 text-sm text-emerald-600 hover:bg-emerald-50 font-medium"
+                              >
+                                ✓ Confirm
+                              </button>
+                            )}
+                            {b.status !== "cancelled" && (
+                              <button
+                                onClick={() => changeStatus(b.id, "cancelled")}
+                                className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 font-medium"
+                              >
+                                ✕ Decline
+                              </button>
+                            )}
+                            {b.status !== "pending" && (
+                              <button
+                                onClick={() => changeStatus(b.id, "pending")}
+                                className="w-full text-left px-4 py-2.5 text-sm text-amber-600 hover:bg-amber-50 font-medium"
+                              >
+                                ⏳ Set Pending
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <h3 className="font-bold text-gray-900">Your Properties</h3>
+            <button
+              onClick={() => onNavigate("properties")}
+              className="text-xs font-semibold text-[#C9A96E] hover:underline"
+            >
+              View all →
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
+            {loading ? (
+              <div className="p-4 space-y-3">
+                {[...Array(3)].map((_, i) => (
+                  <Sk key={i} h="h-14" />
+                ))}
+              </div>
+            ) : hotels.length === 0 ? (
+              <div className="p-8 text-center">
+                <BuildingOffice2Icon className="w-8 h-8 text-gray-200 mx-auto mb-2" />
+                <p className="text-gray-400 text-sm">No listings yet</p>
+                <button
+                  onClick={() => onNavigate("properties")}
+                  className="mt-2 text-xs font-semibold text-[#C9A96E] hover:underline flex items-center gap-1 mx-auto"
+                >
+                  <PlusIcon className="w-3 h-3" /> Add listing
+                </button>
+              </div>
+            ) : (
+              hotels.map((h) => (
+                <div
+                  key={h.id}
+                  className="flex items-center gap-3 p-3 hover:bg-gray-50 transition-colors cursor-pointer group"
+                  onClick={() => onBook?.(h)}
+                >
+                  <div className="w-12 h-10 rounded-lg overflow-hidden shrink-0">
+                    <img
+                      src={
+                        h.thumbnail ||
+                        "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=200"
+                      }
+                      alt={h.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src =
+                          "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=200";
+                      }}
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-gray-800 truncate">
+                      {h.name}
+                    </p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <p className="text-xs text-[#C9A96E] font-bold">
+                        {fmt$(h.pricePerNight)}
+                        <span className="text-gray-400 font-normal">/n</span>
+                      </p>
+                      <VerifBadge
+                        status={h.verificationStatus ?? "unverified"}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   MAIN EXPORT
+═══════════════════════════════════════════════════════════ */
+interface DashboardProps {
+  onBook?: (hotel: Hotel) => void;
+  onLogout?: () => void;
 }
+
+const Dashboard = ({ onBook, onLogout }: DashboardProps) => {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const role = (user?.role ?? "guest") as "host" | "guest" | "admin";
+
+  const handleLogout = useCallback(async () => {
+    await logout();
+    if (onLogout) onLogout();
+    else navigate("/login");
+  }, [logout, navigate, onLogout]);
+
+  if (!user)
+    return (
+      <div className="min-h-screen bg-[#0e0d0b] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-[#C9A96E] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+
+  if (role === "guest")
+    return <GuestDashboard onBook={onBook} onLogout={onLogout} />;
+  return <HostDashboardShell onBook={onBook} onLogout={handleLogout} />;
+};
+
+export default Dashboard;
+
+/* ═══════════════════════════════════════════════════════════
+   HOST DASHBOARD SHELL
+═══════════════════════════════════════════════════════════ */
+const HostDashboardShell = ({
+  onBook,
+  onLogout,
+}: {
+  onBook?: (hotel: Hotel) => void;
+  onLogout: () => void;
+}) => {
+  const [active, setActive] = useState<NavKey>("dashboard");
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [pending, setPending] = useState(0);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (!user) return;
+    BookingsDB.byHost(user.id).then((b) =>
+      setPending(b.filter((bk) => bk.status === "pending").length),
+    );
+  }, [user]);
+
+  const PAGE_TITLES: Record<NavKey, string> = {
+    dashboard: "Dashboard",
+    properties: "My Properties",
+    bookings: "Bookings",
+    reviews: "Reviews",
+    earnings: "Earnings",
+    messages: "Messages",
+    settings: "Settings",
+    wishlist: "Wishlist",
+    history: "Travel History",
+  };
+
+  const content = () => {
+    switch (active) {
+      case "dashboard":
+        return <HostHome onNavigate={setActive} onBook={onBook} />;
+      case "properties":
+        return <PropertiesSection onBook={onBook} />;
+      case "bookings":
+        return <HostBookings />;
+      case "reviews":
+        return <ReviewsSection />;
+      case "earnings":
+        return <EarningsSection />;
+      case "messages":
+        return <MessagesInbox />;
+      case "settings":
+        return <SettingsSection />;
+      default:
+        return <HostHome onNavigate={setActive} onBook={onBook} />;
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex overflow-hidden bg-gray-50">
+      <style>{`@keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }`}</style>
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 z-40 lg:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+      <div
+        className={`fixed inset-y-0 left-0 z-50 lg:hidden transition-transform duration-300 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
+      >
+        <Sidebar
+          role="host"
+          active={active}
+          onNav={setActive}
+          pending={pending}
+          onClose={() => setMobileOpen(false)}
+          onLogout={onLogout}
+          isMobile
+        />
+      </div>
+      <div className="hidden lg:flex shrink-0">
+        <Sidebar
+          role="host"
+          active={active}
+          onNav={setActive}
+          pending={pending}
+          onLogout={onLogout}
+        />
+      </div>
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <TopBar
+          title={PAGE_TITLES[active]}
+          onHamburger={() => setMobileOpen(true)}
+          pending={pending}
+        />
+        <main className="flex-1 overflow-hidden flex flex-col">
+          {content()}
+        </main>
+      </div>
+    </div>
+  );
+};
