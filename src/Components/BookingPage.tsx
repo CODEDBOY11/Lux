@@ -4228,84 +4228,74 @@ export default function BookingPage({
               top: 88,
               alignSelf: "start",
               animation: "fadeUp 0.5s ease 100ms both",
-              width: "100%",
-              maxWidth: 380,
-              marginLeft: "auto",
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
             }}
           >
+            {/* Main card */}
             <div
-              className="booking-widget-card"
               style={{
                 background: "#141210",
                 border: "1px solid rgba(245,240,232,0.1)",
                 borderRadius: 24,
                 overflow: "hidden",
-                boxShadow: "0 32px 64px rgba(0,0,0,0.5)",
-                width: "100%",
-                boxSizing: "border-box",
+                boxShadow: "0 24px 60px rgba(0,0,0,0.5)",
               }}
             >
+              {/* Header — selected room + price */}
               <div
                 style={{
-                  background: "rgba(201,169,110,0.06)",
+                  background:
+                    "linear-gradient(135deg, rgba(201,169,110,0.12) 0%, rgba(201,169,110,0.04) 100%)",
                   borderBottom: "1px solid rgba(245,240,232,0.08)",
-                  padding: "22px 24px",
+                  padding: "22px 24px 20px",
                 }}
               >
-                <div
+                <p
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 12,
-                    marginBottom: 8,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.2em",
+                    color: "#C9A96E",
+                    textTransform: "uppercase",
+                    marginBottom: 6,
+                    margin: "0 0 6px",
                   }}
                 >
-                  <p
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 700,
-                      letterSpacing: "0.2em",
-                      color: "#C9A96E",
-                      textTransform: "uppercase",
-                      margin: 0,
-                    }}
-                  >
-                    Selected Room
-                  </p>
-                  <span
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: "rgba(245,240,232,0.75)",
-                      background: "rgba(201,169,110,0.12)",
-                      border: "1px solid rgba(201,169,110,0.22)",
-                      borderRadius: 999,
-                      padding: "4px 10px",
-                    }}
-                  >
-                    {room.name}
-                  </span>
-                </div>
+                  Selected Room
+                </p>
+                <h3
+                  style={{
+                    fontFamily: "Cormorant Garamond, serif",
+                    fontSize: 22,
+                    fontWeight: 600,
+                    color: "#f5f0e8",
+                    margin: "0 0 3px",
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {room.name}
+                </h3>
                 <p
                   style={{
                     fontSize: 12,
                     color: "rgba(245,240,232,0.35)",
-                    marginBottom: 12,
-                    lineHeight: 1.5,
+                    margin: "0 0 16px",
                   }}
                 >
                   {room.size} · {room.bed} · Up to {room.guests} guests
                 </p>
                 <div
-                  style={{ display: "flex", alignItems: "baseline", gap: 4 }}
+                  style={{ display: "flex", alignItems: "baseline", gap: 5 }}
                 >
                   <span
                     style={{
                       fontFamily: "Cormorant Garamond, serif",
-                      fontSize: 32,
+                      fontSize: 36,
                       fontWeight: 700,
                       color: "#f5f0e8",
+                      lineHeight: 1,
                     }}
                   >
                     ₦{room.price.toLocaleString()}
@@ -4318,14 +4308,16 @@ export default function BookingPage({
                 </div>
               </div>
 
+              {/* Date + guest pickers */}
               <div
                 style={{
                   padding: "20px 24px",
                   display: "flex",
                   flexDirection: "column",
-                  gap: 14,
+                  gap: 12,
                 }}
               >
+                {/* Check-in / Check-out */}
                 <div
                   style={{
                     display: "grid",
@@ -4341,12 +4333,15 @@ export default function BookingPage({
                       }}
                       style={{
                         width: "100%",
-                        background: "rgba(245,240,232,0.05)",
+                        background: showCheckInCal
+                          ? "rgba(201,169,110,0.08)"
+                          : "rgba(245,240,232,0.04)",
                         border: `1px solid ${showCheckInCal ? "#C9A96E" : "rgba(245,240,232,0.1)"}`,
                         borderRadius: 12,
-                        padding: "10px 12px",
+                        padding: "11px 14px",
                         textAlign: "left",
                         cursor: "pointer",
+                        transition: "all 0.15s",
                       }}
                     >
                       <p
@@ -4356,16 +4351,17 @@ export default function BookingPage({
                           letterSpacing: "0.15em",
                           color: "rgba(245,240,232,0.35)",
                           textTransform: "uppercase",
-                          marginBottom: 4,
+                          margin: "0 0 4px",
                         }}
                       >
                         Check-in
                       </p>
                       <p
                         style={{
-                          fontSize: 12,
+                          fontSize: 13,
                           fontWeight: 600,
-                          color: checkIn ? "#f5f0e8" : "rgba(245,240,232,0.3)",
+                          color: checkIn ? "#f5f0e8" : "rgba(245,240,232,0.25)",
+                          margin: 0,
                         }}
                       >
                         {checkIn ? formatDate(checkIn) : "Select date"}
@@ -4383,7 +4379,7 @@ export default function BookingPage({
                           borderRadius: 16,
                           padding: 16,
                           minWidth: 260,
-                          boxShadow: "0 16px 40px rgba(0,0,0,0.6)",
+                          boxShadow: "0 16px 40px rgba(0,0,0,0.7)",
                         }}
                       >
                         <MiniCalendar
@@ -4400,6 +4396,7 @@ export default function BookingPage({
                       </div>
                     )}
                   </div>
+
                   <div style={{ position: "relative" }} ref={calOutRef}>
                     <button
                       onClick={() => {
@@ -4408,12 +4405,15 @@ export default function BookingPage({
                       }}
                       style={{
                         width: "100%",
-                        background: "rgba(245,240,232,0.05)",
+                        background: showCheckOutCal
+                          ? "rgba(201,169,110,0.08)"
+                          : "rgba(245,240,232,0.04)",
                         border: `1px solid ${showCheckOutCal ? "#C9A96E" : "rgba(245,240,232,0.1)"}`,
                         borderRadius: 12,
-                        padding: "10px 12px",
+                        padding: "11px 14px",
                         textAlign: "left",
                         cursor: "pointer",
+                        transition: "all 0.15s",
                       }}
                     >
                       <p
@@ -4423,19 +4423,24 @@ export default function BookingPage({
                           letterSpacing: "0.15em",
                           color: "rgba(245,240,232,0.35)",
                           textTransform: "uppercase",
-                          marginBottom: 4,
+                          margin: "0 0 4px",
                         }}
                       >
-                        Check-out{" "}
+                        Check-out
                         {nights > 0 && (
-                          <span style={{ color: "#C9A96E" }}>· {nights}n</span>
+                          <span style={{ color: "#C9A96E", marginLeft: 4 }}>
+                            · {nights}n
+                          </span>
                         )}
                       </p>
                       <p
                         style={{
-                          fontSize: 12,
+                          fontSize: 13,
                           fontWeight: 600,
-                          color: checkOut ? "#f5f0e8" : "rgba(245,240,232,0.3)",
+                          color: checkOut
+                            ? "#f5f0e8"
+                            : "rgba(245,240,232,0.25)",
+                          margin: 0,
                         }}
                       >
                         {checkOut ? formatDate(checkOut) : "Select date"}
@@ -4453,7 +4458,7 @@ export default function BookingPage({
                           borderRadius: 16,
                           padding: 16,
                           minWidth: 260,
-                          boxShadow: "0 16px 40px rgba(0,0,0,0.6)",
+                          boxShadow: "0 16px 40px rgba(0,0,0,0.7)",
                         }}
                       >
                         <MiniCalendar
@@ -4470,12 +4475,14 @@ export default function BookingPage({
                     )}
                   </div>
                 </div>
+
+                {/* Guests */}
                 <div
                   style={{
-                    background: "rgba(245,240,232,0.05)",
-                    border: "1px solid rgba(245,240,232,0.1)",
+                    background: "rgba(245,240,232,0.04)",
+                    border: "1px solid rgba(245,240,232,0.08)",
                     borderRadius: 12,
-                    padding: "12px 16px",
+                    padding: "11px 14px",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
@@ -4489,7 +4496,7 @@ export default function BookingPage({
                         letterSpacing: "0.15em",
                         color: "rgba(245,240,232,0.35)",
                         textTransform: "uppercase",
-                        marginBottom: 4,
+                        margin: "0 0 4px",
                       }}
                     >
                       Guests
@@ -4499,9 +4506,10 @@ export default function BookingPage({
                         fontSize: 13,
                         fontWeight: 600,
                         color: "#f5f0e8",
+                        margin: 0,
                       }}
                     >
-                      {guests} {guests === 1 ? "guest" : "guests"}
+                      {guests} guest{guests > 1 ? "s" : ""}
                     </p>
                   </div>
                   <div
@@ -4510,14 +4518,14 @@ export default function BookingPage({
                     <button
                       onClick={() => setGuests((g) => Math.max(1, g - 1))}
                       style={{
-                        width: 28,
-                        height: 28,
+                        width: 30,
+                        height: 30,
                         borderRadius: "50%",
                         background: "rgba(245,240,232,0.08)",
-                        border: "1px solid rgba(245,240,232,0.1)",
+                        border: "1px solid rgba(245,240,232,0.12)",
                         color: "#f5f0e8",
                         cursor: "pointer",
-                        fontSize: 16,
+                        fontSize: 18,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -4527,7 +4535,7 @@ export default function BookingPage({
                     </button>
                     <span
                       style={{
-                        fontSize: 14,
+                        fontSize: 15,
                         fontWeight: 700,
                         color: "#f5f0e8",
                         minWidth: 20,
@@ -4541,14 +4549,14 @@ export default function BookingPage({
                         setGuests((g) => Math.min(room.guests, g + 1))
                       }
                       style={{
-                        width: 28,
-                        height: 28,
+                        width: 30,
+                        height: 30,
                         borderRadius: "50%",
                         background: "rgba(245,240,232,0.08)",
-                        border: "1px solid rgba(245,240,232,0.1)",
+                        border: "1px solid rgba(245,240,232,0.12)",
                         color: "#f5f0e8",
                         cursor: "pointer",
-                        fontSize: 16,
+                        fontSize: 18,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -4558,162 +4566,255 @@ export default function BookingPage({
                     </button>
                   </div>
                 </div>
-                <div
-                  style={{ display: "flex", flexDirection: "column", gap: 6 }}
-                >
-                  {roomsLoading
-                    ? [1, 2].map((i) => (
-                        <div
-                          key={i}
-                          style={{
-                            height: 40,
-                            borderRadius: 10,
-                            background: "rgba(245,240,232,0.05)",
-                            border: "1px solid rgba(245,240,232,0.07)",
-                            animation: "pulse 1.5s ease-in-out infinite",
-                          }}
-                        />
-                      ))
-                    : roomTypes.map((rt) => (
-                        <button
-                          key={rt.id}
-                          onClick={() => {
-                            const found = roomTypes.find((r) => r.id === rt.id);
-                            if (found) selectRoom(found);
-                          }}
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            padding: "10px 14px",
-                            borderRadius: 10,
-                            background:
-                              selectedRoomId === rt.id
-                                ? "rgba(201,169,110,0.1)"
-                                : "rgba(245,240,232,0.03)",
-                            border: `1px solid ${selectedRoomId === rt.id ? "rgba(201,169,110,0.35)" : "rgba(245,240,232,0.07)"}`,
-                            cursor: "pointer",
-                          }}
-                        >
-                          <span
+
+                {/* Room quick-select */}
+                {roomTypes.length > 1 && (
+                  <div
+                    style={{ display: "flex", flexDirection: "column", gap: 6 }}
+                  >
+                    <p
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: "0.15em",
+                        color: "rgba(245,240,232,0.35)",
+                        textTransform: "uppercase",
+                        margin: 0,
+                      }}
+                    >
+                      Room Type
+                    </p>
+                    {roomsLoading
+                      ? [1, 2].map((i) => (
+                          <div
+                            key={i}
                             style={{
-                              fontSize: 13,
-                              fontWeight: 500,
-                              color: "#f5f0e8",
+                              height: 42,
+                              borderRadius: 10,
+                              background: "rgba(245,240,232,0.04)",
+                              border: "1px solid rgba(245,240,232,0.07)",
+                              animation: "pulse 1.5s ease-in-out infinite",
                             }}
-                          >
-                            {rt.name}
-                          </span>
-                          <span
-                            style={{
-                              fontSize: 13,
-                              fontWeight: 700,
-                              color:
-                                selectedRoomId === rt.id
-                                  ? "#C9A96E"
-                                  : "rgba(245,240,232,0.4)",
-                              flexShrink: 0,
-                              marginLeft: 8,
-                            }}
-                          >
-                            ₦{rt.price.toLocaleString()}
-                          </span>
-                        </button>
-                      ))}
-                </div>
+                          />
+                        ))
+                      : roomTypes.map((rt) => {
+                          const active = selectedRoomId === rt.id;
+                          return (
+                            <button
+                              key={rt.id}
+                              onClick={() => {
+                                const found = roomTypes.find(
+                                  (r) => r.id === rt.id,
+                                );
+                                if (found) selectRoom(found);
+                              }}
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                padding: "10px 14px",
+                                borderRadius: 10,
+                                background: active
+                                  ? "rgba(201,169,110,0.1)"
+                                  : "rgba(245,240,232,0.03)",
+                                border: `1px solid ${active ? "rgba(201,169,110,0.4)" : "rgba(245,240,232,0.07)"}`,
+                                cursor: "pointer",
+                                transition: "all 0.15s",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 8,
+                                }}
+                              >
+                                {active && (
+                                  <CheckCircleIcon
+                                    style={{
+                                      width: 13,
+                                      height: 13,
+                                      color: "#C9A96E",
+                                      flexShrink: 0,
+                                    }}
+                                  />
+                                )}
+                                <span
+                                  style={{
+                                    fontSize: 13,
+                                    fontWeight: active ? 600 : 400,
+                                    color: active
+                                      ? "#f5f0e8"
+                                      : "rgba(245,240,232,0.6)",
+                                  }}
+                                >
+                                  {rt.name}
+                                </span>
+                              </div>
+                              <span
+                                style={{
+                                  fontSize: 13,
+                                  fontWeight: 700,
+                                  color: active
+                                    ? "#C9A96E"
+                                    : "rgba(245,240,232,0.35)",
+                                  flexShrink: 0,
+                                  marginLeft: 8,
+                                }}
+                              >
+                                ₦{rt.price.toLocaleString()}
+                              </span>
+                            </button>
+                          );
+                        })}
+                  </div>
+                )}
               </div>
+
+              {/* Price breakdown */}
               <div
                 style={{
                   borderTop: "1px solid rgba(245,240,232,0.07)",
-                  paddingTop: 14,
+                  padding: "16px 24px",
                   display: "flex",
                   flexDirection: "column",
-                  gap: 8,
+                  gap: 9,
                 }}
               >
-                {[
-                  [
-                    `₦${room.price.toLocaleString()} × ${nights} nights`,
-                    `₦${subtotal.toLocaleString()}`,
-                  ],
-                  ["Taxes & resort fees", `₦${taxes.toLocaleString()}`],
-                ].map(([k, v]) => (
-                  <div
-                    key={k}
+                {nights > 0 ? (
+                  <>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        fontSize: 13,
+                        color: "rgba(245,240,232,0.4)",
+                      }}
+                    >
+                      <span>
+                        ₦{room.price.toLocaleString()} × {nights} night
+                        {nights > 1 ? "s" : ""}
+                      </span>
+                      <span>₦{subtotal.toLocaleString()}</span>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        fontSize: 13,
+                        color: "rgba(245,240,232,0.4)",
+                      }}
+                    >
+                      <span>Taxes & resort fees (12%)</span>
+                      <span>₦{taxes.toLocaleString()}</span>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        fontSize: 16,
+                        fontWeight: 700,
+                        paddingTop: 10,
+                        borderTop: "1px solid rgba(245,240,232,0.08)",
+                        marginTop: 2,
+                      }}
+                    >
+                      <span style={{ color: "#f5f0e8" }}>Total</span>
+                      <span style={{ color: "#C9A96E" }}>
+                        ₦{total.toLocaleString()}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <p
                     style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      fontSize: 12,
-                      color: "rgba(245,240,232,0.4)",
+                      fontSize: 13,
+                      color: "rgba(245,240,232,0.25)",
+                      textAlign: "center",
+                      margin: "4px 0",
                     }}
                   >
-                    <span>{k}</span>
-                    <span>{v}</span>
-                  </div>
-                ))}
+                    Select dates to see total price
+                  </p>
+                )}
+              </div>
+
+              {/* Reserve button */}
+              <div
+                style={{
+                  padding: "0 24px 20px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                }}
+              >
+                <button
+                  onClick={() => setStep("form")}
+                  disabled={
+                    !checkIn || !checkOut || nights < 1 || !selectedRoom
+                  }
+                  style={{
+                    width: "100%",
+                    background:
+                      !checkIn || !checkOut || nights < 1 || !selectedRoom
+                        ? "rgba(201,169,110,0.25)"
+                        : "#C9A96E",
+                    color:
+                      !checkIn || !checkOut || nights < 1 || !selectedRoom
+                        ? "rgba(14,13,11,0.4)"
+                        : "#0e0d0b",
+                    fontWeight: 800,
+                    fontSize: 14,
+                    padding: "16px 0",
+                    borderRadius: 14,
+                    border: "none",
+                    cursor:
+                      !checkIn || !checkOut || nights < 1 || !selectedRoom
+                        ? "not-allowed"
+                        : "pointer",
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    transition: "all 0.15s",
+                  }}
+                  onMouseOver={(e) => {
+                    if (checkIn && checkOut && nights >= 1 && selectedRoom)
+                      (e.target as HTMLButtonElement).style.background =
+                        "#dfc08a";
+                  }}
+                  onMouseOut={(e) => {
+                    if (checkIn && checkOut && nights >= 1 && selectedRoom)
+                      (e.target as HTMLButtonElement).style.background =
+                        "#C9A96E";
+                  }}
+                >
+                  {nights > 0
+                    ? `Reserve · ₦${total.toLocaleString()}`
+                    : "Reserve Now"}
+                </button>
                 <div
                   style={{
                     display: "flex",
-                    justifyContent: "space-between",
-                    fontSize: 15,
-                    fontWeight: 700,
-                    color: "#f5f0e8",
-                    paddingTop: 10,
-                    borderTop: "1px solid rgba(245,240,232,0.07)",
+                    alignItems: "center",
+                    gap: 6,
+                    justifyContent: "center",
                   }}
                 >
-                  <span>Total</span>
-                  <span style={{ color: "#C9A96E" }}>
-                    ₦{total.toLocaleString()}
+                  <ShieldCheckIcon
+                    style={{ width: 13, height: 13, color: "#C9A96E" }}
+                  />
+                  <span
+                    style={{ fontSize: 11, color: "rgba(245,240,232,0.25)" }}
+                  >
+                    Free cancellation · No charge until confirmed
                   </span>
                 </div>
               </div>
-              <button
-                onClick={() => setStep("form")}
-                style={{
-                  width: "100%",
-                  background: "#C9A96E",
-                  color: "#0e0d0b",
-                  fontWeight: 700,
-                  fontSize: 14,
-                  padding: "16px 0",
-                  borderRadius: 14,
-                  border: "none",
-                  cursor: "pointer",
-                  letterSpacing: "0.04em",
-                }}
-                onMouseOver={(e) =>
-                  ((e.target as HTMLButtonElement).style.background = "#dfc08a")
-                }
-                onMouseOut={(e) =>
-                  ((e.target as HTMLButtonElement).style.background = "#C9A96E")
-                }
-                disabled={!checkIn || !checkOut || nights < 0 || !selectedRoom}
-              >
-                Reserve ·{" "}
-                {nights > 1
-                  ? `₦${total.toLocaleString()}`
-                  : `From ₦${room.price.toLocaleString()}`}
-              </button>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  justifyContent: "center",
-                  fontSize: 12,
-                  color: "rgba(245,240,232,0.3)",
-                }}
-              >
-                <ShieldCheckIcon
-                  style={{ width: 14, height: 14, color: "#C9A96E" }}
-                />
-                Free cancellation · No charge until confirmed
-              </div>
+
+              {/* Concierge */}
               <div
                 style={{
                   borderTop: "1px solid rgba(245,240,232,0.07)",
-                  paddingTop: 14,
+                  padding: "14px 24px",
                   display: "flex",
                   alignItems: "center",
                   gap: 12,
@@ -4724,8 +4825,8 @@ export default function BookingPage({
                     width: 36,
                     height: 36,
                     borderRadius: "50%",
-                    background: "rgba(245,240,232,0.08)",
-                    border: "1px solid rgba(245,240,232,0.1)",
+                    background: "rgba(201,169,110,0.1)",
+                    border: "1px solid rgba(201,169,110,0.2)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -4736,23 +4837,19 @@ export default function BookingPage({
                     style={{ width: 16, height: 16, color: "#C9A96E" }}
                   />
                 </div>
-                <div>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <p
                     style={{
                       fontSize: 12,
                       fontWeight: 600,
                       color: "#f5f0e8",
+                      margin: "0 0 2px",
                     }}
                   >
                     Speak to a Concierge
                   </p>
                   <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      marginTop: 2,
-                    }}
+                    style={{ display: "flex", alignItems: "center", gap: 5 }}
                   >
                     <span
                       style={{
@@ -4761,12 +4858,14 @@ export default function BookingPage({
                         borderRadius: "50%",
                         background: "#4ade80",
                         display: "inline-block",
+                        flexShrink: 0,
                       }}
                     />
                     <p
                       style={{
                         fontSize: 11,
-                        color: "rgba(245,240,232,0.35)",
+                        color: "rgba(245,240,232,0.3)",
+                        margin: 0,
                       }}
                     >
                       Available 24/7 · Avg reply 4 min
@@ -4776,53 +4875,67 @@ export default function BookingPage({
                 <button
                   onClick={() => setChatOpen(true)}
                   style={{
-                    marginLeft: "auto",
                     fontSize: 12,
                     fontWeight: 700,
                     color: "#C9A96E",
                     background: "none",
-                    border: "none",
+                    border: "1px solid rgba(201,169,110,0.3)",
+                    borderRadius: 8,
+                    padding: "6px 12px",
                     cursor: "pointer",
-                    flexShrink: 0,
                   }}
                 >
                   Chat →
                 </button>
               </div>
             </div>
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr 1fr",
-              gap: 8,
-              marginTop: 10,
-            }}
-          >
-            {[
-              ["🔒", "Secure", "256-bit SSL"],
-              ["✓", "Verified", "Official listing"],
-              ["🏅", "Best Price", "Guaranteed"],
-            ].map(([icon, title, sub]) => (
-              <div
-                key={String(title)}
-                style={{
-                  background: "#141210",
-                  border: "1px solid rgba(245,240,232,0.08)",
-                  borderRadius: 14,
-                  padding: "12px 8px",
-                  textAlign: "center",
-                }}
-              >
-                <div style={{ fontSize: 18, marginBottom: 4 }}>{icon}</div>
-                <p style={{ fontSize: 11, fontWeight: 700, color: "#f5f0e8" }}>
-                  {title}
-                </p>
-                <p style={{ fontSize: 10, color: "rgba(245,240,232,0.3)" }}>
-                  {sub}
-                </p>
-              </div>
-            ))}
+
+            {/* Trust badges — below the main card */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr 1fr",
+                gap: 8,
+              }}
+            >
+              {[
+                ["🔒", "Secure", "256-bit SSL"],
+                ["✓", "Verified", "Official listing"],
+                ["🏅", "Best Price", "Guaranteed"],
+              ].map(([icon, title, sub]) => (
+                <div
+                  key={String(title)}
+                  style={{
+                    background: "#141210",
+                    border: "1px solid rgba(245,240,232,0.07)",
+                    borderRadius: 14,
+                    padding: "12px 8px",
+                    textAlign: "center",
+                  }}
+                >
+                  <div style={{ fontSize: 18, marginBottom: 4 }}>{icon}</div>
+                  <p
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "#f5f0e8",
+                      margin: "0 0 2px",
+                    }}
+                  >
+                    {title}
+                  </p>
+                  <p
+                    style={{
+                      fontSize: 10,
+                      color: "rgba(245,240,232,0.3)",
+                      margin: 0,
+                    }}
+                  >
+                    {sub}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
