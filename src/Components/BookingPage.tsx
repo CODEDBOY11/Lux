@@ -4481,7 +4481,6 @@ export default function BookingPage({
                     </span>
                   </div>
                 </div>
-                ){"}"}
                 <button
                   onClick={() => setStep("form")}
                   style={{
