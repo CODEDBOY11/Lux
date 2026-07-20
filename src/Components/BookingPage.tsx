@@ -4057,34 +4057,47 @@ export default function BookingPage({
                   padding: "22px 24px",
                 }}
               >
-                <p
+                <div
                   style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "0.2em",
-                    color: "#C9A96E",
-                    textTransform: "uppercase",
-                    marginBottom: 6,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    marginBottom: 8,
                   }}
                 >
-                  Selected Room
-                </p>
-                <h3
-                  style={{
-                    fontFamily: "Cormorant Garamond, serif",
-                    fontSize: 20,
-                    fontWeight: 600,
-                    color: "#f5f0e8",
-                    marginBottom: 2,
-                  }}
-                >
-                  {room.name}
-                </h3>
+                  <p
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: "0.2em",
+                      color: "#C9A96E",
+                      textTransform: "uppercase",
+                      margin: 0,
+                    }}
+                  >
+                    Selected Room
+                  </p>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: "rgba(245,240,232,0.75)",
+                      background: "rgba(201,169,110,0.12)",
+                      border: "1px solid rgba(201,169,110,0.22)",
+                      borderRadius: 999,
+                      padding: "4px 10px",
+                    }}
+                  >
+                    {room.name}
+                  </span>
+                </div>
                 <p
                   style={{
                     fontSize: 12,
                     color: "rgba(245,240,232,0.35)",
-                    marginBottom: 14,
+                    marginBottom: 12,
+                    lineHeight: 1.5,
                   }}
                 >
                   {room.size} · {room.bed} · Up to {room.guests} guests
@@ -4109,36 +4122,6 @@ export default function BookingPage({
                   </span>
                 </div>
               </div>
-
-              {selectedRoom && (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "0 24px 14px",
-                    borderBottom: "1px solid rgba(245,240,232,0.07)",
-                    marginBottom: 4,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: 11,
-                      color: "rgba(245,240,232,0.35)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.12em",
-                      fontWeight: 700,
-                    }}
-                  >
-                    Room
-                  </span>
-                  <span
-                    style={{ fontSize: 13, fontWeight: 600, color: "#f5f0e8" }}
-                  >
-                    {selectedRoom.name}
-                  </span>
-                </div>
-              )}
 
               <div
                 style={{
