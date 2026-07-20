@@ -4361,288 +4361,268 @@ export default function BookingPage({
                     </button>
                   </div>
                 </div>
-                <div>
-                  <p
-                    style={{
-                      fontSize: 9,
-                      fontWeight: 700,
-                      letterSpacing: "0.15em",
-                      color: "rgba(245,240,232,0.35)",
-                      textTransform: "uppercase",
-                      marginBottom: 8,
-                    }}
-                  >
-                    Room Type
-                  </p>
-                  <div
-                    style={{ display: "flex", flexDirection: "column", gap: 6 }}
-                  >
-                    {roomsLoading
-                      ? [1, 2].map((i) => (
-                          <div
-                            key={i}
+                <div
+                  style={{ display: "flex", flexDirection: "column", gap: 6 }}
+                >
+                  {roomsLoading
+                    ? [1, 2].map((i) => (
+                        <div
+                          key={i}
+                          style={{
+                            height: 40,
+                            borderRadius: 10,
+                            background: "rgba(245,240,232,0.05)",
+                            border: "1px solid rgba(245,240,232,0.07)",
+                            animation: "pulse 1.5s ease-in-out infinite",
+                          }}
+                        />
+                      ))
+                    : roomTypes.map((rt) => (
+                        <button
+                          key={rt.id}
+                          onClick={() => setSelectedRoomId(rt.id)}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            padding: "10px 14px",
+                            borderRadius: 10,
+                            background:
+                              selectedRoomId === rt.id
+                                ? "rgba(201,169,110,0.1)"
+                                : "rgba(245,240,232,0.03)",
+                            border: `1px solid ${selectedRoomId === rt.id ? "rgba(201,169,110,0.35)" : "rgba(245,240,232,0.07)"}`,
+                            cursor: "pointer",
+                          }}
+                        >
+                          <span
                             style={{
-                              height: 40,
-                              borderRadius: 10,
-                              background: "rgba(245,240,232,0.05)",
-                              border: "1px solid rgba(245,240,232,0.07)",
-                              animation: "pulse 1.5s ease-in-out infinite",
-                            }}
-                          />
-                        ))
-                      : roomTypes.map((rt) => (
-                          <button
-                            key={rt.id}
-                            onClick={() => setSelectedRoomId(rt.id)}
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                              padding: "10px 14px",
-                              borderRadius: 10,
-                              background:
-                                selectedRoomId === rt.id
-                                  ? "rgba(201,169,110,0.1)"
-                                  : "rgba(245,240,232,0.03)",
-                              border: `1px solid ${selectedRoomId === rt.id ? "rgba(201,169,110,0.35)" : "rgba(245,240,232,0.07)"}`,
-                              cursor: "pointer",
+                              fontSize: 13,
+                              fontWeight: 500,
+                              color: "#f5f0e8",
                             }}
                           >
-                            <span
-                              style={{
-                                fontSize: 13,
-                                fontWeight: 500,
-                                color: "#f5f0e8",
-                              }}
-                            >
-                              {rt.name}
-                            </span>
-                            <span
-                              style={{
-                                fontSize: 13,
-                                fontWeight: 700,
-                                color:
-                                  selectedRoomId === rt.id
-                                    ? "#C9A96E"
-                                    : "rgba(245,240,232,0.4)",
-                                flexShrink: 0,
-                                marginLeft: 8,
-                              }}
-                            >
-                              ₦{rt.price.toLocaleString()}
-                            </span>
-                          </button>
-                        ))}
-                  </div>
+                            {rt.name}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 13,
+                              fontWeight: 700,
+                              color:
+                                selectedRoomId === rt.id
+                                  ? "#C9A96E"
+                                  : "rgba(245,240,232,0.4)",
+                              flexShrink: 0,
+                              marginLeft: 8,
+                            }}
+                          >
+                            ₦{rt.price.toLocaleString()}
+                          </span>
+                        </button>
+                      ))}
                 </div>
-                <div
-                  style={{
-                    borderTop: "1px solid rgba(245,240,232,0.07)",
-                    paddingTop: 14,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 8,
-                  }}
-                >
-                  {[
-                    [
-                      `₦${room.price.toLocaleString()} × ${nights} nights`,
-                      `₦${subtotal.toLocaleString()}`,
-                    ],
-                    ["Taxes & resort fees", `₦${taxes.toLocaleString()}`],
-                  ].map(([k, v]) => (
-                    <div
-                      key={k}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        fontSize: 12,
-                        color: "rgba(245,240,232,0.4)",
-                      }}
-                    >
-                      <span>{k}</span>
-                      <span>{v}</span>
-                    </div>
-                  ))}
+              </div>
+              <div
+                style={{
+                  borderTop: "1px solid rgba(245,240,232,0.07)",
+                  paddingTop: 14,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                }}
+              >
+                {[
+                  [
+                    `₦${room.price.toLocaleString()} × ${nights} nights`,
+                    `₦${subtotal.toLocaleString()}`,
+                  ],
+                  ["Taxes & resort fees", `₦${taxes.toLocaleString()}`],
+                ].map(([k, v]) => (
                   <div
+                    key={k}
                     style={{
                       display: "flex",
                       justifyContent: "space-between",
-                      fontSize: 15,
-                      fontWeight: 700,
-                      color: "#f5f0e8",
-                      paddingTop: 10,
-                      borderTop: "1px solid rgba(245,240,232,0.07)",
+                      fontSize: 12,
+                      color: "rgba(245,240,232,0.4)",
                     }}
                   >
-                    <span>Total</span>
-                    <span style={{ color: "#C9A96E" }}>
-                      ₦{total.toLocaleString()}
-                    </span>
+                    <span>{k}</span>
+                    <span>{v}</span>
+                  </div>
+                ))}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: 15,
+                    fontWeight: 700,
+                    color: "#f5f0e8",
+                    paddingTop: 10,
+                    borderTop: "1px solid rgba(245,240,232,0.07)",
+                  }}
+                >
+                  <span>Total</span>
+                  <span style={{ color: "#C9A96E" }}>
+                    ₦{total.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setStep("form")}
+                style={{
+                  width: "100%",
+                  background: "#C9A96E",
+                  color: "#0e0d0b",
+                  fontWeight: 700,
+                  fontSize: 14,
+                  padding: "16px 0",
+                  borderRadius: 14,
+                  border: "none",
+                  cursor: "pointer",
+                  letterSpacing: "0.04em",
+                }}
+                onMouseOver={(e) =>
+                  ((e.target as HTMLButtonElement).style.background = "#dfc08a")
+                }
+                onMouseOut={(e) =>
+                  ((e.target as HTMLButtonElement).style.background = "#C9A96E")
+                }
+                disabled={!checkIn || !checkOut || nights < 0 || !selectedRoom}
+              >
+                Reserve ·{" "}
+                {nights > 1
+                  ? `₦${total.toLocaleString()}`
+                  : `From ₦${room.price.toLocaleString()}`}
+              </button>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  justifyContent: "center",
+                  fontSize: 12,
+                  color: "rgba(245,240,232,0.3)",
+                }}
+              >
+                <ShieldCheckIcon
+                  style={{ width: 14, height: 14, color: "#C9A96E" }}
+                />
+                Free cancellation · No charge until confirmed
+              </div>
+              <div
+                style={{
+                  borderTop: "1px solid rgba(245,240,232,0.07)",
+                  paddingTop: 14,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                }}
+              >
+                <div
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: "50%",
+                    background: "rgba(245,240,232,0.08)",
+                    border: "1px solid rgba(245,240,232,0.1)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <UserIcon
+                    style={{ width: 16, height: 16, color: "#C9A96E" }}
+                  />
+                </div>
+                <div>
+                  <p
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: "#f5f0e8",
+                    }}
+                  >
+                    Speak to a Concierge
+                  </p>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      marginTop: 2,
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: "50%",
+                        background: "#4ade80",
+                        display: "inline-block",
+                      }}
+                    />
+                    <p
+                      style={{
+                        fontSize: 11,
+                        color: "rgba(245,240,232,0.35)",
+                      }}
+                    >
+                      Available 24/7 · Avg reply 4 min
+                    </p>
                   </div>
                 </div>
                 <button
-                  onClick={() => setStep("form")}
+                  onClick={() => setChatOpen(true)}
                   style={{
-                    width: "100%",
-                    background: "#C9A96E",
-                    color: "#0e0d0b",
+                    marginLeft: "auto",
+                    fontSize: 12,
                     fontWeight: 700,
-                    fontSize: 14,
-                    padding: "16px 0",
-                    borderRadius: 14,
+                    color: "#C9A96E",
+                    background: "none",
                     border: "none",
                     cursor: "pointer",
-                    letterSpacing: "0.04em",
+                    flexShrink: 0,
                   }}
-                  onMouseOver={(e) =>
-                    ((e.target as HTMLButtonElement).style.background =
-                      "#dfc08a")
-                  }
-                  onMouseOut={(e) =>
-                    ((e.target as HTMLButtonElement).style.background =
-                      "#C9A96E")
-                  }
-                  disabled={
-                    !checkIn || !checkOut || nights < 0 || !selectedRoom
-                  }
                 >
-                  Reserve ·{" "}
-                  {nights > 1
-                    ? `₦${total.toLocaleString()}`
-                    : `From ₦${room.price.toLocaleString()}`}
+                  Chat →
                 </button>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    justifyContent: "center",
-                    fontSize: 12,
-                    color: "rgba(245,240,232,0.3)",
-                  }}
-                >
-                  <ShieldCheckIcon
-                    style={{ width: 14, height: 14, color: "#C9A96E" }}
-                  />
-                  Free cancellation · No charge until confirmed
-                </div>
-                <div
-                  style={{
-                    borderTop: "1px solid rgba(245,240,232,0.07)",
-                    paddingTop: 14,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 12,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: "50%",
-                      background: "rgba(245,240,232,0.08)",
-                      border: "1px solid rgba(245,240,232,0.1)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <UserIcon
-                      style={{ width: 16, height: 16, color: "#C9A96E" }}
-                    />
-                  </div>
-                  <div>
-                    <p
-                      style={{
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: "#f5f0e8",
-                      }}
-                    >
-                      Speak to a Concierge
-                    </p>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                        marginTop: 2,
-                      }}
-                    >
-                      <span
-                        style={{
-                          width: 6,
-                          height: 6,
-                          borderRadius: "50%",
-                          background: "#4ade80",
-                          display: "inline-block",
-                        }}
-                      />
-                      <p
-                        style={{
-                          fontSize: 11,
-                          color: "rgba(245,240,232,0.35)",
-                        }}
-                      >
-                        Available 24/7 · Avg reply 4 min
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setChatOpen(true)}
-                    style={{
-                      marginLeft: "auto",
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: "#C9A96E",
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      flexShrink: 0,
-                    }}
-                  >
-                    Chat →
-                  </button>
-                </div>
               </div>
             </div>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr 1fr",
-                gap: 8,
-                marginTop: 10,
-              }}
-            >
-              {[
-                ["🔒", "Secure", "256-bit SSL"],
-                ["✓", "Verified", "Official listing"],
-                ["🏅", "Best Price", "Guaranteed"],
-              ].map(([icon, title, sub]) => (
-                <div
-                  key={String(title)}
-                  style={{
-                    background: "#141210",
-                    border: "1px solid rgba(245,240,232,0.08)",
-                    borderRadius: 14,
-                    padding: "12px 8px",
-                    textAlign: "center",
-                  }}
-                >
-                  <div style={{ fontSize: 18, marginBottom: 4 }}>{icon}</div>
-                  <p
-                    style={{ fontSize: 11, fontWeight: 700, color: "#f5f0e8" }}
-                  >
-                    {title}
-                  </p>
-                  <p style={{ fontSize: 10, color: "rgba(245,240,232,0.3)" }}>
-                    {sub}
-                  </p>
-                </div>
-              ))}
-            </div>
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr 1fr",
+              gap: 8,
+              marginTop: 10,
+            }}
+          >
+            {[
+              ["🔒", "Secure", "256-bit SSL"],
+              ["✓", "Verified", "Official listing"],
+              ["🏅", "Best Price", "Guaranteed"],
+            ].map(([icon, title, sub]) => (
+              <div
+                key={String(title)}
+                style={{
+                  background: "#141210",
+                  border: "1px solid rgba(245,240,232,0.08)",
+                  borderRadius: 14,
+                  padding: "12px 8px",
+                  textAlign: "center",
+                }}
+              >
+                <div style={{ fontSize: 18, marginBottom: 4 }}>{icon}</div>
+                <p style={{ fontSize: 11, fontWeight: 700, color: "#f5f0e8" }}>
+                  {title}
+                </p>
+                <p style={{ fontSize: 10, color: "rgba(245,240,232,0.3)" }}>
+                  {sub}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
       </div>
