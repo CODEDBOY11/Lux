@@ -134,21 +134,6 @@ function StarPicker({
 }
 
 // Minimal skeleton helper used in the rooms list when loading
-function Sk({ h, rounded }: { h?: string; rounded?: string }) {
-  const height = h === "h-36" ? 144 : undefined;
-  const radius = rounded === "rounded-2xl" ? 16 : 8;
-  return (
-    <div
-      style={{
-        width: "100%",
-        height,
-        borderRadius: radius,
-        background: "rgba(245,240,232,0.04)",
-        marginBottom: 12,
-      }}
-    />
-  );
-}
 
 function SubRating({
   label,
@@ -3587,83 +3572,213 @@ export default function BookingPage({
             )}
 
             {activeTab === "rooms" && (
-              <div className="space-y-4 mt-4">
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                  marginTop: 16,
+                }}
+              >
                 {roomsLoading ? (
-                  [...Array(2)].map((_, i) => (
-                    <Sk key={i} h="h-36" rounded="rounded-2xl" />
+                  [0, 1].map((i) => (
+                    <div
+                      key={i}
+                      style={{
+                        height: 120,
+                        borderRadius: 16,
+                        background: "rgba(245,240,232,0.04)",
+                        border: "1px solid rgba(245,240,232,0.07)",
+                        animation: "pulse 1.5s ease-in-out infinite",
+                      }}
+                    />
                   ))
                 ) : roomTypes.length === 0 ? (
-                  <div className="text-center py-12 text-gray-400 text-sm">
+                  <div
+                    style={{
+                      textAlign: "center",
+                      padding: "48px 0",
+                      fontSize: 13,
+                      color: "rgba(245,240,232,0.3)",
+                    }}
+                  >
                     No room types listed yet.
                   </div>
                 ) : (
-                  roomTypes.map((room) => (
-                    <div
-                      key={room.id}
-                      onClick={() => selectRoom(room)}
-                      className={`border-2 rounded-2xl p-4 cursor-pointer transition-all ${
-                        selectedRoom?.id === room.id
-                          ? "border-[#C9A96E] bg-amber-50/40"
-                          : "border-gray-100 hover:border-gray-300"
-                      }`}
-                    >
-                      <div className="flex gap-4">
-                        {room.images[0] && (
-                          <img
-                            src={room.images[0]}
-                            alt={room.name}
-                            className="w-28 h-20 object-cover rounded-xl shrink-0"
-                          />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <h4 className="font-bold text-gray-900">
-                                {room.name}
-                              </h4>
-                              <p className="text-xs text-gray-400 mt-0.5">
-                                {room.bedType} · {room.size} · Up to{" "}
-                                {room.maxGuests} guests
-                              </p>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <p className="font-bold text-gray-900">
-                                ₦{room.price.toLocaleString()}
-                              </p>
-                              <p className="text-[11px] text-gray-400">
-                                / night
-                              </p>
-                            </div>
-                          </div>
-                          {room.description && (
-                            <p className="text-xs text-gray-500 mt-1.5 line-clamp-2">
-                              {room.description}
-                            </p>
+                  roomTypes.map((room) => {
+                    const isSelected = selectedRoom?.id === room.id;
+                    return (
+                      <div
+                        key={room.id}
+                        onClick={() => selectRoom(room)}
+                        style={{
+                          border: `1px solid ${isSelected ? "rgba(201,169,110,0.5)" : "rgba(245,240,232,0.08)"}`,
+                          borderRadius: 16,
+                          padding: 16,
+                          cursor: "pointer",
+                          background: isSelected
+                            ? "rgba(201,169,110,0.06)"
+                            : "rgba(245,240,232,0.02)",
+                          transition: "all 0.18s ease",
+                          outline: isSelected
+                            ? "1px solid rgba(201,169,110,0.2)"
+                            : "none",
+                        }}
+                      >
+                        <div style={{ display: "flex", gap: 14 }}>
+                          {room.images[0] && (
+                            <img
+                              src={room.images[0]}
+                              alt={room.name}
+                              style={{
+                                width: 96,
+                                height: 72,
+                                objectFit: "cover",
+                                borderRadius: 10,
+                                flexShrink: 0,
+                              }}
+                            />
                           )}
-                          <div className="flex flex-wrap gap-1.5 mt-2">
-                            {room.amenities.slice(0, 4).map((a) => (
-                              <span
-                                key={a}
-                                className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full"
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "flex-start",
+                                gap: 8,
+                              }}
+                            >
+                              <div style={{ minWidth: 0 }}>
+                                <h4
+                                  style={{
+                                    fontSize: 14,
+                                    fontWeight: 700,
+                                    color: "#f5f0e8",
+                                    fontFamily: "Cormorant Garamond, serif",
+                                    margin: 0,
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {room.name}
+                                </h4>
+                                <p
+                                  style={{
+                                    fontSize: 11,
+                                    color: "rgba(245,240,232,0.35)",
+                                    marginTop: 3,
+                                  }}
+                                >
+                                  {room.bedType} · {room.size} · Up to{" "}
+                                  {room.maxGuests} guests
+                                </p>
+                              </div>
+                              <div
+                                style={{ textAlign: "right", flexShrink: 0 }}
                               >
-                                {a}
-                              </span>
-                            ))}
-                            {room.amenities.length > 4 && (
-                              <span className="text-[10px] text-gray-400">
-                                +{room.amenities.length - 4} more
-                              </span>
+                                <p
+                                  style={{
+                                    fontSize: 15,
+                                    fontWeight: 700,
+                                    color: "#C9A96E",
+                                    margin: 0,
+                                  }}
+                                >
+                                  ₦{room.price.toLocaleString()}
+                                </p>
+                                <p
+                                  style={{
+                                    fontSize: 10,
+                                    color: "rgba(245,240,232,0.3)",
+                                    marginTop: 2,
+                                  }}
+                                >
+                                  / night
+                                </p>
+                              </div>
+                            </div>
+
+                            {room.description && (
+                              <p
+                                style={{
+                                  fontSize: 12,
+                                  color: "rgba(245,240,232,0.4)",
+                                  marginTop: 6,
+                                  display: "-webkit-box",
+                                  WebkitLineClamp: 2,
+                                  WebkitBoxOrient: "vertical",
+                                  overflow: "hidden",
+                                }}
+                              >
+                                {room.description}
+                              </p>
+                            )}
+
+                            {room.amenities.length > 0 && (
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexWrap: "wrap",
+                                  gap: 5,
+                                  marginTop: 8,
+                                }}
+                              >
+                                {room.amenities.slice(0, 4).map((a) => (
+                                  <span
+                                    key={a}
+                                    style={{
+                                      fontSize: 10,
+                                      background: "rgba(245,240,232,0.06)",
+                                      border: "1px solid rgba(245,240,232,0.1)",
+                                      color: "rgba(245,240,232,0.45)",
+                                      padding: "2px 8px",
+                                      borderRadius: 99,
+                                    }}
+                                  >
+                                    {a}
+                                  </span>
+                                ))}
+                                {room.amenities.length > 4 && (
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      color: "rgba(245,240,232,0.25)",
+                                    }}
+                                  >
+                                    +{room.amenities.length - 4} more
+                                  </span>
+                                )}
+                              </div>
                             )}
                           </div>
                         </div>
+
+                        {isSelected && (
+                          <div
+                            style={{
+                              marginTop: 12,
+                              paddingTop: 12,
+                              borderTop: "1px solid rgba(201,169,110,0.2)",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              color: "#C9A96E",
+                              letterSpacing: "0.08em",
+                              textTransform: "uppercase",
+                            }}
+                          >
+                            <CheckCircleIcon
+                              style={{ width: 14, height: 14 }}
+                            />
+                            Selected
+                          </div>
+                        )}
                       </div>
-                      {selectedRoom?.id === room.id && (
-                        <div className="mt-3 pt-3 border-t border-amber-200 flex items-center gap-1.5 text-[#C9A96E] text-xs font-bold">
-                          <CheckCircleIcon className="w-4 h-4" /> Selected
-                        </div>
-                      )}
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             )}
