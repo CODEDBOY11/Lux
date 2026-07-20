@@ -200,26 +200,6 @@ function GuestReviewModal({
   const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
   const [reviewError, setReviewError] = useState("");
-  const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
-  const [selectedRoom, setSelectedRoom] = useState<RoomType | null>(null);
-  const [roomsLoading, setRoomsLoading] = useState(true);
-  useEffect(() => {
-    setRoomsLoading(true);
-    RoomTypesDB.byListing(hotel.id)
-      .then((rooms) => {
-        setRoomTypes(rooms);
-        if (rooms.length > 0) setSelectedRoom(rooms[0]); // default to cheapest
-      })
-      .finally(() => setRoomsLoading(false));
-  }, [hotel.id]);
-
-  // Reference these values to avoid "declared but its value is never read" when
-  // compiling with strict noUnusedLocals. This keeps the implementation unchanged.
-  useEffect(() => {
-    void roomTypes;
-    void selectedRoom;
-    void roomsLoading;
-  }, [roomTypes, selectedRoom, roomsLoading]);
 
   useEffect(() => {
     ReviewsDB.existsForBooking(booking.id).then(setAlreadyReviewed);
