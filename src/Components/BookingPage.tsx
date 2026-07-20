@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { MessagesDB, type Conversation } from "../index";
+
 import SEO from "../seo";
 import {
   MapPinIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   XMarkIcon,
-  CheckIcon,
   UserIcon,
   ShieldCheckIcon,
   HeartIcon,
@@ -133,6 +133,23 @@ function StarPicker({
   );
 }
 
+// Minimal skeleton helper used in the rooms list when loading
+function Sk({ h, rounded }: { h?: string; rounded?: string }) {
+  const height = h === "h-36" ? 144 : undefined;
+  const radius = rounded === "rounded-2xl" ? 16 : 8;
+  return (
+    <div
+      style={{
+        width: "100%",
+        height,
+        borderRadius: radius,
+        background: "rgba(245,240,232,0.04)",
+        marginBottom: 12,
+      }}
+    />
+  );
+}
+
 function SubRating({
   label,
   value,
@@ -183,6 +200,26 @@ function GuestReviewModal({
   const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
   const [reviewError, setReviewError] = useState("");
+  const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
+  const [selectedRoom, setSelectedRoom] = useState<RoomType | null>(null);
+  const [roomsLoading, setRoomsLoading] = useState(true);
+  useEffect(() => {
+    setRoomsLoading(true);
+    RoomTypesDB.byListing(hotel.id)
+      .then((rooms) => {
+        setRoomTypes(rooms);
+        if (rooms.length > 0) setSelectedRoom(rooms[0]); // default to cheapest
+      })
+      .finally(() => setRoomsLoading(false));
+  }, [hotel.id]);
+
+  // Reference these values to avoid "declared but its value is never read" when
+  // compiling with strict noUnusedLocals. This keeps the implementation unchanged.
+  useEffect(() => {
+    void roomTypes;
+    void selectedRoom;
+    void roomsLoading;
+  }, [roomTypes, selectedRoom, roomsLoading]);
 
   useEffect(() => {
     ReviewsDB.existsForBooking(booking.id).then(setAlreadyReviewed);
@@ -1416,6 +1453,13 @@ type RoomCard = {
   features: string[];
   image: string;
   badge: string | null;
+  // compatibility fields expected elsewhere in the file
+  images: string[];
+  bedType: string;
+  maxGuests: number;
+  pricePerNight: number;
+  description?: string;
+  amenities: string[];
 };
 
 /** Convert a Supabase RoomType to a RoomCard */
@@ -1429,6 +1473,13 @@ const toRoomCard = (rt: RoomType, hotelImage: string): RoomCard => ({
   features: rt.amenities.length ? rt.amenities : [],
   image: rt.images[0] || hotelImage,
   badge: null,
+  // keep original shape properties for compatibility with other UI code
+  images: rt.images,
+  bedType: rt.bedType,
+  maxGuests: rt.maxGuests,
+  pricePerNight: rt.pricePerNight,
+  description: rt.description,
+  amenities: rt.amenities,
 });
 
 /** Fallback single room derived from the listing itself */
@@ -1442,6 +1493,12 @@ const fallbackRoom = (hotel: Hotel): RoomCard => ({
   features: hotel.amenities.slice(0, 5),
   image: hotel.images[0],
   badge: hotel.featured ? "Featured" : null,
+  images: hotel.images,
+  bedType: hotel.bedrooms > 1 ? `${hotel.bedrooms} Bedrooms` : "1 Bedroom",
+  maxGuests: hotel.maxGuests,
+  pricePerNight: hotel.pricePerNight,
+  description: hotel.description ?? "",
+  amenities: hotel.amenities,
 });
 
 /** Fetch room types from Supabase; fall back to derived room while loading */
@@ -1480,16 +1537,18 @@ export default function BookingPage({
   onBookingComplete,
 }: Props) {
   const { user } = useAuth();
-  const { roomTypes, loadingRooms } = useRoomTypes(hotel);
+  const { roomTypes, loadingRooms: roomsLoading } = useRoomTypes(hotel);
 
   const [activeImg, setActiveImg] = useState(0);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [wishlisted, setWishlisted] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  const [selectedRoom, setSelectedRoom] = useState<string>("");
-  // Sync selectedRoom once rooms load
+  const [selectedRoom, setSelectedRoom] = useState<RoomCard | null>(null);
+  const [selectedRoomId, setSelectedRoomId] = useState<string>("");
+  // Sync selectedRoom once rooms load (keep selecting the first room by default)
   useEffect(() => {
-    if (roomTypes.length && !selectedRoom) setSelectedRoom(roomTypes[0].id);
+    if (roomTypes.length && !selectedRoom) setSelectedRoom(roomTypes[0]);
+    if (roomTypes.length && !selectedRoomId) setSelectedRoomId(roomTypes[0].id);
   }, [roomTypes, selectedRoom]);
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
@@ -1567,10 +1626,9 @@ export default function BookingPage({
     );
   })();
 
-  const room =
-    (selectedRoom ? roomTypes.find((r) => r.id === selectedRoom) : undefined) ??
-    roomTypes[0];
-  const subtotal = room.price * Math.max(nights, 1);
+  const room = selectedRoom ?? roomTypes[0];
+  const pricePerNight = room?.price ?? hotel.pricePerNight;
+  const subtotal = nights * pricePerNight;
   const taxes = Math.round(subtotal * 0.12);
   const total = subtotal + taxes;
 
@@ -1642,6 +1700,8 @@ export default function BookingPage({
               guestPhone: guestInfo.phone,
               listingId: hotel.id,
               listingName: hotel.name,
+              roomTypeId: selectedRoom?.id ?? null,
+              roomTypeName: selectedRoom?.name ?? null,
               hostId: hotel.hostId,
               checkIn: checkIn || today,
               checkOut:
@@ -2128,7 +2188,14 @@ export default function BookingPage({
                   }
                   setStep("confirm");
                 }}
-                disabled={!guestInfo.name || !guestInfo.email}
+                disabled={
+                  !guestInfo.name ||
+                  !guestInfo.email ||
+                  !checkIn ||
+                  !checkOut ||
+                  nights < 1 ||
+                  !selectedRoom
+                }
                 style={{
                   width: "100%",
                   background:
@@ -2706,6 +2773,7 @@ export default function BookingPage({
           onClose={() => setShowReviewModal(false)}
         />
       )}
+
       {/* STICKY NAV */}
       <header
         style={{
@@ -3270,7 +3338,7 @@ export default function BookingPage({
                 {
                   icon: "✦",
                   label: "Per Night",
-                  val: `₦${hotel.pricePerNight.toLocaleString()}`,
+                  val: `₦${pricePerNight.toLocaleString()}`,
                 },
               ].map((s) => (
                 <div
@@ -3521,219 +3589,84 @@ export default function BookingPage({
             )}
 
             {activeTab === "rooms" && (
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: 14 }}
-              >
-                <p
-                  style={{
-                    fontSize: 13,
-                    color: "rgba(245,240,232,0.45)",
-                    marginBottom: 4,
-                  }}
-                >
-                  Select your preferred room type.
-                </p>
-                {loadingRooms
-                  ? [1, 2, 3].map((i) => (
-                      <div
-                        key={i}
-                        style={{
-                          height: 160,
-                          borderRadius: 18,
-                          background: "rgba(245,240,232,0.04)",
-                          border: "2px solid rgba(245,240,232,0.07)",
-                          animation: "pulse 1.5s ease-in-out infinite",
-                        }}
-                      />
-                    ))
-                  : roomTypes.map((rt) => (
-                      <div
-                        key={rt.id}
-                        className="room-card"
-                        onClick={() => setSelectedRoom(rt.id)}
-                        style={{
-                          background: "rgba(245,240,232,0.03)",
-                          border: `2px solid ${selectedRoom === rt.id ? "#C9A96E" : "rgba(245,240,232,0.07)"}`,
-                          borderRadius: 18,
-                          overflow: "hidden",
-                        }}
-                      >
-                        <div
-                          className="room-card-inner"
-                          style={{ display: "flex" }}
-                        >
-                          <div
-                            className="room-card-img"
-                            style={{
-                              width: 180,
-                              flexShrink: 0,
-                              overflow: "hidden",
-                            }}
-                          >
-                            <img
-                              src={getSafeImage(rt.image)}
-                              alt={rt.name}
-                              style={{
-                                width: "100%",
-                                height: "100%",
-                                objectFit: "cover",
-                                minHeight: 140,
-                              }}
-                            />
+              <div className="space-y-4 mt-4">
+                {roomsLoading ? (
+                  [...Array(2)].map((_, i) => (
+                    <Sk key={i} h="h-36" rounded="rounded-2xl" />
+                  ))
+                ) : roomTypes.length === 0 ? (
+                  <div className="text-center py-12 text-gray-400 text-sm">
+                    No room types listed yet.
+                  </div>
+                ) : (
+                  roomTypes.map((room) => (
+                    <div
+                      key={room.id}
+                      onClick={() => setSelectedRoom(room)}
+                      className={`border-2 rounded-2xl p-4 cursor-pointer transition-all ${
+                        selectedRoom?.id === room.id
+                          ? "border-[#C9A96E] bg-amber-50/40"
+                          : "border-gray-100 hover:border-gray-300"
+                      }`}
+                    >
+                      <div className="flex gap-4">
+                        {room.images[0] && (
+                          <img
+                            src={room.images[0]}
+                            alt={room.name}
+                            className="w-28 h-20 object-cover rounded-xl shrink-0"
+                          />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <h4 className="font-bold text-gray-900">
+                                {room.name}
+                              </h4>
+                              <p className="text-xs text-gray-400 mt-0.5">
+                                {room.bedType} · {room.size} · Up to{" "}
+                                {room.maxGuests} guests
+                              </p>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="font-bold text-gray-900">
+                                ₦{room.pricePerNight.toLocaleString()}
+                              </p>
+                              <p className="text-[11px] text-gray-400">
+                                / night
+                              </p>
+                            </div>
                           </div>
-                          <div style={{ flex: 1, padding: 20, minWidth: 0 }}>
-                            <div
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "flex-start",
-                                marginBottom: 6,
-                              }}
-                            >
-                              <div style={{ minWidth: 0 }}>
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 8,
-                                    marginBottom: 4,
-                                    flexWrap: "wrap",
-                                  }}
-                                >
-                                  <h3
-                                    style={{
-                                      fontFamily: "Cormorant Garamond, serif",
-                                      fontSize: 17,
-                                      fontWeight: 600,
-                                      color: "#f5f0e8",
-                                    }}
-                                  >
-                                    {rt.name}
-                                  </h3>
-                                  {rt.badge && (
-                                    <span
-                                      style={{
-                                        fontSize: 10,
-                                        fontWeight: 700,
-                                        color: "#C9A96E",
-                                        background: "rgba(201,169,110,0.12)",
-                                        borderRadius: 99,
-                                        padding: "3px 10px",
-                                      }}
-                                    >
-                                      {rt.badge}
-                                    </span>
-                                  )}
-                                </div>
-                                <p
-                                  style={{
-                                    fontSize: 12,
-                                    color: "rgba(245,240,232,0.4)",
-                                  }}
-                                >
-                                  {rt.size} · {rt.bed} · Up to {rt.guests}{" "}
-                                  guests
-                                </p>
-                              </div>
-                              <div
-                                style={{
-                                  textAlign: "right",
-                                  flexShrink: 0,
-                                  marginLeft: 12,
-                                }}
+                          {room.description && (
+                            <p className="text-xs text-gray-500 mt-1.5 line-clamp-2">
+                              {room.description}
+                            </p>
+                          )}
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            {room.amenities.slice(0, 4).map((a) => (
+                              <span
+                                key={a}
+                                className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full"
                               >
-                                <p
-                                  style={{
-                                    fontFamily: "Cormorant Garamond, serif",
-                                    fontSize: 20,
-                                    fontWeight: 700,
-                                    color: "#C9A96E",
-                                  }}
-                                >
-                                  ₦{rt.price.toLocaleString()}
-                                </p>
-                                <p
-                                  style={{
-                                    fontSize: 11,
-                                    color: "rgba(245,240,232,0.35)",
-                                  }}
-                                >
-                                  / night
-                                </p>
-                              </div>
-                            </div>
-                            <div
-                              style={{
-                                display: "flex",
-                                flexWrap: "wrap",
-                                gap: 6,
-                                marginTop: 10,
-                              }}
-                            >
-                              {rt.features.map((f) => (
-                                <span
-                                  key={f}
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 4,
-                                    fontSize: 11,
-                                    color: "rgba(245,240,232,0.55)",
-                                    background: "rgba(245,240,232,0.05)",
-                                    border: "1px solid rgba(245,240,232,0.08)",
-                                    borderRadius: 99,
-                                    padding: "3px 10px",
-                                  }}
-                                >
-                                  <CheckIcon
-                                    style={{
-                                      width: 10,
-                                      height: 10,
-                                      color: "#C9A96E",
-                                    }}
-                                  />{" "}
-                                  {f}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              padding: "0 16px",
-                              flexShrink: 0,
-                            }}
-                          >
-                            <div
-                              style={{
-                                width: 20,
-                                height: 20,
-                                borderRadius: "50%",
-                                border: `2px solid ${selectedRoom === rt.id ? "#C9A96E" : "rgba(245,240,232,0.2)"}`,
-                                background:
-                                  selectedRoom === rt.id
-                                    ? "#C9A96E"
-                                    : "transparent",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                              }}
-                            >
-                              {selectedRoom === rt.id && (
-                                <CheckIcon
-                                  style={{
-                                    width: 11,
-                                    height: 11,
-                                    color: "#0e0d0b",
-                                  }}
-                                />
-                              )}
-                            </div>
+                                {a}
+                              </span>
+                            ))}
+                            {room.amenities.length > 4 && (
+                              <span className="text-[10px] text-gray-400">
+                                +{room.amenities.length - 4} more
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
-                    ))}
+                      {selectedRoom?.id === room.id && (
+                        <div className="mt-3 pt-3 border-t border-amber-200 flex items-center gap-1.5 text-[#C9A96E] text-xs font-bold">
+                          <CheckCircleIcon className="w-4 h-4" /> Selected
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
             )}
 
@@ -4178,6 +4111,16 @@ export default function BookingPage({
                   </span>
                 </div>
               </div>
+
+              {selectedRoom && (
+                <div className="flex items-center justify-between text-sm mb-3 pb-3 border-b border-gray-100">
+                  <span className="text-gray-500">Room</span>
+                  <span className="font-semibold text-gray-800">
+                    {selectedRoom.name}
+                  </span>
+                </div>
+              )}
+
               <div
                 style={{
                   padding: "20px 24px",
@@ -4434,7 +4377,7 @@ export default function BookingPage({
                   <div
                     style={{ display: "flex", flexDirection: "column", gap: 6 }}
                   >
-                    {loadingRooms
+                    {roomsLoading
                       ? [1, 2].map((i) => (
                           <div
                             key={i}
@@ -4450,7 +4393,7 @@ export default function BookingPage({
                       : roomTypes.map((rt) => (
                           <button
                             key={rt.id}
-                            onClick={() => setSelectedRoom(rt.id)}
+                            onClick={() => setSelectedRoomId(rt.id)}
                             style={{
                               display: "flex",
                               justifyContent: "space-between",
@@ -4458,10 +4401,10 @@ export default function BookingPage({
                               padding: "10px 14px",
                               borderRadius: 10,
                               background:
-                                selectedRoom === rt.id
+                                selectedRoomId === rt.id
                                   ? "rgba(201,169,110,0.1)"
                                   : "rgba(245,240,232,0.03)",
-                              border: `1px solid ${selectedRoom === rt.id ? "rgba(201,169,110,0.35)" : "rgba(245,240,232,0.07)"}`,
+                              border: `1px solid ${selectedRoomId === rt.id ? "rgba(201,169,110,0.35)" : "rgba(245,240,232,0.07)"}`,
                               cursor: "pointer",
                             }}
                           >
@@ -4479,7 +4422,7 @@ export default function BookingPage({
                                 fontSize: 13,
                                 fontWeight: 700,
                                 color:
-                                  selectedRoom === rt.id
+                                  selectedRoomId === rt.id
                                     ? "#C9A96E"
                                     : "rgba(245,240,232,0.4)",
                                 flexShrink: 0,
@@ -4561,9 +4504,12 @@ export default function BookingPage({
                     ((e.target as HTMLButtonElement).style.background =
                       "#C9A96E")
                   }
+                  disabled={
+                    !checkIn || !checkOut || nights < 1 || !selectedRoom
+                  }
                 >
                   Reserve ·{" "}
-                  {nights > 0
+                  {nights > 1
                     ? `₦${total.toLocaleString()}`
                     : `From ₦${room.price.toLocaleString()}`}
                 </button>

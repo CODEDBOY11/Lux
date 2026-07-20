@@ -734,6 +734,8 @@ export const BookingsDB = {
     nights: number;
     totalAmount: number;
     specialRequests?: string;
+    roomTypeId?: string;
+    roomTypeName?: string;
     guestPhone: string;
   }): Promise<Booking> {
     const { data: row, error } = await supabase
@@ -751,6 +753,8 @@ export const BookingsDB = {
         nights: data.nights,
         total_amount: data.totalAmount,
         special_requests: data.specialRequests ?? "",
+        room_type_id: data.roomTypeId ?? null,
+        room_type_name: data.roomTypeName ?? null,
         status: "confirmed",
         guest_phone: data.guestPhone,
       })
