@@ -200,26 +200,6 @@ function GuestReviewModal({
   const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
   const [reviewError, setReviewError] = useState("");
-  const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
-  const [selectedRoom, setSelectedRoom] = useState<RoomType | null>(null);
-  const [roomsLoading, setRoomsLoading] = useState(true);
-  useEffect(() => {
-    setRoomsLoading(true);
-    RoomTypesDB.byListing(hotel.id)
-      .then((rooms) => {
-        setRoomTypes(rooms);
-        if (rooms.length > 0) setSelectedRoom(rooms[0]); // default to cheapest
-      })
-      .finally(() => setRoomsLoading(false));
-  }, [hotel.id]);
-
-  // Reference these values to avoid "declared but its value is never read" when
-  // compiling with strict noUnusedLocals. This keeps the implementation unchanged.
-  useEffect(() => {
-    void roomTypes;
-    void selectedRoom;
-    void roomsLoading;
-  }, [roomTypes, selectedRoom, roomsLoading]);
 
   useEffect(() => {
     ReviewsDB.existsForBooking(booking.id).then(setAlreadyReviewed);
@@ -1547,8 +1527,10 @@ export default function BookingPage({
   const [selectedRoomId, setSelectedRoomId] = useState<string>("");
   // Sync selectedRoom once rooms load (keep selecting the first room by default)
   useEffect(() => {
-    if (roomTypes.length && !selectedRoom) setSelectedRoom(roomTypes[0]);
-    if (roomTypes.length && !selectedRoomId) setSelectedRoomId(roomTypes[0].id);
+    if (roomTypes.length && !selectedRoom) {
+      setSelectedRoom(roomTypes[0]);
+      setSelectedRoomId(roomTypes[0].id);
+    }
   }, [roomTypes, selectedRoom]);
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
@@ -1627,8 +1609,12 @@ export default function BookingPage({
   })();
 
   const room = selectedRoom ?? roomTypes[0];
+  const selectRoom = (room: RoomCard) => {
+    setSelectedRoom(room);
+    setSelectedRoomId(room.id);
+  };
   const pricePerNight = room?.price ?? hotel.pricePerNight;
-  const subtotal = nights * pricePerNight;
+  const subtotal = nights * (room?.price ?? hotel.pricePerNight);
   const taxes = Math.round(subtotal * 0.12);
   const total = subtotal + taxes;
 
@@ -2199,11 +2185,11 @@ export default function BookingPage({
                 style={{
                   width: "100%",
                   background:
-                    guestInfo.name && guestInfo.email
+                    guestInfo.name && guestInfo.email && checkIn && checkOut && selectedRoom
                       ? "#C9A96E"
                       : "rgba(201,169,110,0.3)",
                   color:
-                    guestInfo.name && guestInfo.email
+                   guestInfo.name && guestInfo.email && checkIn && checkOut && selectedRoom
                       ? "#0e0d0b"
                       : "rgba(14,13,11,0.5)",
                   fontWeight: 700,
@@ -2212,7 +2198,7 @@ export default function BookingPage({
                   borderRadius: 14,
                   border: "none",
                   cursor:
-                    guestInfo.name && guestInfo.email
+                    guestInfo.name && guestInfo.email && checkIn && checkOut && selectedRoom
                       ? "pointer"
                       : "not-allowed",
                   letterSpacing: "0.04em",
@@ -3602,7 +3588,7 @@ export default function BookingPage({
                   roomTypes.map((room) => (
                     <div
                       key={room.id}
-                      onClick={() => setSelectedRoom(room)}
+                      onClick={() => selectRoom(room)}
                       className={`border-2 rounded-2xl p-4 cursor-pointer transition-all ${
                         selectedRoom?.id === room.id
                           ? "border-[#C9A96E] bg-amber-50/40"
@@ -3630,7 +3616,7 @@ export default function BookingPage({
                             </div>
                             <div className="text-right shrink-0">
                               <p className="font-bold text-gray-900">
-                                ₦{room.pricePerNight.toLocaleString()}
+                                ₦{room.price.toLocaleString()}
                               </p>
                               <p className="text-[11px] text-gray-400">
                                 / night
@@ -4113,9 +4099,30 @@ export default function BookingPage({
               </div>
 
               {selectedRoom && (
-                <div className="flex items-center justify-between text-sm mb-3 pb-3 border-b border-gray-100">
-                  <span className="text-gray-500">Room</span>
-                  <span className="font-semibold text-gray-800">
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "0 24px 14px",
+                    borderBottom: "1px solid rgba(245,240,232,0.07)",
+                    marginBottom: 4,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: "rgba(245,240,232,0.35)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.12em",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Room
+                  </span>
+                  <span
+                    style={{ fontSize: 13, fontWeight: 600, color: "#f5f0e8" }}
+                  >
                     {selectedRoom.name}
                   </span>
                 </div>
@@ -4380,7 +4387,10 @@ export default function BookingPage({
                     : roomTypes.map((rt) => (
                         <button
                           key={rt.id}
-                          onClick={() => setSelectedRoomId(rt.id)}
+                          onClick={() => {
+                            const found = roomTypes.find((r) => r.id === rt.id);
+                            if (found) selectRoom(found);
+                          }}
                           style={{
                             display: "flex",
                             justifyContent: "space-between",
