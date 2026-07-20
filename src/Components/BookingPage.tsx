@@ -2716,6 +2716,8 @@ export default function BookingPage({
         .tab-btn:hover:not(.active) { color:rgba(245,240,232,0.7); }
         .room-card { cursor:pointer; transition:all 0.2s; }
         .room-card:hover { border-color:rgba(201,169,110,0.3) !important; }
+        .booking-widget-col { width:100%; max-width:380px; justify-self:end; }
+        .booking-widget-card { width:100%; display:flex; flex-direction:column; box-sizing:border-box; }
         input[type="date"]::-webkit-calendar-picker-indicator { filter:invert(1); opacity:0.4; cursor:pointer; }
         textarea::placeholder, input::placeholder { color:rgba(245,240,232,0.2); }
         @media (max-width: 767px) {
@@ -3576,8 +3578,8 @@ export default function BookingPage({
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  gap: 12,
-                  marginTop: 16,
+                  gap: 20,
+                  marginTop: 20,
                 }}
               >
                 {roomsLoading ? (
@@ -3585,8 +3587,8 @@ export default function BookingPage({
                     <div
                       key={i}
                       style={{
-                        height: 120,
-                        borderRadius: 16,
+                        height: 220,
+                        borderRadius: 20,
                         background: "rgba(245,240,232,0.04)",
                         border: "1px solid rgba(245,240,232,0.07)",
                         animation: "pulse 1.5s ease-in-out infinite",
@@ -3597,12 +3599,12 @@ export default function BookingPage({
                   <div
                     style={{
                       textAlign: "center",
-                      padding: "48px 0",
-                      fontSize: 13,
-                      color: "rgba(245,240,232,0.3)",
+                      padding: "64px 0",
+                      fontSize: 14,
+                      color: "rgba(245,240,232,0.25)",
                     }}
                   >
-                    No room types listed yet.
+                    No room types have been added yet.
                   </div>
                 ) : (
                   roomTypes.map((room) => {
@@ -3612,62 +3614,102 @@ export default function BookingPage({
                         key={room.id}
                         onClick={() => selectRoom(room)}
                         style={{
-                          border: `1px solid ${isSelected ? "rgba(201,169,110,0.5)" : "rgba(245,240,232,0.08)"}`,
-                          borderRadius: 16,
-                          padding: 16,
-                          cursor: "pointer",
+                          border: `1px solid ${isSelected ? "rgba(201,169,110,0.45)" : "rgba(245,240,232,0.08)"}`,
+                          borderRadius: 20,
+                          overflow: "hidden",
                           background: isSelected
-                            ? "rgba(201,169,110,0.06)"
+                            ? "rgba(201,169,110,0.05)"
                             : "rgba(245,240,232,0.02)",
-                          transition: "all 0.18s ease",
-                          outline: isSelected
-                            ? "1px solid rgba(201,169,110,0.2)"
-                            : "none",
+                          cursor: "pointer",
+                          transition: "all 0.2s ease",
+                          boxShadow: isSelected
+                            ? "0 0 0 1px rgba(201,169,110,0.2), 0 8px 32px rgba(0,0,0,0.3)"
+                            : "0 2px 12px rgba(0,0,0,0.2)",
                         }}
                       >
-                        <div style={{ display: "flex", gap: 14 }}>
-                          {room.images[0] && (
+                        {/* Top — image + headline */}
+                        <div style={{ display: "flex", minHeight: 180 }}>
+                          <div
+                            style={{
+                              width: 260,
+                              flexShrink: 0,
+                              position: "relative",
+                            }}
+                          >
                             <img
-                              src={room.images[0]}
+                              src={room.images[0] || hotel.images[0]}
                               alt={room.name}
                               style={{
-                                width: 96,
-                                height: 72,
+                                width: "100%",
+                                height: "100%",
                                 objectFit: "cover",
-                                borderRadius: 10,
-                                flexShrink: 0,
+                                display: "block",
                               }}
                             />
-                          )}
-                          <div style={{ flex: 1, minWidth: 0 }}>
+                            {isSelected && (
+                              <div
+                                style={{
+                                  position: "absolute",
+                                  top: 10,
+                                  left: 10,
+                                  background: "#C9A96E",
+                                  color: "#0e0d0b",
+                                  fontSize: 10,
+                                  fontWeight: 800,
+                                  letterSpacing: "0.1em",
+                                  textTransform: "uppercase",
+                                  padding: "4px 10px",
+                                  borderRadius: 99,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                }}
+                              >
+                                <CheckCircleIcon
+                                  style={{ width: 11, height: 11 }}
+                                />
+                                Selected
+                              </div>
+                            )}
+                          </div>
+
+                          <div
+                            style={{
+                              flex: 1,
+                              padding: "20px 24px",
+                              display: "flex",
+                              flexDirection: "column",
+                              justifyContent: "space-between",
+                              minWidth: 0,
+                            }}
+                          >
+                            {/* Name + price */}
                             <div
                               style={{
                                 display: "flex",
                                 justifyContent: "space-between",
                                 alignItems: "flex-start",
-                                gap: 8,
+                                gap: 12,
                               }}
                             >
                               <div style={{ minWidth: 0 }}>
                                 <h4
                                   style={{
-                                    fontSize: 14,
+                                    fontFamily: "Cormorant Garamond, serif",
+                                    fontSize: 20,
                                     fontWeight: 700,
                                     color: "#f5f0e8",
-                                    fontFamily: "Cormorant Garamond, serif",
-                                    margin: 0,
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                    whiteSpace: "nowrap",
+                                    margin: "0 0 4px",
+                                    lineHeight: 1.2,
                                   }}
                                 >
                                   {room.name}
                                 </h4>
                                 <p
                                   style={{
-                                    fontSize: 11,
+                                    fontSize: 12,
                                     color: "rgba(245,240,232,0.35)",
-                                    marginTop: 3,
+                                    margin: 0,
                                   }}
                                 >
                                   {room.bedType} · {room.size} · Up to{" "}
@@ -3679,34 +3721,38 @@ export default function BookingPage({
                               >
                                 <p
                                   style={{
-                                    fontSize: 15,
+                                    fontFamily: "Cormorant Garamond, serif",
+                                    fontSize: 26,
                                     fontWeight: 700,
                                     color: "#C9A96E",
                                     margin: 0,
+                                    lineHeight: 1,
                                   }}
                                 >
                                   ₦{room.price.toLocaleString()}
                                 </p>
                                 <p
                                   style={{
-                                    fontSize: 10,
+                                    fontSize: 11,
                                     color: "rgba(245,240,232,0.3)",
-                                    marginTop: 2,
+                                    marginTop: 3,
                                   }}
                                 >
-                                  / night
+                                  per night
                                 </p>
                               </div>
                             </div>
 
+                            {/* Description */}
                             {room.description && (
                               <p
                                 style={{
-                                  fontSize: 12,
-                                  color: "rgba(245,240,232,0.4)",
-                                  marginTop: 6,
+                                  fontSize: 13,
+                                  color: "rgba(245,240,232,0.5)",
+                                  lineHeight: 1.6,
+                                  margin: "12px 0 0",
                                   display: "-webkit-box",
-                                  WebkitLineClamp: 2,
+                                  WebkitLineClamp: 3,
                                   WebkitBoxOrient: "vertical",
                                   overflow: "hidden",
                                 }}
@@ -3715,38 +3761,40 @@ export default function BookingPage({
                               </p>
                             )}
 
+                            {/* Amenity pills */}
                             {room.amenities.length > 0 && (
                               <div
                                 style={{
                                   display: "flex",
                                   flexWrap: "wrap",
-                                  gap: 5,
-                                  marginTop: 8,
+                                  gap: 6,
+                                  marginTop: 14,
                                 }}
                               >
-                                {room.amenities.slice(0, 4).map((a) => (
+                                {room.amenities.slice(0, 6).map((a) => (
                                   <span
                                     key={a}
                                     style={{
-                                      fontSize: 10,
+                                      fontSize: 11,
                                       background: "rgba(245,240,232,0.06)",
                                       border: "1px solid rgba(245,240,232,0.1)",
-                                      color: "rgba(245,240,232,0.45)",
-                                      padding: "2px 8px",
+                                      color: "rgba(245,240,232,0.5)",
+                                      padding: "3px 10px",
                                       borderRadius: 99,
                                     }}
                                   >
                                     {a}
                                   </span>
                                 ))}
-                                {room.amenities.length > 4 && (
+                                {room.amenities.length > 6 && (
                                   <span
                                     style={{
-                                      fontSize: 10,
+                                      fontSize: 11,
                                       color: "rgba(245,240,232,0.25)",
+                                      padding: "3px 0",
                                     }}
                                   >
-                                    +{room.amenities.length - 4} more
+                                    +{room.amenities.length - 6} more
                                   </span>
                                 )}
                               </div>
@@ -3754,35 +3802,61 @@ export default function BookingPage({
                           </div>
                         </div>
 
-                        {isSelected && (
-                          <div
+                        {/* Bottom bar — CTA */}
+                        <div
+                          style={{
+                            borderTop: `1px solid ${isSelected ? "rgba(201,169,110,0.2)" : "rgba(245,240,232,0.06)"}`,
+                            padding: "12px 24px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            background: isSelected
+                              ? "rgba(201,169,110,0.04)"
+                              : "rgba(245,240,232,0.01)",
+                          }}
+                        >
+                          <p
                             style={{
-                              marginTop: 12,
-                              paddingTop: 12,
-                              borderTop: "1px solid rgba(201,169,110,0.2)",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 6,
-                              fontSize: 11,
-                              fontWeight: 700,
-                              color: "#C9A96E",
-                              letterSpacing: "0.08em",
-                              textTransform: "uppercase",
+                              fontSize: 12,
+                              color: "rgba(245,240,232,0.3)",
+                              margin: 0,
                             }}
                           >
-                            <CheckCircleIcon
-                              style={{ width: 14, height: 14 }}
-                            />
-                            Selected
+                            {isSelected
+                              ? "This room will be booked for your selected dates"
+                              : "Click to select this room"}
+                          </p>
+                          <div
+                            style={{
+                              fontSize: 12,
+                              fontWeight: 700,
+                              color: isSelected
+                                ? "#C9A96E"
+                                : "rgba(245,240,232,0.25)",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 5,
+                              transition: "color 0.2s",
+                            }}
+                          >
+                            {isSelected ? (
+                              <>
+                                <CheckCircleIcon
+                                  style={{ width: 14, height: 14 }}
+                                />
+                                Room Selected
+                              </>
+                            ) : (
+                              "Select Room →"
+                            )}
                           </div>
-                        )}
+                        </div>
                       </div>
                     );
                   })
                 )}
               </div>
             )}
-
             {activeTab === "reviews" &&
               (() => {
                 const avgRating = listingReviews.length
@@ -4154,15 +4228,21 @@ export default function BookingPage({
               top: 88,
               alignSelf: "start",
               animation: "fadeUp 0.5s ease 100ms both",
+              width: "100%",
+              maxWidth: 380,
+              marginLeft: "auto",
             }}
           >
             <div
+              className="booking-widget-card"
               style={{
                 background: "#141210",
                 border: "1px solid rgba(245,240,232,0.1)",
                 borderRadius: 24,
                 overflow: "hidden",
                 boxShadow: "0 32px 64px rgba(0,0,0,0.5)",
+                width: "100%",
+                boxSizing: "border-box",
               }}
             >
               <div
