@@ -62,12 +62,10 @@ import {
   BillingSection,
   UpgradeGate,
   isProFeature,
-} from "./HostDashboardModules";
+} from "./Hostdashboardmodules";
 import { SubscriptionsDB, PRO_PLAN_PRICE_NGN, type HostSubscription } from "./index";
 
-/* ─────────────────────────────────────────────────────────
-   TYPES
-───────────────────────────────────────────────────────── */
+
 type NavKey =
   | "dashboard"
   | "properties"
