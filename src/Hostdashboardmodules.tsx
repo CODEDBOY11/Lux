@@ -1,15 +1,4 @@
-/* ═══════════════════════════════════════════════════════════
-   HOST DASHBOARD — NEW POWER-USER MODULES
-   Occupancy Board · Booking Calendar · Sales Analytics
-   Staff Management · Attendance · Guest CRM · Camera Grid
-   ───────────────────────────────────────────────────────────
-   Wire-up: everything reads/writes through the DB modules
-   exported from ./index (Supabase-backed) — RoomsDB, StaffDB,
-   AttendanceDB, GuestsDB, GuestOrdersDB, CamerasDB, AnalyticsDB.
-   Run the SQL block near the bottom of index.ts in your
-   Supabase SQL Editor once (rooms, staff, attendance,
-   guest_orders, cameras tables) before using these sections.
-═══════════════════════════════════════════════════════════ */
+
 import { useState, useEffect, useMemo } from "react";
 import {
   AreaChart,
@@ -80,9 +69,6 @@ import { fmt$, fmtDate, Sk, StatCard } from "./HostDashboard";
 
 const GOLD = "#C9A96E";
 
-/* ═══════════════════════════════════════════════════════════
-   0. PRO PLAN — feature gating, upgrade gate, billing
-═══════════════════════════════════════════════════════════ */
 
 /** Every Pro-only nav key, with what to show on its locked screen. */
 export const PRO_FEATURES: Record<
@@ -121,7 +107,7 @@ export const PRO_FEATURES: Record<
   },
   cameras: {
     title: "Room Cameras",
-    blurb: "A live camera grid, one tile per room, ready to connect to your CCTV feeds.",
+    blurb: " \, one tile per room, ready to connect to your CCTV feed",
     icon: VideoCameraIcon,
   },
 };
