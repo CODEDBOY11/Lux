@@ -141,7 +141,6 @@ export const UpgradeGate = ({ featureKey, onUpgraded }: { featureKey: string; on
     setError("");
     try {
       const url = await SubscriptionsDB.startUpgrade(user.id, user.email);
-      onUpgraded?.();
       window.location.href = url;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start checkout. Try again.");
@@ -1349,7 +1348,7 @@ export const CameraGridSection = () => {
               </div>
               <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2">
                 <p className="text-white text-xs font-semibold">{c.roomLabel}</p>
-                           </div>
+              </div>
             </button>
           ))}
         </div>
