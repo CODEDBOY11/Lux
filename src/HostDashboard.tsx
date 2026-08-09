@@ -36,6 +36,8 @@ import {
   ClipboardDocumentCheckIcon,
   ChartBarIcon,
   VideoCameraIcon,
+  CreditCardIcon,
+  SparklesIcon,
 } from "@heroicons/react/24/outline";
 import { StarIcon as StarSolid } from "@heroicons/react/24/solid";
 import { useAuth } from "./AuthContext";
@@ -57,7 +59,11 @@ import {
   AttendanceSection,
   GuestProfilesSection,
   CameraGridSection,
-} from "./Hostdashboardmodules";
+  BillingSection,
+  UpgradeGate,
+  isProFeature,
+} from "./HostDashboardModules";
+import { SubscriptionsDB, PRO_PLAN_PRICE_NGN, type HostSubscription } from "./index";
 
 /* ─────────────────────────────────────────────────────────
    TYPES
@@ -78,7 +84,8 @@ type NavKey =
   | "attendance"
   | "guests"
   | "cameras"
-  | "analytics";
+  | "analytics"
+  | "billing";
 
 /* ─────────────────────────────────────────────────────────
    HELPERS
@@ -246,6 +253,7 @@ const HOST_NAV = [
     icon: ChatBubbleLeftRightIcon,
   },
   { key: "settings" as NavKey, label: "Settings", icon: Cog6ToothIcon },
+  { key: "billing" as NavKey, label: "Billing", icon: CreditCardIcon },
 ];
 
 const GUEST_NAV = [
@@ -272,6 +280,7 @@ const Sidebar = ({
   onClose,
   onLogout,
   isMobile,
+  isPro = true,
 }: {
   role: "host" | "guest";
   active: NavKey;
@@ -280,6 +289,7 @@ const Sidebar = ({
   onClose?: () => void;
   onLogout: () => void;
   isMobile?: boolean;
+  isPro?: boolean;
 }) => {
   const { user } = useAuth();
   const nav = role === "guest" ? GUEST_NAV : HOST_NAV;
@@ -340,6 +350,7 @@ const Sidebar = ({
         {nav.map(({ key, label, icon: Icon }) => {
           const isActive = active === key;
           const hasBadge = key === "bookings" && pending > 0;
+          const locked = !isPro && isProFeature(key);
           return (
             <button
               key={key}
@@ -363,6 +374,11 @@ const Sidebar = ({
               {hasBadge && (
                 <span className="ml-auto bg-white/20 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
                   {pending > 9 ? "9+" : pending}
+                </span>
+              )}
+              {locked && (
+                <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[#C9A96E]/20 text-[#C9A96E] tracking-wider">
+                  PRO
                 </span>
               )}
             </button>
@@ -2563,9 +2579,11 @@ const SettingsSection = () => {
 const HostHome = ({
   onNavigate,
   onBook,
+  isPro,
 }: {
   onNavigate: (k: NavKey) => void;
   onBook?: (h: Hotel) => void;
+  isPro?: boolean;
 }) => {
   const { user } = useAuth();
   const [hotels, setHotels] = useState<Hotel[]>([]);
@@ -2654,6 +2672,31 @@ const HostHome = ({
           </>
         )}
       </div>
+      {!isPro && (
+        <button
+          onClick={() => onNavigate("billing")}
+          className="w-full text-left rounded-2xl p-5 flex items-center gap-4 relative overflow-hidden group"
+          style={{ background: "linear-gradient(135deg,#1a1006,#3a230f)" }}
+        >
+          <div
+            className="absolute inset-0 opacity-[0.06]"
+            style={{
+              backgroundImage:
+                "url(\"data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23C9A96E' fill-opacity='1' fill-rule='evenodd'%3E%3Cpath d='M0 40L40 0H20L0 20M40 40V20L20 40'/%3E%3C/g%3E%3C/svg%3E\")",
+            }}
+          />
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 relative z-10" style={{ background: "linear-gradient(135deg,#C9A96E,#8a6030)" }}>
+            <SparklesIcon className="w-5 h-5 text-white" />
+          </div>
+          <div className="flex-1 relative z-10 min-w-0">
+            <p className="text-white font-bold text-sm">Unlock Pro — occupancy, staff, guest CRM, analytics & cameras</p>
+            <p className="text-white/50 text-xs mt-0.5">Starting at {fmt$(PRO_PLAN_PRICE_NGN)}/month · cancel anytime</p>
+          </div>
+          <span className="relative z-10 shrink-0 text-xs font-bold text-[#1a1006] bg-[#C9A96E] group-hover:bg-white px-4 py-2 rounded-xl transition-colors">
+            Upgrade
+          </span>
+        </button>
+      )}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { key: "occupancy" as NavKey, label: "Occupancy", icon: BuildingOffice2Icon },
@@ -2662,18 +2705,26 @@ const HostHome = ({
           { key: "staff" as NavKey, label: "Staff & Attendance", icon: ShieldCheckIcon },
           { key: "calendar" as NavKey, label: "Booking Calendar", icon: CalendarDaysIcon },
           { key: "cameras" as NavKey, label: "Room Cameras", icon: PhotoIcon },
-        ].map((s) => (
-          <button
-            key={s.key}
-            onClick={() => onNavigate(s.key)}
-            className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-[#C9A96E]/40 transition-all p-4 flex items-center gap-3 text-left"
-          >
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#C9A96E18", border: "1px solid #C9A96E30" }}>
-              <s.icon className="w-4.5 h-4.5 text-[#C9A96E]" />
-            </div>
-            <span className="text-xs font-semibold text-gray-700">{s.label}</span>
-          </button>
-        ))}
+        ].map((s) => {
+          const locked = !isPro && isProFeature(s.key);
+          return (
+            <button
+              key={s.key}
+              onClick={() => onNavigate(s.key)}
+              className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-[#C9A96E]/40 transition-all p-4 flex items-center gap-3 text-left relative"
+            >
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#C9A96E18", border: "1px solid #C9A96E30" }}>
+                <s.icon className="w-4.5 h-4.5 text-[#C9A96E]" />
+              </div>
+              <span className="text-xs font-semibold text-gray-700">{s.label}</span>
+              {locked && (
+                <span className="absolute top-2 right-2 text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-[#C9A96E]/15 text-[#C9A96E] tracking-wider">
+                  PRO
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_260px] gap-6">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -2903,6 +2954,7 @@ const HostDashboardShell = ({
   const [active, setActive] = useState<NavKey>("dashboard");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [pending, setPending] = useState(0);
+  const [subscription, setSubscription] = useState<HostSubscription | null>(null);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -2910,7 +2962,22 @@ const HostDashboardShell = ({
     BookingsDB.byHost(user.id).then((b) =>
       setPending(b.filter((bk) => bk.status === "pending").length),
     );
+    SubscriptionsDB.getByHost(user.id).then(setSubscription);
+
+    // If we just came back from Paystack checkout, re-check the plan a
+    // few times — the webhook can take a couple seconds to land.
+    if (new URLSearchParams(window.location.search).get("upgraded")) {
+      let tries = 0;
+      const interval = setInterval(() => {
+        tries += 1;
+        SubscriptionsDB.getByHost(user.id).then(setSubscription);
+        if (tries >= 6) clearInterval(interval);
+      }, 3000);
+      return () => clearInterval(interval);
+    }
   }, [user]);
+
+  const isPro = subscription ? SubscriptionsDB.isPro(subscription) : false;
 
   const PAGE_TITLES: Record<NavKey, string> = {
     dashboard: "Dashboard",
@@ -2929,12 +2996,18 @@ const HostDashboardShell = ({
     guests: "Guest Profiles",
     cameras: "Room Cameras",
     analytics: "Sales Analytics",
+    billing: "Billing",
   };
 
   const content = () => {
+    // Gate every Pro-only section behind an upgrade screen unless the
+    // host is actually on an active Pro subscription.
+    if (isProFeature(active) && !isPro) {
+      return <UpgradeGate featureKey={active} />;
+    }
     switch (active) {
       case "dashboard":
-        return <HostHome onNavigate={setActive} onBook={onBook} />;
+        return <HostHome onNavigate={setActive} onBook={onBook} isPro={isPro} />;
       case "properties":
         return <PropertiesSection onBook={onBook} />;
       case "occupancy":
@@ -2961,8 +3034,10 @@ const HostDashboardShell = ({
         return <MessagesInbox />;
       case "settings":
         return <SettingsSection />;
+      case "billing":
+        return <BillingSection />;
       default:
-        return <HostHome onNavigate={setActive} onBook={onBook} />;
+        return <HostHome onNavigate={setActive} onBook={onBook} isPro={isPro} />;
     }
   };
 
@@ -2986,6 +3061,7 @@ const HostDashboardShell = ({
           onClose={() => setMobileOpen(false)}
           onLogout={onLogout}
           isMobile
+          isPro={isPro}
         />
       </div>
       <div className="hidden lg:flex shrink-0">
@@ -2995,6 +3071,7 @@ const HostDashboardShell = ({
           onNav={setActive}
           pending={pending}
           onLogout={onLogout}
+          isPro={isPro}
         />
       </div>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">

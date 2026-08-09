@@ -2461,10 +2461,26 @@ export const RefundRequestsDB = {
      hourly_rate numeric,
      status text default 'active' check (status in ('active','on_leave','suspended','terminated')),
      hired_at date default current_date,
+     device_user_id int,  -- ← fingerprint device's internal user # for this person
      created_at timestamptz default now()
    );
    alter table staff enable row level security;
    create policy "host all" on staff for all using (host_id = auth.uid());
+   create unique index staff_device_user_unique on staff (host_id, device_user_id) where device_user_id is not null;
+
+   -- ALREADY RAN THE STAFF TABLE ABOVE WITHOUT device_user_id? Run this instead:
+   --   alter table staff add column device_user_id int;
+   --   create unique index staff_device_user_unique on staff (host_id, device_user_id) where device_user_id is not null;
+
+   -- Fingerprint device sync bookkeeping (used only by the bridge script,
+   -- so it doesn't re-process punches it already synced)
+   create table device_sync_state (
+     device_id text primary key,       -- any name you pick for the physical device, e.g. 'front-desk-zkteco'
+     host_id uuid references users(id) not null,
+     last_synced_at timestamptz default now()
+   );
+   alter table device_sync_state enable row level security;
+   create policy "host all" on device_sync_state for all using (host_id = auth.uid());
 
    -- Attendance (clock in/out)
    create table attendance (
@@ -2640,6 +2656,7 @@ export interface StaffMember {
   hourlyRate?: number;
   status: StaffStatus;
   hiredAt: string;
+  deviceUserId?: number; // ← fingerprint device's internal user # for this person
   createdAt: string;
 }
 
@@ -2656,6 +2673,7 @@ function toStaff(r: any): StaffMember {
     hourlyRate: r.hourly_rate !== null && r.hourly_rate !== undefined ? Number(r.hourly_rate) : undefined,
     status: r.status,
     hiredAt: r.hired_at,
+    deviceUserId: r.device_user_id ?? undefined,
     createdAt: r.created_at,
   };
 }
@@ -2678,6 +2696,7 @@ export const StaffDB = {
     phone?: string;
     email?: string;
     hourlyRate?: number;
+    deviceUserId?: number;
   }): Promise<StaffMember> {
     const { data: row, error } = await supabase
       .from("staff")
@@ -2688,6 +2707,7 @@ export const StaffDB = {
         phone: data.phone ?? null,
         email: data.email ?? null,
         hourly_rate: data.hourlyRate ?? null,
+        device_user_id: data.deviceUserId ?? null,
         status: "active",
       })
       .select()
@@ -2706,6 +2726,7 @@ export const StaffDB = {
     if (data.hourlyRate !== undefined) p.hourly_rate = data.hourlyRate;
     if (data.status !== undefined) p.status = data.status;
     if (data.hiredAt !== undefined) p.hired_at = data.hiredAt;
+    if (data.deviceUserId !== undefined) p.device_user_id = data.deviceUserId;
     const { data: row, error } = await supabase
       .from("staff")
       .update(p)
@@ -2714,6 +2735,18 @@ export const StaffDB = {
       .single();
     if (error) { console.error("StaffDB.update:", error.message); return null; }
     return toStaff(row);
+  },
+
+  /** Used by the fingerprint bridge script to map a device punch back to a staff record. */
+  async byDeviceUserId(hostId: string, deviceUserId: number): Promise<StaffMember | null> {
+    const { data, error } = await supabase
+      .from("staff")
+      .select("*")
+      .eq("host_id", hostId)
+      .eq("device_user_id", deviceUserId)
+      .maybeSingle();
+    if (error) { console.error("StaffDB.byDeviceUserId:", error.message); return null; }
+    return data ? toStaff(data) : null;
   },
 
   async setStatus(id: string, status: StaffStatus): Promise<void> {
@@ -3165,5 +3198,110 @@ export const AnalyticsDB = {
       occupancyRate,
       topListings,
     };
+  },
+};
+
+/* ═══════════════════════════════════════════════════════════════════════
+   HOST PRO PLAN — subscriptions & billing (Paystack)
+   ───────────────────────────────────────────────────────────────────────
+   NEW TABLE — run in Supabase SQL Editor:
+   ─────────────────────────────────────────
+   create table host_subscriptions (
+     host_id uuid primary key references users(id) on delete cascade,
+     plan text not null default 'free' check (plan in ('free','pro')),
+     status text not null default 'inactive' check (status in ('inactive','active','past_due','cancelled')),
+     paystack_customer_code text,
+     paystack_subscription_code text,
+     paystack_email_token text,       -- needed to cancel via API later
+     current_period_end timestamptz,
+     updated_at timestamptz default now(),
+     created_at timestamptz default now()
+   );
+   alter table host_subscriptions enable row level security;
+   create policy "host read own" on host_subscriptions for select using (host_id = auth.uid());
+   -- Deliberately NO insert/update policy for regular users — only the
+   -- paystack-webhook Edge Function (using the service role key, which
+   -- bypasses RLS) is allowed to write to this table. This means a host
+   -- can't just flip their own plan to "pro" from the browser console.
+
+   HOW THIS CONNECTS TO PAYSTACK:
+   ─────────────────────────────────────────
+   1. Create a Plan in your Paystack Dashboard → Products → Plans
+      (amount = PRO_PLAN_PRICE_NGN below, interval = monthly). Copy its
+      plan_code (starts with PLN_).
+   2. Deploy the two Edge Functions in /supabase/functions/ (paystack-init,
+      paystack-webhook — see their own file headers for deploy steps).
+   3. In Paystack Dashboard → Settings → API Keys & Webhooks, set the
+      webhook URL to your deployed paystack-webhook function's URL.
+   4. SubscriptionsDB.startUpgrade() below calls paystack-init, which
+      redirects the host to Paystack's hosted checkout page. After they
+      pay, Paystack calls your webhook, which flips host_subscriptions
+      to "active" — the dashboard picks that up on next load.
+   ─────────────────────────────────────────────────────────────
+*/
+
+/** Change this to match the amount on the Plan you create in Paystack. */
+export const PRO_PLAN_PRICE_NGN = 15000;
+export const PRO_PLAN_INTERVAL = "month";
+
+export type PlanTier = "free" | "pro";
+export type SubscriptionStatus = "inactive" | "active" | "past_due" | "cancelled";
+
+export interface HostSubscription {
+  hostId: string;
+  plan: PlanTier;
+  status: SubscriptionStatus;
+  currentPeriodEnd?: string;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toSubscription(hostId: string, r: any): HostSubscription {
+  if (!r) return { hostId, plan: "free", status: "inactive" };
+  return {
+    hostId,
+    plan: r.plan,
+    status: r.status,
+    currentPeriodEnd: r.current_period_end ?? undefined,
+  };
+}
+
+export const SubscriptionsDB = {
+  /** Every host implicitly has a "free" subscription until a row exists. */
+  async getByHost(hostId: string): Promise<HostSubscription> {
+    const { data, error } = await supabase
+      .from("host_subscriptions")
+      .select("plan, status, current_period_end")
+      .eq("host_id", hostId)
+      .maybeSingle();
+    if (error) {
+      console.error("SubscriptionsDB.getByHost:", error.message);
+      return { hostId, plan: "free", status: "inactive" };
+    }
+    return toSubscription(hostId, data);
+  },
+
+  isPro(sub: HostSubscription): boolean {
+    return sub.plan === "pro" && sub.status === "active";
+  },
+
+  /** Starts checkout — calls the paystack-init Edge Function, which talks
+   *  to Paystack's API using the secret key (never exposed to the browser),
+   *  and returns a hosted checkout URL to redirect the host to. */
+  async startUpgrade(hostId: string, email: string): Promise<string> {
+    const { data, error } = await supabase.functions.invoke("paystack-init", {
+      body: { hostId, email },
+    });
+    if (error) throw new Error(error.message);
+    if (!data?.authorization_url) throw new Error("Paystack did not return a checkout URL.");
+    return data.authorization_url as string;
+  },
+
+  /** Cancels the recurring subscription (host keeps Pro until period end,
+   *  matching how Paystack/most SaaS billing works). */
+  async cancel(hostId: string): Promise<void> {
+    const { error } = await supabase.functions.invoke("paystack-cancel", {
+      body: { hostId },
+    });
+    if (error) throw new Error(error.message);
   },
 };

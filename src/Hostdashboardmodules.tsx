@@ -43,6 +43,10 @@ import {
   TrashIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
+  LockClosedIcon,
+  SparklesIcon,
+  CreditCardIcon,
+  CalendarDaysIcon,
 } from "@heroicons/react/24/outline";
 import { useAuth } from "./AuthContext";
 import {
@@ -56,6 +60,8 @@ import {
   GuestOrdersDB,
   CamerasDB,
   AnalyticsDB,
+  SubscriptionsDB,
+  PRO_PLAN_PRICE_NGN,
   type Booking,
   type Hotel,
   type Room,
@@ -68,10 +74,250 @@ import {
   type OrderCategory,
   type RoomCamera,
   type AnalyticsSummary,
+  type HostSubscription,
 } from "./index";
 import { fmt$, fmtDate, Sk, StatCard } from "./HostDashboard";
 
 const GOLD = "#C9A96E";
+
+/* ═══════════════════════════════════════════════════════════
+   0. PRO PLAN — feature gating, upgrade gate, billing
+═══════════════════════════════════════════════════════════ */
+
+/** Every Pro-only nav key, with what to show on its locked screen. */
+export const PRO_FEATURES: Record<
+  string,
+  { title: string; blurb: string; icon: typeof BuildingOffice2Icon }
+> = {
+  occupancy: {
+    title: "Room Occupancy",
+    blurb: "See which rooms are filled, vacant, cleaning or under maintenance — live, across every property.",
+    icon: BuildingOffice2Icon,
+  },
+  calendar: {
+    title: "Booking Calendar",
+    blurb: "Click any date to see exactly which rooms are booked that day.",
+    icon: CalendarDaysIcon,
+  },
+  analytics: {
+    title: "Sales Analytics",
+    blurb: "Revenue charts across bookings and in-stay orders, plus your top-earning properties.",
+    icon: ChartBarIcon,
+  },
+  guests: {
+    title: "Guest Profiles",
+    blurb: "Total spend, stay history, and every snack or drink a guest has ordered — all in one view.",
+    icon: UserGroupIcon,
+  },
+  staff: {
+    title: "Staff Management",
+    blurb: "Add your team, assign roles, and manage who's active — all from one screen.",
+    icon: UserPlusIcon,
+  },
+  attendance: {
+    title: "Staff Attendance",
+    blurb: "Clock-in / clock-out tracking, on-time vs late, and (optionally) fingerprint device sync.",
+    icon: ClockIcon,
+  },
+  cameras: {
+    title: "Room Cameras",
+    blurb: "A live camera grid, one tile per room, ready to connect to your CCTV feeds.",
+    icon: VideoCameraIcon,
+  },
+};
+
+export const isProFeature = (key: string) => key in PRO_FEATURES;
+
+/** Shown instead of a Pro section's real content when the host is on Free. */
+export const UpgradeGate = ({ featureKey, onUpgraded }: { featureKey: string; onUpgraded?: () => void }) => {
+  const { user } = useAuth();
+  const feature = PRO_FEATURES[featureKey];
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const upgrade = async () => {
+    if (!user?.id || !user?.email) return;
+    setLoading(true);
+    setError("");
+    try {
+      const url = await SubscriptionsDB.startUpgrade(user.id, user.email);
+      onUpgraded?.();
+      window.location.href = url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not start checkout. Try again.");
+      setLoading(false);
+    }
+  };
+
+  if (!feature) return null;
+  const Icon = feature.icon;
+
+  return (
+    <div className="flex-1 overflow-y-auto bg-gray-50 p-6 flex items-center justify-center" style={{ animation: "fadeUp 0.3s ease both" }}>
+      <div className="max-w-md w-full bg-white rounded-3xl border border-gray-100 shadow-sm p-8 text-center">
+        <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-5 relative" style={{ background: "linear-gradient(135deg,#C9A96E,#8a6030)" }}>
+          <Icon className="w-7 h-7 text-white" />
+          <div className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-gray-900 flex items-center justify-center border-2 border-white">
+            <LockClosedIcon className="w-3 h-3 text-white" />
+          </div>
+        </div>
+        <p className="text-[11px] font-bold text-[#C9A96E] uppercase tracking-wider mb-1.5">Pro Feature</p>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">{feature.title}</h2>
+        <p className="text-sm text-gray-500 mb-6 leading-relaxed">{feature.blurb}</p>
+
+        <div className="bg-gray-50 rounded-2xl p-4 mb-5">
+          <p className="text-2xl font-bold text-gray-900">
+            {fmt$(PRO_PLAN_PRICE_NGN)}
+            <span className="text-sm font-medium text-gray-400">/month</span>
+          </p>
+          <p className="text-xs text-gray-400 mt-1">Unlocks all Pro features across your dashboard</p>
+        </div>
+
+        {error && <p className="text-xs text-red-600 mb-3">{error}</p>}
+
+        <button
+          disabled={loading}
+          onClick={upgrade}
+          className="w-full flex items-center justify-center gap-2 text-sm font-semibold text-white bg-[#C9A96E] hover:bg-[#b8935a] px-5 py-3 rounded-xl transition-all disabled:opacity-50"
+        >
+          <SparklesIcon className="w-4 h-4" />
+          {loading ? "Redirecting to checkout…" : "Upgrade to Pro"}
+        </button>
+        <p className="text-[11px] text-gray-400 mt-3">Secure checkout via Paystack. Cancel anytime.</p>
+      </div>
+    </div>
+  );
+};
+
+/** Billing page — plan status, price, upgrade or cancel. */
+export const BillingSection = () => {
+  const { user } = useAuth();
+  const [sub, setSub] = useState<HostSubscription | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = () => {
+    if (!user) return;
+    setLoading(true);
+    SubscriptionsDB.getByHost(user.id).then(setSub).finally(() => setLoading(false));
+  };
+  useEffect(load, [user]);
+
+  const isPro = sub ? SubscriptionsDB.isPro(sub) : false;
+
+  const upgrade = async () => {
+    if (!user?.id || !user?.email) return;
+    setBusy(true);
+    setError("");
+    try {
+      const url = await SubscriptionsDB.startUpgrade(user.id, user.email);
+      window.location.href = url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not start checkout.");
+      setBusy(false);
+    }
+  };
+
+  const cancel = async () => {
+    if (!user?.id) return;
+    if (!confirm("Cancel your Pro subscription? You'll keep access until the current billing period ends.")) return;
+    setBusy(true);
+    setError("");
+    try {
+      await SubscriptionsDB.cancel(user.id);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not cancel — try again or contact support.");
+    }
+    setBusy(false);
+  };
+
+  return (
+    <div className="flex-1 overflow-y-auto bg-gray-50 p-6" style={{ animation: "fadeUp 0.3s ease both" }}>
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">Billing</h2>
+        <p className="text-gray-400 text-sm mt-0.5">Your plan and subscription</p>
+      </div>
+
+      {loading ? (
+        <Sk h="h-48" />
+      ) : (
+        <div className="max-w-xl">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <CreditCardIcon className="w-5 h-5 text-gray-400" />
+                <span className="text-sm font-semibold text-gray-700">Current Plan</span>
+              </div>
+              <span
+                className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${
+                  isPro ? "bg-[#C9A96E]/10 text-[#C9A96E] border-[#C9A96E]/30" : "bg-gray-50 text-gray-500 border-gray-200"
+                }`}
+              >
+                {isPro ? "PRO" : "FREE"}
+              </span>
+            </div>
+
+            {isPro ? (
+              <>
+                <p className="text-2xl font-bold text-gray-900 mb-1">
+                  {fmt$(PRO_PLAN_PRICE_NGN)}<span className="text-sm font-medium text-gray-400">/month</span>
+                </p>
+                {sub?.currentPeriodEnd && (
+                  <p className="text-xs text-gray-400 mb-4">
+                    {sub.status === "cancelled" ? "Access ends" : "Renews"} {fmtDate(sub.currentPeriodEnd)}
+                  </p>
+                )}
+                {sub?.status === "past_due" && (
+                  <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+                    Your last payment failed — please update your payment method to keep Pro access.
+                  </p>
+                )}
+                {sub?.status !== "cancelled" && (
+                  <button
+                    disabled={busy}
+                    onClick={cancel}
+                    className="text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 px-4 py-2 rounded-xl disabled:opacity-50"
+                  >
+                    {busy ? "Cancelling…" : "Cancel Subscription"}
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-gray-500 mb-4">
+                  You're on the free plan. Upgrade to unlock occupancy tracking, staff & attendance, guest CRM, sales analytics, and room cameras.
+                </p>
+                <button
+                  disabled={busy}
+                  onClick={upgrade}
+                  className="flex items-center gap-2 text-sm font-semibold text-white bg-[#C9A96E] hover:bg-[#b8935a] px-5 py-2.5 rounded-xl disabled:opacity-50"
+                >
+                  <SparklesIcon className="w-4 h-4" />
+                  {busy ? "Redirecting…" : `Upgrade to Pro — ${fmt$(PRO_PLAN_PRICE_NGN)}/mo`}
+                </button>
+              </>
+            )}
+            {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <p className="text-sm font-semibold text-gray-700 mb-3">Pro includes</p>
+            <div className="space-y-2.5">
+              {Object.values(PRO_FEATURES).map((f) => (
+                <div key={f.title} className="flex items-center gap-2.5 text-sm text-gray-600">
+                  <CheckCircleIcon className="w-4 h-4 text-emerald-500 shrink-0" />
+                  {f.title}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 /* ═══════════════════════════════════════════════════════════
    1. OCCUPANCY BOARD — which rooms are filled / empty
@@ -502,7 +748,7 @@ export const StaffManagementSection = () => {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ fullName: "", role: "front_desk" as StaffRole, phone: "", email: "" });
+  const [form, setForm] = useState({ fullName: "", role: "front_desk" as StaffRole, phone: "", email: "", deviceUserId: "" });
   const [saving, setSaving] = useState(false);
 
   const load = () => {
@@ -521,9 +767,10 @@ export const StaffManagementSection = () => {
       role: form.role,
       phone: form.phone.trim() || undefined,
       email: form.email.trim() || undefined,
+      deviceUserId: form.deviceUserId.trim() ? Number(form.deviceUserId.trim()) : undefined,
     });
     setStaff((p) => [...p, rec]);
-    setForm({ fullName: "", role: "front_desk", phone: "", email: "" });
+    setForm({ fullName: "", role: "front_desk", phone: "", email: "", deviceUserId: "" });
     setShowForm(false);
     setSaving(false);
   };
@@ -565,6 +812,13 @@ export const StaffManagementSection = () => {
           </select>
           <input className={inp} placeholder="Phone" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
           <input className={inp} placeholder="Email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+          <input
+            className={inp}
+            placeholder="Fingerprint device user # (optional)"
+            type="number"
+            value={form.deviceUserId}
+            onChange={(e) => setForm((f) => ({ ...f, deviceUserId: e.target.value }))}
+          />
           <div className="sm:col-span-2 flex justify-end gap-2">
             <button onClick={() => setShowForm(false)} className="text-sm font-semibold text-gray-500 px-4 py-2">Cancel</button>
             <button disabled={saving} onClick={addStaff} className="text-sm font-semibold text-white bg-[#C9A96E] hover:bg-[#b8935a] px-5 py-2 rounded-xl disabled:opacity-50">
@@ -587,7 +841,7 @@ export const StaffManagementSection = () => {
             <table className="w-full">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
-                  {["Name", "Role", "Contact", "Status", "Hired", ""].map((h) => (
+                  {["Name", "Role", "Contact", "Fingerprint #", "Status", "Hired", ""].map((h) => (
                     <th key={h} className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3">{h}</th>
                   ))}
                 </tr>
@@ -607,6 +861,13 @@ export const StaffManagementSection = () => {
                     <td className="px-5 py-3 text-xs text-gray-500">
                       {s.phone && <p className="flex items-center gap-1"><PhoneIcon className="w-3 h-3" />{s.phone}</p>}
                       {s.email && <p className="flex items-center gap-1 truncate max-w-[160px]"><EnvelopeIcon className="w-3 h-3" />{s.email}</p>}
+                    </td>
+                    <td className="px-5 py-3 text-xs text-gray-500">
+                      {s.deviceUserId !== undefined ? (
+                        <span className="font-mono bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5">#{s.deviceUserId}</span>
+                      ) : (
+                        <span className="text-gray-300">Not linked</span>
+                      )}
                     </td>
                     <td className="px-5 py-3">
                       <button
@@ -1088,7 +1349,7 @@ export const CameraGridSection = () => {
               </div>
               <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2">
                 <p className="text-white text-xs font-semibold">{c.roomLabel}</p>
-              </div>
+                           </div>
             </button>
           ))}
         </div>
