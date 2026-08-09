@@ -31,6 +31,11 @@ import {
   PhotoIcon,
   UserIcon,
   ShieldCheckIcon,
+  Squares2X2Icon,
+  UserGroupIcon,
+  ClipboardDocumentCheckIcon,
+  ChartBarIcon,
+  VideoCameraIcon,
 } from "@heroicons/react/24/outline";
 import { StarIcon as StarSolid } from "@heroicons/react/24/solid";
 import { useAuth } from "./AuthContext";
@@ -44,6 +49,15 @@ import {
   type VerificationStatus,
 } from "./index";
 import GuestDashboard from "./GuestDashboard";
+import {
+  OccupancyBoard,
+  BookingCalendarSection,
+  SalesAnalyticsSection,
+  StaffManagementSection,
+  AttendanceSection,
+  GuestProfilesSection,
+  CameraGridSection,
+} from "./Hostdashboardmodules";
 
 /* ─────────────────────────────────────────────────────────
    TYPES
@@ -57,14 +71,21 @@ type NavKey =
   | "messages"
   | "settings"
   | "wishlist"
-  | "history";
+  | "history"
+  | "occupancy"
+  | "calendar"
+  | "staff"
+  | "attendance"
+  | "guests"
+  | "cameras"
+  | "analytics";
 
 /* ─────────────────────────────────────────────────────────
    HELPERS
 ───────────────────────────────────────────────────────── */
-const fmt$ = (n: number) =>
+export const fmt$ = (n: number) =>
   "₦" + n.toLocaleString("en-US", { maximumFractionDigits: 0 });
-const fmtDate = (d: string) =>
+export const fmtDate = (d: string) =>
   new Date(d).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -113,7 +134,7 @@ const VerifBadge = ({ status }: { status: VerificationStatus }) => {
   );
 };
 
-const Sk = ({
+export const Sk = ({
   h = "h-8",
   rounded = "rounded-xl",
 }: {
@@ -150,7 +171,7 @@ const StatusPill = ({ status }: { status: string }) => {
   );
 };
 
-const StatCard = ({
+export const StatCard = ({
   icon,
   label,
   value,
@@ -197,7 +218,26 @@ const HOST_NAV = [
     label: "My Properties",
     icon: BuildingOffice2Icon,
   },
+  { key: "occupancy" as NavKey, label: "Occupancy", icon: Squares2X2Icon },
   { key: "bookings" as NavKey, label: "Bookings", icon: CalendarDaysIcon },
+  {
+    key: "calendar" as NavKey,
+    label: "Booking Calendar",
+    icon: CalendarDaysIcon,
+  },
+  {
+    key: "analytics" as NavKey,
+    label: "Sales Analytics",
+    icon: ChartBarIcon,
+  },
+  { key: "guests" as NavKey, label: "Guest Profiles", icon: UserGroupIcon },
+  { key: "staff" as NavKey, label: "Staff", icon: UserIcon },
+  {
+    key: "attendance" as NavKey,
+    label: "Attendance",
+    icon: ClipboardDocumentCheckIcon,
+  },
+  { key: "cameras" as NavKey, label: "Cameras", icon: VideoCameraIcon },
   { key: "reviews" as NavKey, label: "Reviews", icon: StarIcon },
   { key: "earnings" as NavKey, label: "Earnings", icon: BanknotesIcon },
   {
@@ -2614,6 +2654,27 @@ const HostHome = ({
           </>
         )}
       </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { key: "occupancy" as NavKey, label: "Occupancy", icon: BuildingOffice2Icon },
+          { key: "analytics" as NavKey, label: "Sales Analytics", icon: ClockIcon },
+          { key: "guests" as NavKey, label: "Guest Profiles", icon: UserIcon },
+          { key: "staff" as NavKey, label: "Staff & Attendance", icon: ShieldCheckIcon },
+          { key: "calendar" as NavKey, label: "Booking Calendar", icon: CalendarDaysIcon },
+          { key: "cameras" as NavKey, label: "Room Cameras", icon: PhotoIcon },
+        ].map((s) => (
+          <button
+            key={s.key}
+            onClick={() => onNavigate(s.key)}
+            className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-[#C9A96E]/40 transition-all p-4 flex items-center gap-3 text-left"
+          >
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#C9A96E18", border: "1px solid #C9A96E30" }}>
+              <s.icon className="w-4.5 h-4.5 text-[#C9A96E]" />
+            </div>
+            <span className="text-xs font-semibold text-gray-700">{s.label}</span>
+          </button>
+        ))}
+      </div>
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_260px] gap-6">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
@@ -2861,6 +2922,13 @@ const HostDashboardShell = ({
     settings: "Settings",
     wishlist: "Wishlist",
     history: "Travel History",
+    occupancy: "Room Occupancy",
+    calendar: "Booking Calendar",
+    staff: "Staff Management",
+    attendance: "Attendance",
+    guests: "Guest Profiles",
+    cameras: "Room Cameras",
+    analytics: "Sales Analytics",
   };
 
   const content = () => {
@@ -2869,8 +2937,22 @@ const HostDashboardShell = ({
         return <HostHome onNavigate={setActive} onBook={onBook} />;
       case "properties":
         return <PropertiesSection onBook={onBook} />;
+      case "occupancy":
+        return <OccupancyBoard />;
       case "bookings":
         return <HostBookings />;
+      case "calendar":
+        return <BookingCalendarSection />;
+      case "analytics":
+        return <SalesAnalyticsSection />;
+      case "guests":
+        return <GuestProfilesSection />;
+      case "staff":
+        return <StaffManagementSection />;
+      case "attendance":
+        return <AttendanceSection />;
+      case "cameras":
+        return <CameraGridSection />;
       case "reviews":
         return <ReviewsSection />;
       case "earnings":

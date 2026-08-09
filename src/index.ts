@@ -2426,3 +2426,744 @@ export const RefundRequestsDB = {
     return (count ?? 0) > 0;
   },
 };
+/* ═══════════════════════════════════════════════════════════════════════
+   HOST POWER TOOLS — Rooms, Staff, Attendance, Guest Orders, Cameras,
+   Analytics
+   ───────────────────────────────────────────────────────────────────────
+   NEW TABLES — run in Supabase SQL Editor:
+   ─────────────────────────────────────────
+   -- Physical rooms (occupancy board / booking calendar)
+   create table rooms (
+     id uuid primary key default gen_random_uuid(),
+     listing_id uuid references listings(id) on delete cascade not null,
+     room_type_id uuid references room_types(id) on delete set null,
+     label text not null,
+     status text default 'vacant' check (status in ('occupied','vacant','cleaning','maintenance','reserved')),
+     current_booking_id uuid references bookings(id) on delete set null,
+     last_cleaned_at timestamptz,
+     notes text default '',
+     created_at timestamptz default now()
+   );
+   alter table rooms enable row level security;
+   create policy "host all" on rooms for all using (
+     listing_id in (select id from listings where host_id = auth.uid())
+   );
+
+   -- Staff
+   create table staff (
+     id uuid primary key default gen_random_uuid(),
+     host_id uuid references users(id) on delete cascade not null,
+     full_name text not null,
+     role text not null check (role in ('manager','front_desk','housekeeping','security','kitchen','maintenance','other')),
+     phone text,
+     email text,
+     photo_url text,
+     hourly_rate numeric,
+     status text default 'active' check (status in ('active','on_leave','suspended','terminated')),
+     hired_at date default current_date,
+     created_at timestamptz default now()
+   );
+   alter table staff enable row level security;
+   create policy "host all" on staff for all using (host_id = auth.uid());
+
+   -- Attendance (clock in/out)
+   create table attendance (
+     id uuid primary key default gen_random_uuid(),
+     staff_id uuid references staff(id) on delete cascade not null,
+     date date not null default current_date,
+     clock_in timestamptz,
+     clock_out timestamptz,
+     status text default 'on_time' check (status in ('on_time','late','absent','half_day')),
+     hours_worked numeric,
+     notes text default '',
+     created_at timestamptz default now()
+   );
+   alter table attendance enable row level security;
+   create policy "host all" on attendance for all using (
+     staff_id in (select id from staff where host_id = auth.uid())
+   );
+
+   -- Guest orders (snacks / drinks / room service, tied to a stay)
+   create table guest_orders (
+     id uuid primary key default gen_random_uuid(),
+     guest_id uuid references users(id) not null,
+     booking_id uuid references bookings(id) on delete set null,
+     listing_id uuid references listings(id) not null,
+     host_id uuid references users(id) not null,
+     category text not null check (category in ('snack','drink','room_service','other')),
+     item_name text not null,
+     quantity int default 1,
+     unit_price numeric default 0,
+     room_label text,
+     ordered_at timestamptz default now()
+   );
+   alter table guest_orders enable row level security;
+   create policy "host all" on guest_orders for all using (host_id = auth.uid());
+   create policy "guest read own" on guest_orders for select using (guest_id = auth.uid());
+
+   -- Cameras (CCTV registry — actual video comes from your NVR/streaming
+   -- provider; this table just tracks which room maps to which stream)
+   create table cameras (
+     id uuid primary key default gen_random_uuid(),
+     listing_id uuid references listings(id) on delete cascade not null,
+     room_id uuid references rooms(id) on delete set null,
+     room_label text not null,
+     stream_url text,
+     status text default 'unassigned' check (status in ('online','offline','unassigned')),
+     last_ping_at timestamptz,
+     created_at timestamptz default now()
+   );
+   alter table cameras enable row level security;
+   create policy "host all" on cameras for all using (
+     listing_id in (select id from listings where host_id = auth.uid())
+   );
+   ─────────────────────────────────────────────────────────────
+*/
+
+/* ─────────────────────────────────────────────────────────────
+   ROOMS  (occupancy board + booking calendar)
+───────────────────────────────────────────────────────────── */
+
+export type RoomOccupancyStatus =
+  | "occupied"
+  | "vacant"
+  | "cleaning"
+  | "maintenance"
+  | "reserved";
+
+export interface Room {
+  id: string;
+  listingId: string;
+  roomTypeId?: string;
+  label: string;
+  status: RoomOccupancyStatus;
+  currentBookingId?: string;
+  lastCleanedAt?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toRoom(r: any): Room {
+  return {
+    id: r.id,
+    listingId: r.listing_id,
+    roomTypeId: r.room_type_id ?? undefined,
+    label: r.label,
+    status: r.status,
+    currentBookingId: r.current_booking_id ?? undefined,
+    lastCleanedAt: r.last_cleaned_at ?? undefined,
+    notes: r.notes ?? "",
+    createdAt: r.created_at,
+  };
+}
+
+export const RoomsDB = {
+  async byListing(listingId: string): Promise<Room[]> {
+    const { data, error } = await supabase
+      .from("rooms")
+      .select("*")
+      .eq("listing_id", listingId)
+      .order("label", { ascending: true });
+    if (error) { console.error("RoomsDB.byListing:", error.message); return []; }
+    return (data ?? []).map(toRoom);
+  },
+
+  async add(data: {
+    listingId: string;
+    roomTypeId?: string;
+    label: string;
+    status?: RoomOccupancyStatus;
+    notes?: string;
+  }): Promise<Room> {
+    const { data: row, error } = await supabase
+      .from("rooms")
+      .insert({
+        listing_id: data.listingId,
+        room_type_id: data.roomTypeId ?? null,
+        label: data.label,
+        status: data.status ?? "vacant",
+        notes: data.notes ?? "",
+      })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return toRoom(row);
+  },
+
+  async updateStatus(
+    id: string,
+    status: RoomOccupancyStatus,
+    extra?: { currentBookingId?: string | null; lastCleanedAt?: string },
+  ): Promise<Room | null> {
+    const p: Record<string, unknown> = { status };
+    if (extra?.currentBookingId !== undefined) p.current_booking_id = extra.currentBookingId;
+    if (status === "cleaning" || status === "vacant") p.last_cleaned_at = extra?.lastCleanedAt ?? new Date().toISOString();
+    const { data: row, error } = await supabase
+      .from("rooms")
+      .update(p)
+      .eq("id", id)
+      .select()
+      .single();
+    if (error) { console.error("RoomsDB.updateStatus:", error.message); return null; }
+    return toRoom(row);
+  },
+
+  async delete(id: string): Promise<void> {
+    await supabase.from("rooms").delete().eq("id", id);
+  },
+};
+
+/* ─────────────────────────────────────────────────────────────
+   STAFF
+───────────────────────────────────────────────────────────── */
+
+export type StaffRole =
+  | "manager"
+  | "front_desk"
+  | "housekeeping"
+  | "security"
+  | "kitchen"
+  | "maintenance"
+  | "other";
+
+export type StaffStatus = "active" | "on_leave" | "suspended" | "terminated";
+
+export interface StaffMember {
+  id: string;
+  hostId: string;
+  fullName: string;
+  role: StaffRole;
+  phone?: string;
+  email?: string;
+  photoUrl?: string;
+  hourlyRate?: number;
+  status: StaffStatus;
+  hiredAt: string;
+  createdAt: string;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toStaff(r: any): StaffMember {
+  return {
+    id: r.id,
+    hostId: r.host_id,
+    fullName: r.full_name,
+    role: r.role,
+    phone: r.phone ?? undefined,
+    email: r.email ?? undefined,
+    photoUrl: r.photo_url ?? undefined,
+    hourlyRate: r.hourly_rate !== null && r.hourly_rate !== undefined ? Number(r.hourly_rate) : undefined,
+    status: r.status,
+    hiredAt: r.hired_at,
+    createdAt: r.created_at,
+  };
+}
+
+export const StaffDB = {
+  async byHost(hostId: string): Promise<StaffMember[]> {
+    const { data, error } = await supabase
+      .from("staff")
+      .select("*")
+      .eq("host_id", hostId)
+      .order("full_name", { ascending: true });
+    if (error) { console.error("StaffDB.byHost:", error.message); return []; }
+    return (data ?? []).map(toStaff);
+  },
+
+  async add(data: {
+    hostId: string;
+    fullName: string;
+    role: StaffRole;
+    phone?: string;
+    email?: string;
+    hourlyRate?: number;
+  }): Promise<StaffMember> {
+    const { data: row, error } = await supabase
+      .from("staff")
+      .insert({
+        host_id: data.hostId,
+        full_name: data.fullName,
+        role: data.role,
+        phone: data.phone ?? null,
+        email: data.email ?? null,
+        hourly_rate: data.hourlyRate ?? null,
+        status: "active",
+      })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return toStaff(row);
+  },
+
+  async update(id: string, data: Partial<Omit<StaffMember, "id" | "hostId" | "createdAt">>): Promise<StaffMember | null> {
+    const p: Record<string, unknown> = {};
+    if (data.fullName !== undefined) p.full_name = data.fullName;
+    if (data.role !== undefined) p.role = data.role;
+    if (data.phone !== undefined) p.phone = data.phone;
+    if (data.email !== undefined) p.email = data.email;
+    if (data.photoUrl !== undefined) p.photo_url = data.photoUrl;
+    if (data.hourlyRate !== undefined) p.hourly_rate = data.hourlyRate;
+    if (data.status !== undefined) p.status = data.status;
+    if (data.hiredAt !== undefined) p.hired_at = data.hiredAt;
+    const { data: row, error } = await supabase
+      .from("staff")
+      .update(p)
+      .eq("id", id)
+      .select()
+      .single();
+    if (error) { console.error("StaffDB.update:", error.message); return null; }
+    return toStaff(row);
+  },
+
+  async setStatus(id: string, status: StaffStatus): Promise<void> {
+    const { error } = await supabase.from("staff").update({ status }).eq("id", id);
+    if (error) console.error("StaffDB.setStatus:", error.message);
+  },
+
+  async remove(id: string): Promise<void> {
+    await supabase.from("staff").delete().eq("id", id);
+  },
+};
+
+/* ─────────────────────────────────────────────────────────────
+   ATTENDANCE  (clock in / clock out)
+───────────────────────────────────────────────────────────── */
+
+export type AttendanceStatus = "on_time" | "late" | "absent" | "half_day";
+
+export interface AttendanceRecord {
+  id: string;
+  staffId: string;
+  date: string;
+  clockIn?: string;
+  clockOut?: string;
+  status: AttendanceStatus;
+  hoursWorked?: number;
+  notes?: string;
+  createdAt: string;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toAttendance(r: any): AttendanceRecord {
+  return {
+    id: r.id,
+    staffId: r.staff_id,
+    date: r.date,
+    clockIn: r.clock_in ?? undefined,
+    clockOut: r.clock_out ?? undefined,
+    status: r.status,
+    hoursWorked: r.hours_worked !== null && r.hours_worked !== undefined ? Number(r.hours_worked) : undefined,
+    notes: r.notes ?? "",
+    createdAt: r.created_at,
+  };
+}
+
+/** Shift is considered "late" if clock-in happens after this hour (24h, server-local). */
+const LATE_CUTOFF_HOUR = 9;
+
+export const AttendanceDB = {
+  /** All attendance records for every staff member belonging to this host. */
+  async byHost(hostId: string): Promise<(AttendanceRecord & { staffName: string })[]> {
+    const staff = await StaffDB.byHost(hostId);
+    if (staff.length === 0) return [];
+    const staffMap = new Map(staff.map((s) => [s.id, s.fullName]));
+    const { data, error } = await supabase
+      .from("attendance")
+      .select("*")
+      .in("staff_id", staff.map((s) => s.id))
+      .order("date", { ascending: false });
+    if (error) { console.error("AttendanceDB.byHost:", error.message); return []; }
+    return (data ?? []).map((r) => ({ ...toAttendance(r), staffName: staffMap.get(r.staff_id) ?? "Unknown" }));
+  },
+
+  async byStaff(staffId: string): Promise<AttendanceRecord[]> {
+    const { data, error } = await supabase
+      .from("attendance")
+      .select("*")
+      .eq("staff_id", staffId)
+      .order("date", { ascending: false });
+    if (error) { console.error("AttendanceDB.byStaff:", error.message); return []; }
+    return (data ?? []).map(toAttendance);
+  },
+
+  async clockIn(staffId: string): Promise<AttendanceRecord> {
+    const now = new Date();
+    const status: AttendanceStatus = now.getHours() >= LATE_CUTOFF_HOUR ? "late" : "on_time";
+    const { data: row, error } = await supabase
+      .from("attendance")
+      .insert({
+        staff_id: staffId,
+        date: now.toISOString().slice(0, 10),
+        clock_in: now.toISOString(),
+        status,
+      })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return toAttendance(row);
+  },
+
+  async clockOut(recordId: string): Promise<AttendanceRecord | null> {
+    const { data: existing } = await supabase.from("attendance").select("*").eq("id", recordId).single();
+    if (!existing) return null;
+    const now = new Date();
+    const hoursWorked = existing.clock_in
+      ? +((now.getTime() - new Date(existing.clock_in).getTime()) / 3.6e6).toFixed(2)
+      : null;
+    const { data: row, error } = await supabase
+      .from("attendance")
+      .update({ clock_out: now.toISOString(), hours_worked: hoursWorked })
+      .eq("id", recordId)
+      .select()
+      .single();
+    if (error) { console.error("AttendanceDB.clockOut:", error.message); return null; }
+    return toAttendance(row);
+  },
+
+  async markAbsent(staffId: string, date: string, notes?: string): Promise<void> {
+    const { error } = await supabase.from("attendance").insert({
+      staff_id: staffId,
+      date,
+      status: "absent",
+      notes: notes ?? "",
+    });
+    if (error) console.error("AttendanceDB.markAbsent:", error.message);
+  },
+};
+
+/* ─────────────────────────────────────────────────────────────
+   GUEST ORDERS  (snacks, drinks, room service — feeds Guest CRM)
+───────────────────────────────────────────────────────────── */
+
+export type OrderCategory = "snack" | "drink" | "room_service" | "other";
+
+export interface GuestOrderItem {
+  id: string;
+  guestId: string;
+  bookingId?: string;
+  listingId: string;
+  hostId: string;
+  category: OrderCategory;
+  itemName: string;
+  quantity: number;
+  unitPrice: number;
+  roomLabel?: string;
+  orderedAt: string;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toGuestOrder(r: any): GuestOrderItem {
+  return {
+    id: r.id,
+    guestId: r.guest_id,
+    bookingId: r.booking_id ?? undefined,
+    listingId: r.listing_id,
+    hostId: r.host_id,
+    category: r.category,
+    itemName: r.item_name,
+    quantity: r.quantity ?? 1,
+    unitPrice: Number(r.unit_price ?? 0),
+    roomLabel: r.room_label ?? undefined,
+    orderedAt: r.ordered_at,
+  };
+}
+
+export const GuestOrdersDB = {
+  async add(data: {
+    guestId: string;
+    bookingId?: string;
+    listingId: string;
+    hostId: string;
+    category: OrderCategory;
+    itemName: string;
+    quantity: number;
+    unitPrice: number;
+    roomLabel?: string;
+  }): Promise<GuestOrderItem> {
+    const { data: row, error } = await supabase
+      .from("guest_orders")
+      .insert({
+        guest_id: data.guestId,
+        booking_id: data.bookingId ?? null,
+        listing_id: data.listingId,
+        host_id: data.hostId,
+        category: data.category,
+        item_name: data.itemName,
+        quantity: data.quantity,
+        unit_price: data.unitPrice,
+        room_label: data.roomLabel ?? null,
+      })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return toGuestOrder(row);
+  },
+
+  async byGuest(guestId: string): Promise<GuestOrderItem[]> {
+    const { data, error } = await supabase
+      .from("guest_orders")
+      .select("*")
+      .eq("guest_id", guestId)
+      .order("ordered_at", { ascending: false });
+    if (error) { console.error("GuestOrdersDB.byGuest:", error.message); return []; }
+    return (data ?? []).map(toGuestOrder);
+  },
+
+  async byHost(hostId: string): Promise<GuestOrderItem[]> {
+    const { data, error } = await supabase
+      .from("guest_orders")
+      .select("*")
+      .eq("host_id", hostId)
+      .order("ordered_at", { ascending: false });
+    if (error) { console.error("GuestOrdersDB.byHost:", error.message); return []; }
+    return (data ?? []).map(toGuestOrder);
+  },
+};
+
+/* ─────────────────────────────────────────────────────────────
+   GUEST CRM  (spend, stay history — derived from bookings + orders)
+───────────────────────────────────────────────────────────── */
+
+export interface GuestProfile {
+  id: string;
+  fullName: string;
+  email?: string;
+  totalStays: number;
+  totalSpend: number;
+  firstStayAt?: string;
+  lastStayAt?: string;
+  isReturning: boolean;
+}
+
+export const GuestsDB = {
+  /** Aggregates every guest who has ever booked with this host — spend,
+   *  stay count, first/last stay — from bookings + guest_orders. */
+  async byHost(hostId: string): Promise<GuestProfile[]> {
+    const [{ data: bookings, error: bErr }, { data: orders, error: oErr }] = await Promise.all([
+      supabase
+        .from("bookings")
+        .select("guest_id, guest_name, guest_email, total_amount, check_in, status")
+        .eq("host_id", hostId),
+      supabase
+        .from("guest_orders")
+        .select("guest_id, quantity, unit_price")
+        .eq("host_id", hostId),
+    ]);
+    if (bErr) { console.error("GuestsDB.byHost (bookings):", bErr.message); return []; }
+    if (oErr) console.error("GuestsDB.byHost (orders):", oErr.message);
+
+    const orderSpendByGuest = new Map<string, number>();
+    (orders ?? []).forEach((o) => {
+      const spend = Number(o.unit_price ?? 0) * (o.quantity ?? 1);
+      orderSpendByGuest.set(o.guest_id, (orderSpendByGuest.get(o.guest_id) ?? 0) + spend);
+    });
+
+    const byGuest = new Map<string, GuestProfile>();
+    (bookings ?? [])
+      .filter((b) => b.status !== "cancelled")
+      .forEach((b) => {
+        const existing = byGuest.get(b.guest_id);
+        const bookingSpend = Number(b.total_amount ?? 0);
+        if (!existing) {
+          byGuest.set(b.guest_id, {
+            id: b.guest_id,
+            fullName: b.guest_name ?? "Guest",
+            email: b.guest_email ?? undefined,
+            totalStays: 1,
+            totalSpend: bookingSpend,
+            firstStayAt: b.check_in,
+            lastStayAt: b.check_in,
+            isReturning: false,
+          });
+        } else {
+          existing.totalStays += 1;
+          existing.totalSpend += bookingSpend;
+          if (b.check_in < (existing.firstStayAt ?? b.check_in)) existing.firstStayAt = b.check_in;
+          if (b.check_in > (existing.lastStayAt ?? b.check_in)) existing.lastStayAt = b.check_in;
+          existing.isReturning = existing.totalStays > 1;
+        }
+      });
+
+    // fold in order spend
+    for (const [guestId, spend] of orderSpendByGuest.entries()) {
+      const g = byGuest.get(guestId);
+      if (g) g.totalSpend += spend;
+    }
+
+    return Array.from(byGuest.values()).sort((a, b) => b.totalSpend - a.totalSpend);
+  },
+};
+
+/* ─────────────────────────────────────────────────────────────
+   CAMERAS  (CCTV registry — UI-ready; wire a real streamUrl once
+   your NVR/streaming backend is connected)
+───────────────────────────────────────────────────────────── */
+
+export type CameraStatus = "online" | "offline" | "unassigned";
+
+export interface RoomCamera {
+  id: string;
+  listingId: string;
+  roomId?: string;
+  roomLabel: string;
+  streamUrl?: string;
+  status: CameraStatus;
+  lastPingAt?: string;
+  createdAt: string;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toCamera(r: any): RoomCamera {
+  return {
+    id: r.id,
+    listingId: r.listing_id,
+    roomId: r.room_id ?? undefined,
+    roomLabel: r.room_label,
+    streamUrl: r.stream_url ?? undefined,
+    status: r.status,
+    lastPingAt: r.last_ping_at ?? undefined,
+    createdAt: r.created_at,
+  };
+}
+
+export const CamerasDB = {
+  async byListing(listingId: string): Promise<RoomCamera[]> {
+    const { data, error } = await supabase
+      .from("cameras")
+      .select("*")
+      .eq("listing_id", listingId)
+      .order("room_label", { ascending: true });
+    if (error) { console.error("CamerasDB.byListing:", error.message); return []; }
+    return (data ?? []).map(toCamera);
+  },
+
+  async add(data: { listingId: string; roomId?: string; roomLabel: string; streamUrl?: string }): Promise<RoomCamera> {
+    const { data: row, error } = await supabase
+      .from("cameras")
+      .insert({
+        listing_id: data.listingId,
+        room_id: data.roomId ?? null,
+        room_label: data.roomLabel,
+        stream_url: data.streamUrl ?? null,
+        status: data.streamUrl ? "online" : "unassigned",
+      })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return toCamera(row);
+  },
+
+  /** Point a room's camera at a real stream (RTSP proxied to HLS, etc). */
+  async connectStream(id: string, streamUrl: string): Promise<void> {
+    const { error } = await supabase
+      .from("cameras")
+      .update({ stream_url: streamUrl, status: "online", last_ping_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) console.error("CamerasDB.connectStream:", error.message);
+  },
+
+  async setStatus(id: string, status: CameraStatus): Promise<void> {
+    const { error } = await supabase
+      .from("cameras")
+      .update({ status, last_ping_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) console.error("CamerasDB.setStatus:", error.message);
+  },
+};
+
+/* ─────────────────────────────────────────────────────────────
+   SALES ANALYTICS  (derived from real bookings + guest_orders —
+   no extra table needed)
+───────────────────────────────────────────────────────────── */
+
+export interface SalesDataPoint {
+  date: string;
+  bookingRevenue: number;
+  orderRevenue: number;
+}
+
+export interface AnalyticsSummary {
+  series: SalesDataPoint[];
+  totalRevenue: number;
+  totalBookingRevenue: number;
+  totalOrderRevenue: number;
+  occupancyRate: number;
+  topListings: { name: string; revenue: number }[];
+}
+
+export const AnalyticsDB = {
+  async summary(hostId: string, days = 14): Promise<AnalyticsSummary> {
+    const since = new Date();
+    since.setDate(since.getDate() - (days - 1));
+    const sinceStr = since.toISOString().slice(0, 10);
+
+    const [{ data: bookings, error: bErr }, { data: orders, error: oErr }, { data: rooms, error: rErr }] = await Promise.all([
+      supabase
+        .from("bookings")
+        .select("total_amount, created_at, listing_name, status")
+        .eq("host_id", hostId)
+        .neq("status", "cancelled")
+        .gte("created_at", sinceStr),
+      supabase
+        .from("guest_orders")
+        .select("quantity, unit_price, ordered_at")
+        .eq("host_id", hostId)
+        .gte("ordered_at", sinceStr),
+      supabase
+        .from("rooms")
+        .select("id, status, listing_id")
+        .in(
+          "listing_id",
+          (await supabase.from("listings").select("id").eq("host_id", hostId)).data?.map((l) => l.id) ?? [],
+        ),
+    ]);
+    if (bErr) console.error("AnalyticsDB.summary (bookings):", bErr.message);
+    if (oErr) console.error("AnalyticsDB.summary (orders):", oErr.message);
+    if (rErr) console.error("AnalyticsDB.summary (rooms):", rErr.message);
+
+    // build a day-by-day series
+    const byDay = new Map<string, { bookingRevenue: number; orderRevenue: number }>();
+    for (let i = 0; i < days; i++) {
+      const d = new Date(since);
+      d.setDate(d.getDate() + i);
+      byDay.set(d.toISOString().slice(0, 10), { bookingRevenue: 0, orderRevenue: 0 });
+    }
+    (bookings ?? []).forEach((b) => {
+      const day = String(b.created_at).slice(0, 10);
+      const entry = byDay.get(day);
+      if (entry) entry.bookingRevenue += Number(b.total_amount ?? 0);
+    });
+    (orders ?? []).forEach((o) => {
+      const day = String(o.ordered_at).slice(0, 10);
+      const entry = byDay.get(day);
+      if (entry) entry.orderRevenue += Number(o.unit_price ?? 0) * (o.quantity ?? 1);
+    });
+
+    const series: SalesDataPoint[] = Array.from(byDay.entries()).map(([date, v]) => ({ date, ...v }));
+    const totalBookingRevenue = series.reduce((s, p) => s + p.bookingRevenue, 0);
+    const totalOrderRevenue = series.reduce((s, p) => s + p.orderRevenue, 0);
+
+    const revenueByListing = new Map<string, number>();
+    (bookings ?? []).forEach((b) => {
+      revenueByListing.set(b.listing_name, (revenueByListing.get(b.listing_name) ?? 0) + Number(b.total_amount ?? 0));
+    });
+    const topListings = Array.from(revenueByListing.entries())
+      .map(([name, revenue]) => ({ name, revenue }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5);
+
+    const totalRooms = (rooms ?? []).length;
+    const occupiedRooms = (rooms ?? []).filter((r) => r.status === "occupied").length;
+    const occupancyRate = totalRooms > 0 ? Math.round((occupiedRooms / totalRooms) * 100) : 0;
+
+    return {
+      series,
+      totalRevenue: totalBookingRevenue + totalOrderRevenue,
+      totalBookingRevenue,
+      totalOrderRevenue,
+      occupancyRate,
+      topListings,
+    };
+  },
+};
