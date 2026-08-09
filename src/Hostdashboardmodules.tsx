@@ -129,7 +129,7 @@ export const PRO_FEATURES: Record<
 export const isProFeature = (key: string) => key in PRO_FEATURES;
 
 /** Shown instead of a Pro section's real content when the host is on Free. */
-export const UpgradeGate = ({ featureKey, onUpgraded }: { featureKey: string; onUpgraded?: () => void }) => {
+export const UpgradeGate = ({ featureKey }: { featureKey: string }) => {
   const { user } = useAuth();
   const feature = PRO_FEATURES[featureKey];
   const [loading, setLoading] = useState(false);
