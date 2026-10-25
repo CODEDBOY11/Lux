@@ -22,7 +22,7 @@ import {
   ArrowDownTrayIcon,
   CheckIcon,
 } from "@heroicons/react/24/outline";
-import type { Booking } from "./index";
+import type { Booking } from "../index";
 
 /* ─── helpers ──────────────────────────────────────────── */
 const fmt$ = (n: number) =>
