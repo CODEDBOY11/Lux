@@ -5,6 +5,7 @@ import ReviewsSection from "./ReviewSection";
 import { WalletDB, RoomTypesDB, type RoomType } from "./index";
 import PropertyVerificationForm from "./Verification/Property";
 import { BankAccountPicker, type ResolvedAccount } from "./BankAccountPicker";
+import ValidateBooking from "./ValidateBooking";
 import {
   HomeIcon,
   BuildingOffice2Icon,
@@ -63,8 +64,11 @@ import {
   UpgradeGate,
   isProFeature,
 } from "./Hostdashboardmodules";
-import { SubscriptionsDB, PRO_PLAN_PRICE_NGN, type HostSubscription } from "./index";
-
+import {
+  SubscriptionsDB,
+  PRO_PLAN_PRICE_NGN,
+  type HostSubscription,
+} from "./index";
 
 type NavKey =
   | "dashboard"
@@ -1976,6 +1980,8 @@ const HostBookings = () => {
       className="flex-1 overflow-y-auto bg-gray-50 p-6"
       style={{ animation: "fadeUp 0.3s ease both" }}
     >
+      <ValidateBooking />
+
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-gray-900">Bookings</h2>
         <p className="text-gray-400 text-sm mt-0.5">
@@ -2683,12 +2689,19 @@ const HostHome = ({
                 "url(\"data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23C9A96E' fill-opacity='1' fill-rule='evenodd'%3E%3Cpath d='M0 40L40 0H20L0 20M40 40V20L20 40'/%3E%3C/g%3E%3C/svg%3E\")",
             }}
           />
-          <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 relative z-10" style={{ background: "linear-gradient(135deg,#C9A96E,#8a6030)" }}>
+          <div
+            className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 relative z-10"
+            style={{ background: "linear-gradient(135deg,#C9A96E,#8a6030)" }}
+          >
             <SparklesIcon className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1 relative z-10 min-w-0">
-            <p className="text-white font-bold text-sm">Unlock Pro — occupancy, staff, guest CRM, analytics & cameras</p>
-            <p className="text-white/50 text-xs mt-0.5">Starting at {fmt$(PRO_PLAN_PRICE_NGN)}/month · cancel anytime</p>
+            <p className="text-white font-bold text-sm">
+              Unlock Pro — occupancy, staff, guest CRM, analytics & cameras
+            </p>
+            <p className="text-white/50 text-xs mt-0.5">
+              Starting at {fmt$(PRO_PLAN_PRICE_NGN)}/month · cancel anytime
+            </p>
           </div>
           <span className="relative z-10 shrink-0 text-xs font-bold text-[#1a1006] bg-[#C9A96E] group-hover:bg-white px-4 py-2 rounded-xl transition-colors">
             Upgrade
@@ -2697,11 +2710,27 @@ const HostHome = ({
       )}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { key: "occupancy" as NavKey, label: "Occupancy", icon: BuildingOffice2Icon },
-          { key: "analytics" as NavKey, label: "Sales Analytics", icon: ClockIcon },
+          {
+            key: "occupancy" as NavKey,
+            label: "Occupancy",
+            icon: BuildingOffice2Icon,
+          },
+          {
+            key: "analytics" as NavKey,
+            label: "Sales Analytics",
+            icon: ClockIcon,
+          },
           { key: "guests" as NavKey, label: "Guest Profiles", icon: UserIcon },
-          { key: "staff" as NavKey, label: "Staff & Attendance", icon: ShieldCheckIcon },
-          { key: "calendar" as NavKey, label: "Booking Calendar", icon: CalendarDaysIcon },
+          {
+            key: "staff" as NavKey,
+            label: "Staff & Attendance",
+            icon: ShieldCheckIcon,
+          },
+          {
+            key: "calendar" as NavKey,
+            label: "Booking Calendar",
+            icon: CalendarDaysIcon,
+          },
           { key: "cameras" as NavKey, label: "Room Cameras", icon: PhotoIcon },
         ].map((s) => {
           const locked = !isPro && isProFeature(s.key);
@@ -2711,10 +2740,18 @@ const HostHome = ({
               onClick={() => onNavigate(s.key)}
               className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-[#C9A96E]/40 transition-all p-4 flex items-center gap-3 text-left relative"
             >
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#C9A96E18", border: "1px solid #C9A96E30" }}>
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                style={{
+                  background: "#C9A96E18",
+                  border: "1px solid #C9A96E30",
+                }}
+              >
                 <s.icon className="w-4.5 h-4.5 text-[#C9A96E]" />
               </div>
-              <span className="text-xs font-semibold text-gray-700">{s.label}</span>
+              <span className="text-xs font-semibold text-gray-700">
+                {s.label}
+              </span>
               {locked && (
                 <span className="absolute top-2 right-2 text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-[#C9A96E]/15 text-[#C9A96E] tracking-wider">
                   PRO
@@ -2952,7 +2989,9 @@ const HostDashboardShell = ({
   const [active, setActive] = useState<NavKey>("dashboard");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [pending, setPending] = useState(0);
-  const [subscription, setSubscription] = useState<HostSubscription | null>(null);
+  const [subscription, setSubscription] = useState<HostSubscription | null>(
+    null,
+  );
   const { user } = useAuth();
 
   useEffect(() => {
@@ -3005,7 +3044,9 @@ const HostDashboardShell = ({
     }
     switch (active) {
       case "dashboard":
-        return <HostHome onNavigate={setActive} onBook={onBook} isPro={isPro} />;
+        return (
+          <HostHome onNavigate={setActive} onBook={onBook} isPro={isPro} />
+        );
       case "properties":
         return <PropertiesSection onBook={onBook} />;
       case "occupancy":
@@ -3035,7 +3076,9 @@ const HostDashboardShell = ({
       case "billing":
         return <BillingSection />;
       default:
-        return <HostHome onNavigate={setActive} onBook={onBook} isPro={isPro} />;
+        return (
+          <HostHome onNavigate={setActive} onBook={onBook} isPro={isPro} />
+        );
     }
   };
 

@@ -826,7 +826,7 @@ export const BookingsDB = {
       .eq("id", id);
     if (error) console.error("BookingsDB.updateStatus:", error.message);
   },
-   /** Returns true if the date range is free for this listing */
+  /** Returns true if the date range is free for this listing */
   async checkAvailability(
     listingId: string,
     checkIn: string,
@@ -844,6 +844,14 @@ export const BookingsDB = {
       return false;
     }
     return (data ?? []).length === 0;
+  },
+  async getByRef(ref: string): Promise<Booking | null> {
+    const { data } = await supabase
+      .from("bookings")
+      .select("*")
+      .eq("ref", ref)
+      .maybeSingle();
+    return data ? toBooking(data) : null;
   },
 
   /** Returns all booked date ranges for a listing (for calendar UI) */
@@ -1825,7 +1833,7 @@ export const WalletDB = {
         host_id: data.hostId,
         amount: data.amount,
         bank_name: data.bankName,
-         bank_code: data.bankCode,
+        bank_code: data.bankCode,
         account_number: data.accountNumber,
         account_name: data.accountName,
         status: "pending",
@@ -1850,12 +1858,18 @@ export const WalletDB = {
     return (data ?? []).map(toWithdrawal);
   },
   async withdrawPlatformBalance(data: {
-  amount: number; bankName: string; bankCode: string;
-  accountNumber: string; accountName: string;
-}): Promise<void> {
-  const wr = await this.requestWithdrawal({ hostId: PLATFORM_ADMIN_ID, ...data });
-  await this.initiateTransfer(wr.id);
-},
+    amount: number;
+    bankName: string;
+    bankCode: string;
+    accountNumber: string;
+    accountName: string;
+  }): Promise<void> {
+    const wr = await this.requestWithdrawal({
+      hostId: PLATFORM_ADMIN_ID,
+      ...data,
+    });
+    await this.initiateTransfer(wr.id);
+  },
 
   /* ── Admin methods ── */
 
@@ -1947,35 +1961,47 @@ export const WalletDB = {
       });
     }
   },
-   async listBanks(): Promise<{ name: string; code: string }[]> {
-  const { data, error } = await supabase.functions.invoke("paystack-transfers", {
-    body: { action: "list-banks" },
-  });
-  if (error) {
-    console.error("❌ WalletDB.listBanks error:", error);
-    throw new Error(error.message || "Failed to fetch banks from Paystack");
-  }
-  if (!data || !data.data) {
-    throw new Error("Invalid response from bank list API");
-  }
-  return data.data;
-},
+  async listBanks(): Promise<{ name: string; code: string }[]> {
+    const { data, error } = await supabase.functions.invoke(
+      "paystack-transfers",
+      {
+        body: { action: "list-banks" },
+      },
+    );
+    if (error) {
+      console.error("❌ WalletDB.listBanks error:", error);
+      throw new Error(error.message || "Failed to fetch banks from Paystack");
+    }
+    if (!data || !data.data) {
+      throw new Error("Invalid response from bank list API");
+    }
+    return data.data;
+  },
 
-async resolveAccount(accountNumber: string, bankCode: string): Promise<string> {
-  const { data, error } = await supabase.functions.invoke("paystack-transfers", {
-    body: { action: "resolve-account", accountNumber, bankCode },
-  });
-  if (error) throw new Error(error.message);
-  return data.data.accountName;
-},
+  async resolveAccount(
+    accountNumber: string,
+    bankCode: string,
+  ): Promise<string> {
+    const { data, error } = await supabase.functions.invoke(
+      "paystack-transfers",
+      {
+        body: { action: "resolve-account", accountNumber, bankCode },
+      },
+    );
+    if (error) throw new Error(error.message);
+    return data.data.accountName;
+  },
 
-async initiateTransfer(withdrawalId: string): Promise<{ status: string }> {
-  const { data, error } = await supabase.functions.invoke("paystack-transfers", {
-    body: { action: "initiate-transfer", withdrawalId },
-  });
-  if (error) throw new Error(error.message);
-  return data.data;
-},
+  async initiateTransfer(withdrawalId: string): Promise<{ status: string }> {
+    const { data, error } = await supabase.functions.invoke(
+      "paystack-transfers",
+      {
+        body: { action: "initiate-transfer", withdrawalId },
+      },
+    );
+    if (error) throw new Error(error.message);
+    return data.data;
+  },
 };
 /* ─────────────────────────────────────────────────────────────
    NOTIFICATIONS
@@ -2098,7 +2124,6 @@ export const NotificationsDB = {
       )
       .subscribe();
   },
- 
 };
 
 /* ─────────────────────────────────────────────────────────────
@@ -2110,8 +2135,8 @@ export interface RoomType {
   listingId: string;
   name: string;
   description: string;
-  size: string;          // e.g. "45 m²"
-  bedType: string;       // e.g. "King Bed", "2 Twin Beds"
+  size: string; // e.g. "45 m²"
+  bedType: string; // e.g. "King Bed", "2 Twin Beds"
   maxGuests: number;
   pricePerNight: number;
   images: string[];
@@ -2146,7 +2171,10 @@ export const RoomTypesDB = {
       .eq("listing_id", listingId)
       .eq("available", true)
       .order("price_per_night", { ascending: true });
-    if (error) { console.error("RoomTypesDB.byListing:", error.message); return []; }
+    if (error) {
+      console.error("RoomTypesDB.byListing:", error.message);
+      return [];
+    }
     return (data ?? []).map(toRoomType);
   },
 
@@ -2171,14 +2199,18 @@ export const RoomTypesDB = {
     return toRoomType(row);
   },
 
-  async update(id: string, data: Partial<Omit<RoomType, "id" | "createdAt" | "listingId">>): Promise<RoomType | null> {
+  async update(
+    id: string,
+    data: Partial<Omit<RoomType, "id" | "createdAt" | "listingId">>,
+  ): Promise<RoomType | null> {
     const p: Record<string, unknown> = {};
     if (data.name !== undefined) p.name = data.name;
     if (data.description !== undefined) p.description = data.description;
     if (data.size !== undefined) p.size = data.size;
     if (data.bedType !== undefined) p.bed_type = data.bedType;
     if (data.maxGuests !== undefined) p.max_guests = data.maxGuests;
-    if (data.pricePerNight !== undefined) p.price_per_night = data.pricePerNight;
+    if (data.pricePerNight !== undefined)
+      p.price_per_night = data.pricePerNight;
     if (data.images !== undefined) p.images = data.images;
     if (data.amenities !== undefined) p.amenities = data.amenities;
     if (data.available !== undefined) p.available = data.available;
@@ -2188,7 +2220,10 @@ export const RoomTypesDB = {
       .eq("id", id)
       .select()
       .single();
-    if (error) { console.error("RoomTypesDB.update:", error.message); return null; }
+    if (error) {
+      console.error("RoomTypesDB.update:", error.message);
+      return null;
+    }
     return toRoomType(row);
   },
 
@@ -2215,7 +2250,7 @@ export const CANCELLATION_REASONS = [
   "Other",
 ] as const;
 
-export type CancellationReason = typeof CANCELLATION_REASONS[number];
+export type CancellationReason = (typeof CANCELLATION_REASONS)[number];
 
 export interface RefundRequest {
   id: string;
@@ -2261,10 +2296,19 @@ function toRefundRequest(r: any): RefundRequest {
 }
 
 /** Calculate refund amount based on days until check-in */
-export function calcRefundAmount(totalAmount: number, checkIn: string): { amount: number; pct: number; label: string } {
+export function calcRefundAmount(
+  totalAmount: number,
+  checkIn: string,
+): { amount: number; pct: number; label: string } {
   const days = Math.ceil((new Date(checkIn).getTime() - Date.now()) / 86400000);
-  if (days >= 14) return { amount: totalAmount, pct: 100, label: "Full Refund" };
-  if (days >= 7)  return { amount: Math.round(totalAmount * 0.5), pct: 50, label: "50% Refund" };
+  if (days >= 14)
+    return { amount: totalAmount, pct: 100, label: "Full Refund" };
+  if (days >= 7)
+    return {
+      amount: Math.round(totalAmount * 0.5),
+      pct: 50,
+      label: "50% Refund",
+    };
   return { amount: 0, pct: 0, label: "No Refund" };
 }
 
@@ -2282,7 +2326,6 @@ export const RefundRequestsDB = {
     reason: CancellationReason;
     note: string;
   }): Promise<RefundRequest> {
-
     /* Guard 1: fetch the booking and verify it exists */
     const { data: booking, error: bookingErr } = await supabase
       .from("bookings")
@@ -2325,7 +2368,9 @@ export const RefundRequestsDB = {
       .in("status", ["pending", "approved"]);
 
     if ((count ?? 0) > 0) {
-      throw new Error("A cancellation request already exists for this booking.");
+      throw new Error(
+        "A cancellation request already exists for this booking.",
+      );
     }
 
     /* All guards passed — create the request */
@@ -2361,27 +2406,47 @@ export const RefundRequestsDB = {
       .select("*")
       .eq("guest_id", guestId)
       .order("created_at", { ascending: false });
-    if (error) { console.error("RefundRequestsDB.byGuest:", error.message); return []; }
+    if (error) {
+      console.error("RefundRequestsDB.byGuest:", error.message);
+      return [];
+    }
     return (data ?? []).map(toRefundRequest);
   },
 
   async all(status?: RefundStatus): Promise<RefundRequest[]> {
-    let q = supabase.from("refund_requests").select("*").order("created_at", { ascending: false });
+    let q = supabase
+      .from("refund_requests")
+      .select("*")
+      .order("created_at", { ascending: false });
     if (status) q = q.eq("status", status);
     const { data, error } = await q;
-    if (error) { console.error("RefundRequestsDB.all:", error.message); return []; }
+    if (error) {
+      console.error("RefundRequestsDB.all:", error.message);
+      return [];
+    }
     return (data ?? []).map(toRefundRequest);
   },
 
-  async approve(id: string, adminId: string, adminNote?: string): Promise<void> {
-    const { data: req } = await supabase.from("refund_requests").select("*").eq("id", id).single();
+  async approve(
+    id: string,
+    adminId: string,
+    adminNote?: string,
+  ): Promise<void> {
+    const { data: req } = await supabase
+      .from("refund_requests")
+      .select("*")
+      .eq("id", id)
+      .single();
     if (!req) throw new Error("Refund request not found");
-    await supabase.from("refund_requests").update({
-      status: "approved",
-      admin_note: adminNote ?? null,
-      reviewed_by: adminId,
-      reviewed_at: new Date().toISOString(),
-    }).eq("id", id);
+    await supabase
+      .from("refund_requests")
+      .update({
+        status: "approved",
+        admin_note: adminNote ?? null,
+        reviewed_by: adminId,
+        reviewed_at: new Date().toISOString(),
+      })
+      .eq("id", id);
     // Cancel the booking
     await BookingsDB.updateStatus(req.booking_id, "cancelled");
     // Notify guest
@@ -2389,22 +2454,30 @@ export const RefundRequestsDB = {
       userId: req.guest_id,
       type: "payment",
       title: "Cancellation Approved",
-      body: req.refund_amount > 0
-        ? `Your cancellation for ${req.listing_name} was approved. ₦${Number(req.refund_amount).toLocaleString()} will be refunded within 5–10 business days.`
-        : `Your cancellation for ${req.listing_name} was approved. No refund applies per our policy.`,
+      body:
+        req.refund_amount > 0
+          ? `Your cancellation for ${req.listing_name} was approved. ₦${Number(req.refund_amount).toLocaleString()} will be refunded within 5–10 business days.`
+          : `Your cancellation for ${req.listing_name} was approved. No refund applies per our policy.`,
       link: "/dashboard?tab=bookings",
     });
   },
 
   async decline(id: string, adminId: string, adminNote: string): Promise<void> {
-    const { data: req } = await supabase.from("refund_requests").select("*").eq("id", id).single();
+    const { data: req } = await supabase
+      .from("refund_requests")
+      .select("*")
+      .eq("id", id)
+      .single();
     if (!req) throw new Error("Refund request not found");
-    await supabase.from("refund_requests").update({
-      status: "declined",
-      admin_note: adminNote,
-      reviewed_by: adminId,
-      reviewed_at: new Date().toISOString(),
-    }).eq("id", id);
+    await supabase
+      .from("refund_requests")
+      .update({
+        status: "declined",
+        admin_note: adminNote,
+        reviewed_by: adminId,
+        reviewed_at: new Date().toISOString(),
+      })
+      .eq("id", id);
     // Restore booking to confirmed
     await BookingsDB.updateStatus(req.booking_id, "confirmed");
     await NotificationsDB.create({
@@ -2581,7 +2654,10 @@ export const RoomsDB = {
       .select("*")
       .eq("listing_id", listingId)
       .order("label", { ascending: true });
-    if (error) { console.error("RoomsDB.byListing:", error.message); return []; }
+    if (error) {
+      console.error("RoomsDB.byListing:", error.message);
+      return [];
+    }
     return (data ?? []).map(toRoom);
   },
 
@@ -2613,15 +2689,20 @@ export const RoomsDB = {
     extra?: { currentBookingId?: string | null; lastCleanedAt?: string },
   ): Promise<Room | null> {
     const p: Record<string, unknown> = { status };
-    if (extra?.currentBookingId !== undefined) p.current_booking_id = extra.currentBookingId;
-    if (status === "cleaning" || status === "vacant") p.last_cleaned_at = extra?.lastCleanedAt ?? new Date().toISOString();
+    if (extra?.currentBookingId !== undefined)
+      p.current_booking_id = extra.currentBookingId;
+    if (status === "cleaning" || status === "vacant")
+      p.last_cleaned_at = extra?.lastCleanedAt ?? new Date().toISOString();
     const { data: row, error } = await supabase
       .from("rooms")
       .update(p)
       .eq("id", id)
       .select()
       .single();
-    if (error) { console.error("RoomsDB.updateStatus:", error.message); return null; }
+    if (error) {
+      console.error("RoomsDB.updateStatus:", error.message);
+      return null;
+    }
     return toRoom(row);
   },
 
@@ -2670,7 +2751,10 @@ function toStaff(r: any): StaffMember {
     phone: r.phone ?? undefined,
     email: r.email ?? undefined,
     photoUrl: r.photo_url ?? undefined,
-    hourlyRate: r.hourly_rate !== null && r.hourly_rate !== undefined ? Number(r.hourly_rate) : undefined,
+    hourlyRate:
+      r.hourly_rate !== null && r.hourly_rate !== undefined
+        ? Number(r.hourly_rate)
+        : undefined,
     status: r.status,
     hiredAt: r.hired_at,
     deviceUserId: r.device_user_id ?? undefined,
@@ -2685,7 +2769,10 @@ export const StaffDB = {
       .select("*")
       .eq("host_id", hostId)
       .order("full_name", { ascending: true });
-    if (error) { console.error("StaffDB.byHost:", error.message); return []; }
+    if (error) {
+      console.error("StaffDB.byHost:", error.message);
+      return [];
+    }
     return (data ?? []).map(toStaff);
   },
 
@@ -2716,7 +2803,10 @@ export const StaffDB = {
     return toStaff(row);
   },
 
-  async update(id: string, data: Partial<Omit<StaffMember, "id" | "hostId" | "createdAt">>): Promise<StaffMember | null> {
+  async update(
+    id: string,
+    data: Partial<Omit<StaffMember, "id" | "hostId" | "createdAt">>,
+  ): Promise<StaffMember | null> {
     const p: Record<string, unknown> = {};
     if (data.fullName !== undefined) p.full_name = data.fullName;
     if (data.role !== undefined) p.role = data.role;
@@ -2733,24 +2823,36 @@ export const StaffDB = {
       .eq("id", id)
       .select()
       .single();
-    if (error) { console.error("StaffDB.update:", error.message); return null; }
+    if (error) {
+      console.error("StaffDB.update:", error.message);
+      return null;
+    }
     return toStaff(row);
   },
 
   /** Used by the fingerprint bridge script to map a device punch back to a staff record. */
-  async byDeviceUserId(hostId: string, deviceUserId: number): Promise<StaffMember | null> {
+  async byDeviceUserId(
+    hostId: string,
+    deviceUserId: number,
+  ): Promise<StaffMember | null> {
     const { data, error } = await supabase
       .from("staff")
       .select("*")
       .eq("host_id", hostId)
       .eq("device_user_id", deviceUserId)
       .maybeSingle();
-    if (error) { console.error("StaffDB.byDeviceUserId:", error.message); return null; }
+    if (error) {
+      console.error("StaffDB.byDeviceUserId:", error.message);
+      return null;
+    }
     return data ? toStaff(data) : null;
   },
 
   async setStatus(id: string, status: StaffStatus): Promise<void> {
-    const { error } = await supabase.from("staff").update({ status }).eq("id", id);
+    const { error } = await supabase
+      .from("staff")
+      .update({ status })
+      .eq("id", id);
     if (error) console.error("StaffDB.setStatus:", error.message);
   },
 
@@ -2786,7 +2888,10 @@ function toAttendance(r: any): AttendanceRecord {
     clockIn: r.clock_in ?? undefined,
     clockOut: r.clock_out ?? undefined,
     status: r.status,
-    hoursWorked: r.hours_worked !== null && r.hours_worked !== undefined ? Number(r.hours_worked) : undefined,
+    hoursWorked:
+      r.hours_worked !== null && r.hours_worked !== undefined
+        ? Number(r.hours_worked)
+        : undefined,
     notes: r.notes ?? "",
     createdAt: r.created_at,
   };
@@ -2797,17 +2902,28 @@ const LATE_CUTOFF_HOUR = 9;
 
 export const AttendanceDB = {
   /** All attendance records for every staff member belonging to this host. */
-  async byHost(hostId: string): Promise<(AttendanceRecord & { staffName: string })[]> {
+  async byHost(
+    hostId: string,
+  ): Promise<(AttendanceRecord & { staffName: string })[]> {
     const staff = await StaffDB.byHost(hostId);
     if (staff.length === 0) return [];
     const staffMap = new Map(staff.map((s) => [s.id, s.fullName]));
     const { data, error } = await supabase
       .from("attendance")
       .select("*")
-      .in("staff_id", staff.map((s) => s.id))
+      .in(
+        "staff_id",
+        staff.map((s) => s.id),
+      )
       .order("date", { ascending: false });
-    if (error) { console.error("AttendanceDB.byHost:", error.message); return []; }
-    return (data ?? []).map((r) => ({ ...toAttendance(r), staffName: staffMap.get(r.staff_id) ?? "Unknown" }));
+    if (error) {
+      console.error("AttendanceDB.byHost:", error.message);
+      return [];
+    }
+    return (data ?? []).map((r) => ({
+      ...toAttendance(r),
+      staffName: staffMap.get(r.staff_id) ?? "Unknown",
+    }));
   },
 
   async byStaff(staffId: string): Promise<AttendanceRecord[]> {
@@ -2816,13 +2932,17 @@ export const AttendanceDB = {
       .select("*")
       .eq("staff_id", staffId)
       .order("date", { ascending: false });
-    if (error) { console.error("AttendanceDB.byStaff:", error.message); return []; }
+    if (error) {
+      console.error("AttendanceDB.byStaff:", error.message);
+      return [];
+    }
     return (data ?? []).map(toAttendance);
   },
 
   async clockIn(staffId: string): Promise<AttendanceRecord> {
     const now = new Date();
-    const status: AttendanceStatus = now.getHours() >= LATE_CUTOFF_HOUR ? "late" : "on_time";
+    const status: AttendanceStatus =
+      now.getHours() >= LATE_CUTOFF_HOUR ? "late" : "on_time";
     const { data: row, error } = await supabase
       .from("attendance")
       .insert({
@@ -2838,11 +2958,18 @@ export const AttendanceDB = {
   },
 
   async clockOut(recordId: string): Promise<AttendanceRecord | null> {
-    const { data: existing } = await supabase.from("attendance").select("*").eq("id", recordId).single();
+    const { data: existing } = await supabase
+      .from("attendance")
+      .select("*")
+      .eq("id", recordId)
+      .single();
     if (!existing) return null;
     const now = new Date();
     const hoursWorked = existing.clock_in
-      ? +((now.getTime() - new Date(existing.clock_in).getTime()) / 3.6e6).toFixed(2)
+      ? +(
+          (now.getTime() - new Date(existing.clock_in).getTime()) /
+          3.6e6
+        ).toFixed(2)
       : null;
     const { data: row, error } = await supabase
       .from("attendance")
@@ -2850,11 +2977,18 @@ export const AttendanceDB = {
       .eq("id", recordId)
       .select()
       .single();
-    if (error) { console.error("AttendanceDB.clockOut:", error.message); return null; }
+    if (error) {
+      console.error("AttendanceDB.clockOut:", error.message);
+      return null;
+    }
     return toAttendance(row);
   },
 
-  async markAbsent(staffId: string, date: string, notes?: string): Promise<void> {
+  async markAbsent(
+    staffId: string,
+    date: string,
+    notes?: string,
+  ): Promise<void> {
     const { error } = await supabase.from("attendance").insert({
       staff_id: staffId,
       date,
@@ -2939,7 +3073,10 @@ export const GuestOrdersDB = {
       .select("*")
       .eq("guest_id", guestId)
       .order("ordered_at", { ascending: false });
-    if (error) { console.error("GuestOrdersDB.byGuest:", error.message); return []; }
+    if (error) {
+      console.error("GuestOrdersDB.byGuest:", error.message);
+      return [];
+    }
     return (data ?? []).map(toGuestOrder);
   },
 
@@ -2949,7 +3086,10 @@ export const GuestOrdersDB = {
       .select("*")
       .eq("host_id", hostId)
       .order("ordered_at", { ascending: false });
-    if (error) { console.error("GuestOrdersDB.byHost:", error.message); return []; }
+    if (error) {
+      console.error("GuestOrdersDB.byHost:", error.message);
+      return [];
+    }
     return (data ?? []).map(toGuestOrder);
   },
 };
@@ -2973,23 +3113,32 @@ export const GuestsDB = {
   /** Aggregates every guest who has ever booked with this host — spend,
    *  stay count, first/last stay — from bookings + guest_orders. */
   async byHost(hostId: string): Promise<GuestProfile[]> {
-    const [{ data: bookings, error: bErr }, { data: orders, error: oErr }] = await Promise.all([
-      supabase
-        .from("bookings")
-        .select("guest_id, guest_name, guest_email, total_amount, check_in, status")
-        .eq("host_id", hostId),
-      supabase
-        .from("guest_orders")
-        .select("guest_id, quantity, unit_price")
-        .eq("host_id", hostId),
-    ]);
-    if (bErr) { console.error("GuestsDB.byHost (bookings):", bErr.message); return []; }
+    const [{ data: bookings, error: bErr }, { data: orders, error: oErr }] =
+      await Promise.all([
+        supabase
+          .from("bookings")
+          .select(
+            "guest_id, guest_name, guest_email, total_amount, check_in, status",
+          )
+          .eq("host_id", hostId),
+        supabase
+          .from("guest_orders")
+          .select("guest_id, quantity, unit_price")
+          .eq("host_id", hostId),
+      ]);
+    if (bErr) {
+      console.error("GuestsDB.byHost (bookings):", bErr.message);
+      return [];
+    }
     if (oErr) console.error("GuestsDB.byHost (orders):", oErr.message);
 
     const orderSpendByGuest = new Map<string, number>();
     (orders ?? []).forEach((o) => {
       const spend = Number(o.unit_price ?? 0) * (o.quantity ?? 1);
-      orderSpendByGuest.set(o.guest_id, (orderSpendByGuest.get(o.guest_id) ?? 0) + spend);
+      orderSpendByGuest.set(
+        o.guest_id,
+        (orderSpendByGuest.get(o.guest_id) ?? 0) + spend,
+      );
     });
 
     const byGuest = new Map<string, GuestProfile>();
@@ -3012,8 +3161,10 @@ export const GuestsDB = {
         } else {
           existing.totalStays += 1;
           existing.totalSpend += bookingSpend;
-          if (b.check_in < (existing.firstStayAt ?? b.check_in)) existing.firstStayAt = b.check_in;
-          if (b.check_in > (existing.lastStayAt ?? b.check_in)) existing.lastStayAt = b.check_in;
+          if (b.check_in < (existing.firstStayAt ?? b.check_in))
+            existing.firstStayAt = b.check_in;
+          if (b.check_in > (existing.lastStayAt ?? b.check_in))
+            existing.lastStayAt = b.check_in;
           existing.isReturning = existing.totalStays > 1;
         }
       });
@@ -3024,7 +3175,9 @@ export const GuestsDB = {
       if (g) g.totalSpend += spend;
     }
 
-    return Array.from(byGuest.values()).sort((a, b) => b.totalSpend - a.totalSpend);
+    return Array.from(byGuest.values()).sort(
+      (a, b) => b.totalSpend - a.totalSpend,
+    );
   },
 };
 
@@ -3067,11 +3220,19 @@ export const CamerasDB = {
       .select("*")
       .eq("listing_id", listingId)
       .order("room_label", { ascending: true });
-    if (error) { console.error("CamerasDB.byListing:", error.message); return []; }
+    if (error) {
+      console.error("CamerasDB.byListing:", error.message);
+      return [];
+    }
     return (data ?? []).map(toCamera);
   },
 
-  async add(data: { listingId: string; roomId?: string; roomLabel: string; streamUrl?: string }): Promise<RoomCamera> {
+  async add(data: {
+    listingId: string;
+    roomId?: string;
+    roomLabel: string;
+    streamUrl?: string;
+  }): Promise<RoomCamera> {
     const { data: row, error } = await supabase
       .from("cameras")
       .insert({
@@ -3091,7 +3252,11 @@ export const CamerasDB = {
   async connectStream(id: string, streamUrl: string): Promise<void> {
     const { error } = await supabase
       .from("cameras")
-      .update({ stream_url: streamUrl, status: "online", last_ping_at: new Date().toISOString() })
+      .update({
+        stream_url: streamUrl,
+        status: "online",
+        last_ping_at: new Date().toISOString(),
+      })
       .eq("id", id);
     if (error) console.error("CamerasDB.connectStream:", error.message);
   },
@@ -3131,7 +3296,11 @@ export const AnalyticsDB = {
     since.setDate(since.getDate() - (days - 1));
     const sinceStr = since.toISOString().slice(0, 10);
 
-    const [{ data: bookings, error: bErr }, { data: orders, error: oErr }, { data: rooms, error: rErr }] = await Promise.all([
+    const [
+      { data: bookings, error: bErr },
+      { data: orders, error: oErr },
+      { data: rooms, error: rErr },
+    ] = await Promise.all([
       supabase
         .from("bookings")
         .select("total_amount, created_at, listing_name, status")
@@ -3148,7 +3317,9 @@ export const AnalyticsDB = {
         .select("id, status, listing_id")
         .in(
           "listing_id",
-          (await supabase.from("listings").select("id").eq("host_id", hostId)).data?.map((l) => l.id) ?? [],
+          (
+            await supabase.from("listings").select("id").eq("host_id", hostId)
+          ).data?.map((l) => l.id) ?? [],
         ),
     ]);
     if (bErr) console.error("AnalyticsDB.summary (bookings):", bErr.message);
@@ -3156,11 +3327,17 @@ export const AnalyticsDB = {
     if (rErr) console.error("AnalyticsDB.summary (rooms):", rErr.message);
 
     // build a day-by-day series
-    const byDay = new Map<string, { bookingRevenue: number; orderRevenue: number }>();
+    const byDay = new Map<
+      string,
+      { bookingRevenue: number; orderRevenue: number }
+    >();
     for (let i = 0; i < days; i++) {
       const d = new Date(since);
       d.setDate(d.getDate() + i);
-      byDay.set(d.toISOString().slice(0, 10), { bookingRevenue: 0, orderRevenue: 0 });
+      byDay.set(d.toISOString().slice(0, 10), {
+        bookingRevenue: 0,
+        orderRevenue: 0,
+      });
     }
     (bookings ?? []).forEach((b) => {
       const day = String(b.created_at).slice(0, 10);
@@ -3170,16 +3347,26 @@ export const AnalyticsDB = {
     (orders ?? []).forEach((o) => {
       const day = String(o.ordered_at).slice(0, 10);
       const entry = byDay.get(day);
-      if (entry) entry.orderRevenue += Number(o.unit_price ?? 0) * (o.quantity ?? 1);
+      if (entry)
+        entry.orderRevenue += Number(o.unit_price ?? 0) * (o.quantity ?? 1);
     });
 
-    const series: SalesDataPoint[] = Array.from(byDay.entries()).map(([date, v]) => ({ date, ...v }));
-    const totalBookingRevenue = series.reduce((s, p) => s + p.bookingRevenue, 0);
+    const series: SalesDataPoint[] = Array.from(byDay.entries()).map(
+      ([date, v]) => ({ date, ...v }),
+    );
+    const totalBookingRevenue = series.reduce(
+      (s, p) => s + p.bookingRevenue,
+      0,
+    );
     const totalOrderRevenue = series.reduce((s, p) => s + p.orderRevenue, 0);
 
     const revenueByListing = new Map<string, number>();
     (bookings ?? []).forEach((b) => {
-      revenueByListing.set(b.listing_name, (revenueByListing.get(b.listing_name) ?? 0) + Number(b.total_amount ?? 0));
+      revenueByListing.set(
+        b.listing_name,
+        (revenueByListing.get(b.listing_name) ?? 0) +
+          Number(b.total_amount ?? 0),
+      );
     });
     const topListings = Array.from(revenueByListing.entries())
       .map(([name, revenue]) => ({ name, revenue }))
@@ -3187,8 +3374,11 @@ export const AnalyticsDB = {
       .slice(0, 5);
 
     const totalRooms = (rooms ?? []).length;
-    const occupiedRooms = (rooms ?? []).filter((r) => r.status === "occupied").length;
-    const occupancyRate = totalRooms > 0 ? Math.round((occupiedRooms / totalRooms) * 100) : 0;
+    const occupiedRooms = (rooms ?? []).filter(
+      (r) => r.status === "occupied",
+    ).length;
+    const occupancyRate =
+      totalRooms > 0 ? Math.round((occupiedRooms / totalRooms) * 100) : 0;
 
     return {
       series,
@@ -3245,7 +3435,11 @@ export const PRO_PLAN_PRICE_NGN = 15000;
 export const PRO_PLAN_INTERVAL = "month";
 
 export type PlanTier = "free" | "pro";
-export type SubscriptionStatus = "inactive" | "active" | "past_due" | "cancelled";
+export type SubscriptionStatus =
+  | "inactive"
+  | "active"
+  | "past_due"
+  | "cancelled";
 
 export interface HostSubscription {
   hostId: string;
@@ -3292,7 +3486,8 @@ export const SubscriptionsDB = {
       body: { hostId, email },
     });
     if (error) throw new Error(error.message);
-    if (!data?.authorization_url) throw new Error("Paystack did not return a checkout URL.");
+    if (!data?.authorization_url)
+      throw new Error("Paystack did not return a checkout URL.");
     return data.authorization_url as string;
   },
 

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { MessagesDB, type Conversation } from "../index";
+import BookingReceiptActions from "./BookingReceiptAction";
 
 import SEO from "../seo";
 import {
@@ -2622,6 +2623,13 @@ export default function BookingPage({
                 <strong style={{ color: "#4ade80" }}>✓ Confirmed & Paid</strong>
               </p>
             </div>
+            {/* ↓ ADD THIS — drop just above the "Leave a Review" / "Back to Explore" buttons */}
+            {completedBooking && (
+              <BookingReceiptActions
+                booking={completedBooking}
+                hotelName={hotel?.name ?? "Your Property"}
+              />
+            )}
             {completedBooking && user && (
               <button
                 onClick={() => {
