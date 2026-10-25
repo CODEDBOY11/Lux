@@ -1,18 +1,3 @@
-/**
- * ValidateBooking.tsx
- *
- * Host-side booking validation panel.
- * Drop into HostDashboard inside the HostBookings component.
- *
- * USAGE — at the top of HostBookings render, before the filter tabs:
- *
- *   import ValidateBooking from "./ValidateBooking";
- *   ...
- *   <ValidateBooking />
- *
- * Requires: BookingsDB.getByRef() — see index.ts patch below.
- */
-
 import { useState, useRef } from "react";
 import {
   MagnifyingGlassIcon,
@@ -28,8 +13,8 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
 } from "@heroicons/react/24/outline";
-import { BookingsDB } from "../index";
-import type { Booking } from "../index";
+import { BookingsDB } from "./index";
+import type { Booking } from "./index";
 
 /* ── helpers ─────────────────────────────────────────── */
 const fmt$ = (n: number) =>
