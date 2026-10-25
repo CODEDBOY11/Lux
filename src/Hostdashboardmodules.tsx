@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useMemo } from "react";
 import {
   AreaChart,
@@ -34,7 +33,6 @@ import {
   ExclamationTriangleIcon,
   LockClosedIcon,
   SparklesIcon,
-  CreditCardIcon,
   CalendarDaysIcon,
 } from "@heroicons/react/24/outline";
 import { useAuth } from "./AuthContext";
@@ -63,12 +61,10 @@ import {
   type OrderCategory,
   type RoomCamera,
   type AnalyticsSummary,
-  type HostSubscription,
 } from "./index";
 import { fmt$, fmtDate, Sk, StatCard } from "./HostDashboard";
 
 const GOLD = "#C9A96E";
-
 
 /** Every Pro-only nav key, with what to show on its locked screen. */
 export const PRO_FEATURES: Record<
@@ -77,7 +73,8 @@ export const PRO_FEATURES: Record<
 > = {
   occupancy: {
     title: "Room Occupancy",
-    blurb: "See which rooms are filled, vacant, cleaning or under maintenance — live, across every property.",
+    blurb:
+      "See which rooms are filled, vacant, cleaning or under maintenance — live, across every property.",
     icon: BuildingOffice2Icon,
   },
   calendar: {
@@ -87,22 +84,26 @@ export const PRO_FEATURES: Record<
   },
   analytics: {
     title: "Sales Analytics",
-    blurb: "Revenue charts across bookings and in-stay orders, plus your top-earning properties.",
+    blurb:
+      "Revenue charts across bookings and in-stay orders, plus your top-earning properties.",
     icon: ChartBarIcon,
   },
   guests: {
     title: "Guest Profiles",
-    blurb: "Total spend, stay history, and every snack or drink a guest has ordered — all in one view.",
+    blurb:
+      "Total spend, stay history, and every snack or drink a guest has ordered — all in one view.",
     icon: UserGroupIcon,
   },
   staff: {
     title: "Staff Management",
-    blurb: "Add your team, assign roles, and manage who's active — all from one screen.",
+    blurb:
+      "Add your team, assign roles, and manage who's active — all from one screen.",
     icon: UserPlusIcon,
   },
   attendance: {
     title: "Staff Attendance",
-    blurb: "Clock-in / clock-out tracking, on-time vs late, and (optionally) fingerprint device sync.",
+    blurb:
+      "Clock-in / clock-out tracking, on-time vs late, and (optionally) fingerprint device sync.",
     icon: ClockIcon,
   },
   cameras: {
@@ -129,7 +130,9 @@ export const UpgradeGate = ({ featureKey }: { featureKey: string }) => {
       const url = await SubscriptionsDB.startUpgrade(user.id, user.email);
       window.location.href = url;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not start checkout. Try again.");
+      setError(
+        e instanceof Error ? e.message : "Could not start checkout. Try again.",
+      );
       setLoading(false);
     }
   };
@@ -138,24 +141,38 @@ export const UpgradeGate = ({ featureKey }: { featureKey: string }) => {
   const Icon = feature.icon;
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-50 p-6 flex items-center justify-center" style={{ animation: "fadeUp 0.3s ease both" }}>
+    <div
+      className="flex-1 overflow-y-auto bg-gray-50 p-6 flex items-center justify-center"
+      style={{ animation: "fadeUp 0.3s ease both" }}
+    >
       <div className="max-w-md w-full bg-white rounded-3xl border border-gray-100 shadow-sm p-8 text-center">
-        <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-5 relative" style={{ background: "linear-gradient(135deg,#C9A96E,#8a6030)" }}>
+        <div
+          className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-5 relative"
+          style={{ background: "linear-gradient(135deg,#C9A96E,#8a6030)" }}
+        >
           <Icon className="w-7 h-7 text-white" />
           <div className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-gray-900 flex items-center justify-center border-2 border-white">
             <LockClosedIcon className="w-3 h-3 text-white" />
           </div>
         </div>
-        <p className="text-[11px] font-bold text-[#C9A96E] uppercase tracking-wider mb-1.5">Pro Feature</p>
-        <h2 className="text-xl font-bold text-gray-900 mb-2">{feature.title}</h2>
-        <p className="text-sm text-gray-500 mb-6 leading-relaxed">{feature.blurb}</p>
+        <p className="text-[11px] font-bold text-[#C9A96E] uppercase tracking-wider mb-1.5">
+          Pro Feature
+        </p>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">
+          {feature.title}
+        </h2>
+        <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+          {feature.blurb}
+        </p>
 
         <div className="bg-gray-50 rounded-2xl p-4 mb-5">
           <p className="text-2xl font-bold text-gray-900">
             {fmt$(PRO_PLAN_PRICE_NGN)}
             <span className="text-sm font-medium text-gray-400">/month</span>
           </p>
-          <p className="text-xs text-gray-400 mt-1">Unlocks all Pro features across your dashboard</p>
+          <p className="text-xs text-gray-400 mt-1">
+            Unlocks all Pro features across your dashboard
+          </p>
         </div>
 
         {error && <p className="text-xs text-red-600 mb-3">{error}</p>}
@@ -168,141 +185,16 @@ export const UpgradeGate = ({ featureKey }: { featureKey: string }) => {
           <SparklesIcon className="w-4 h-4" />
           {loading ? "Redirecting to checkout…" : "Upgrade to Pro"}
         </button>
-        <p className="text-[11px] text-gray-400 mt-3">Secure checkout via Paystack. Cancel anytime.</p>
+        <p className="text-[11px] text-gray-400 mt-3">
+          Secure checkout via Paystack. Cancel anytime.
+        </p>
       </div>
     </div>
   );
 };
 
 /** Billing page — plan status, price, upgrade or cancel. */
-export const BillingSection = () => {
-  const { user } = useAuth();
-  const [sub, setSub] = useState<HostSubscription | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  const load = () => {
-    if (!user) return;
-    setLoading(true);
-    SubscriptionsDB.getByHost(user.id).then(setSub).finally(() => setLoading(false));
-  };
-  useEffect(load, [user]);
-
-  const isPro = sub ? SubscriptionsDB.isPro(sub) : false;
-
-  const upgrade = async () => {
-    if (!user?.id || !user?.email) return;
-    setBusy(true);
-    setError("");
-    try {
-      const url = await SubscriptionsDB.startUpgrade(user.id, user.email);
-      window.location.href = url;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not start checkout.");
-      setBusy(false);
-    }
-  };
-
-  const cancel = async () => {
-    if (!user?.id) return;
-    if (!confirm("Cancel your Pro subscription? You'll keep access until the current billing period ends.")) return;
-    setBusy(true);
-    setError("");
-    try {
-      await SubscriptionsDB.cancel(user.id);
-      load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not cancel — try again or contact support.");
-    }
-    setBusy(false);
-  };
-
-  return (
-    <div className="flex-1 overflow-y-auto bg-gray-50 p-6" style={{ animation: "fadeUp 0.3s ease both" }}>
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Billing</h2>
-        <p className="text-gray-400 text-sm mt-0.5">Your plan and subscription</p>
-      </div>
-
-      {loading ? (
-        <Sk h="h-48" />
-      ) : (
-        <div className="max-w-xl">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <CreditCardIcon className="w-5 h-5 text-gray-400" />
-                <span className="text-sm font-semibold text-gray-700">Current Plan</span>
-              </div>
-              <span
-                className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${
-                  isPro ? "bg-[#C9A96E]/10 text-[#C9A96E] border-[#C9A96E]/30" : "bg-gray-50 text-gray-500 border-gray-200"
-                }`}
-              >
-                {isPro ? "PRO" : "FREE"}
-              </span>
-            </div>
-
-            {isPro ? (
-              <>
-                <p className="text-2xl font-bold text-gray-900 mb-1">
-                  {fmt$(PRO_PLAN_PRICE_NGN)}<span className="text-sm font-medium text-gray-400">/month</span>
-                </p>
-                {sub?.currentPeriodEnd && (
-                  <p className="text-xs text-gray-400 mb-4">
-                    {sub.status === "cancelled" ? "Access ends" : "Renews"} {fmtDate(sub.currentPeriodEnd)}
-                  </p>
-                )}
-                {sub?.status === "past_due" && (
-                  <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
-                    Your last payment failed — please update your payment method to keep Pro access.
-                  </p>
-                )}
-                {sub?.status !== "cancelled" && (
-                  <button
-                    disabled={busy}
-                    onClick={cancel}
-                    className="text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 px-4 py-2 rounded-xl disabled:opacity-50"
-                  >
-                    {busy ? "Cancelling…" : "Cancel Subscription"}
-                  </button>
-                )}
-              </>
-            ) : (
-              <>
-                <p className="text-sm text-gray-500 mb-4">
-                  You're on the free plan. Upgrade to unlock occupancy tracking, staff & attendance, guest CRM, sales analytics, and room cameras.
-                </p>
-                <button
-                  disabled={busy}
-                  onClick={upgrade}
-                  className="flex items-center gap-2 text-sm font-semibold text-white bg-[#C9A96E] hover:bg-[#b8935a] px-5 py-2.5 rounded-xl disabled:opacity-50"
-                >
-                  <SparklesIcon className="w-4 h-4" />
-                  {busy ? "Redirecting…" : `Upgrade to Pro — ${fmt$(PRO_PLAN_PRICE_NGN)}/mo`}
-                </button>
-              </>
-            )}
-            {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
-          </div>
-
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-            <p className="text-sm font-semibold text-gray-700 mb-3">Pro includes</p>
-            <div className="space-y-2.5">
-              {Object.values(PRO_FEATURES).map((f) => (
-                <div key={f.title} className="flex items-center gap-2.5 text-sm text-gray-600">
-                  <CheckCircleIcon className="w-4 h-4 text-emerald-500 shrink-0" />
-                  {f.title}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
+export { default as BillingSection } from "./BillingSection";
 
 /* ═══════════════════════════════════════════════════════════
    1. OCCUPANCY BOARD — which rooms are filled / empty
@@ -348,11 +240,18 @@ export const OccupancyBoard = () => {
   };
   useEffect(load, [listingId]);
 
-  const bookingById = useMemo(() => new Map(bookings.map((b) => [b.id, b])), [bookings]);
+  const bookingById = useMemo(
+    () => new Map(bookings.map((b) => [b.id, b])),
+    [bookings],
+  );
 
   const setStatus = async (id: string, status: RoomOccupancyStatus) => {
     setRooms((p) => p.map((r) => (r.id === id ? { ...r, status } : r)));
-    await RoomsDB.updateStatus(id, status, status !== "occupied" ? { currentBookingId: null } : undefined);
+    await RoomsDB.updateStatus(
+      id,
+      status,
+      status !== "occupied" ? { currentBookingId: null } : undefined,
+    );
   };
 
   const addRoom = async () => {
@@ -371,11 +270,16 @@ export const OccupancyBoard = () => {
   }, [rooms]);
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-50 p-6" style={{ animation: "fadeUp 0.3s ease both" }}>
+    <div
+      className="flex-1 overflow-y-auto bg-gray-50 p-6"
+      style={{ animation: "fadeUp 0.3s ease both" }}
+    >
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Room Occupancy</h2>
-          <p className="text-gray-400 text-sm mt-0.5">Live status of every room across your property</p>
+          <p className="text-gray-400 text-sm mt-0.5">
+            Live status of every room across your property
+          </p>
         </div>
         <div className="flex gap-2 items-center flex-wrap">
           {hotels.length > 1 && (
@@ -385,7 +289,9 @@ export const OccupancyBoard = () => {
               className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-[#C9A96E] bg-white"
             >
               {hotels.map((h) => (
-                <option key={h.id} value={h.id}>{h.name}</option>
+                <option key={h.id} value={h.id}>
+                  {h.name}
+                </option>
               ))}
             </select>
           )}
@@ -407,9 +313,17 @@ export const OccupancyBoard = () => {
 
       <div className="flex gap-3 flex-wrap mb-6">
         {(Object.keys(OCC_CONFIG) as RoomOccupancyStatus[]).map((s) => (
-          <div key={s} className="bg-white rounded-xl border border-gray-100 px-4 py-3 flex items-center gap-2.5 shadow-sm">
-            <span className="w-2.5 h-2.5 rounded-full" style={{ background: OCC_CONFIG[s].color }} />
-            <span className="text-sm font-semibold text-gray-700">{counts[s] ?? 0}</span>
+          <div
+            key={s}
+            className="bg-white rounded-xl border border-gray-100 px-4 py-3 flex items-center gap-2.5 shadow-sm"
+          >
+            <span
+              className="w-2.5 h-2.5 rounded-full"
+              style={{ background: OCC_CONFIG[s].color }}
+            />
+            <span className="text-sm font-semibold text-gray-700">
+              {counts[s] ?? 0}
+            </span>
             <span className="text-xs text-gray-400">{OCC_CONFIG[s].label}</span>
           </div>
         ))}
@@ -417,18 +331,24 @@ export const OccupancyBoard = () => {
 
       {loading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {[...Array(8)].map((_, i) => <Sk key={i} h="h-32" />)}
+          {[...Array(8)].map((_, i) => (
+            <Sk key={i} h="h-32" />
+          ))}
         </div>
       ) : rooms.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-100 p-14 text-center">
           <BuildingOffice2Icon className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-          <p className="text-gray-400 text-sm">No rooms added yet — add your first room above</p>
+          <p className="text-gray-400 text-sm">
+            No rooms added yet — add your first room above
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {rooms.map((r, i) => {
             const cfg = OCC_CONFIG[r.status];
-            const booking = r.currentBookingId ? bookingById.get(r.currentBookingId) : undefined;
+            const booking = r.currentBookingId
+              ? bookingById.get(r.currentBookingId)
+              : undefined;
             return (
               <div
                 key={r.id}
@@ -447,21 +367,31 @@ export const OccupancyBoard = () => {
                 {r.status === "occupied" && booking ? (
                   <div className="text-xs text-gray-500 space-y-0.5 mb-3">
                     <p className="truncate">👤 {booking.guestName}</p>
-                    <p>{fmtDate(booking.checkIn)} → {fmtDate(booking.checkOut)}</p>
+                    <p>
+                      {fmtDate(booking.checkIn)} → {fmtDate(booking.checkOut)}
+                    </p>
                   </div>
                 ) : (
                   <p className="text-xs text-gray-400 mb-3">
-                    {r.lastCleanedAt ? `Last cleaned ${fmtDate(r.lastCleanedAt)}` : "No recent activity"}
+                    {r.lastCleanedAt
+                      ? `Last cleaned ${fmtDate(r.lastCleanedAt)}`
+                      : "No recent activity"}
                   </p>
                 )}
                 <select
                   value={r.status}
-                  onChange={(e) => setStatus(r.id, e.target.value as RoomOccupancyStatus)}
+                  onChange={(e) =>
+                    setStatus(r.id, e.target.value as RoomOccupancyStatus)
+                  }
                   className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:border-[#C9A96E] bg-gray-50 text-gray-600"
                 >
-                  {(Object.keys(OCC_CONFIG) as RoomOccupancyStatus[]).map((s) => (
-                    <option key={s} value={s}>{OCC_CONFIG[s].label}</option>
-                  ))}
+                  {(Object.keys(OCC_CONFIG) as RoomOccupancyStatus[]).map(
+                    (s) => (
+                      <option key={s} value={s}>
+                        {OCC_CONFIG[s].label}
+                      </option>
+                    ),
+                  )}
                 </select>
               </div>
             );
@@ -484,7 +414,9 @@ export const BookingCalendarSection = () => {
 
   useEffect(() => {
     if (!user) return;
-    BookingsDB.byHost(user.id).then(setBookings).finally(() => setLoading(false));
+    BookingsDB.byHost(user.id)
+      .then(setBookings)
+      .finally(() => setLoading(false));
   }, [user]);
 
   const days = useMemo(() => {
@@ -495,7 +427,10 @@ export const BookingCalendarSection = () => {
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const cells: (Date | null)[] = [
       ...Array(startOffset).fill(null),
-      ...Array.from({ length: daysInMonth }, (_, i) => new Date(year, month, i + 1)),
+      ...Array.from(
+        { length: daysInMonth },
+        (_, i) => new Date(year, month, i + 1),
+      ),
     ];
     return cells;
   }, [cursor]);
@@ -515,28 +450,44 @@ export const BookingCalendarSection = () => {
     return map;
   }, [bookings]);
 
-  const monthLabel = cursor.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-  const selectedBookings = selected ? bookingsByDay[selected] ?? [] : [];
+  const monthLabel = cursor.toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+  const selectedBookings = selected ? (bookingsByDay[selected] ?? []) : [];
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-50 p-6" style={{ animation: "fadeUp 0.3s ease both" }}>
+    <div
+      className="flex-1 overflow-y-auto bg-gray-50 p-6"
+      style={{ animation: "fadeUp 0.3s ease both" }}
+    >
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-gray-900">Booking Calendar</h2>
-        <p className="text-gray-400 text-sm mt-0.5">See which rooms are booked on any given day</p>
+        <p className="text-gray-400 text-sm mt-0.5">
+          See which rooms are booked on any given day
+        </p>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-6">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
             <button
-              onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}
+              onClick={() =>
+                setCursor(
+                  new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1),
+                )
+              }
               className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50"
             >
               <ChevronLeftIcon className="w-4 h-4" />
             </button>
             <p className="font-bold text-gray-900">{monthLabel}</p>
             <button
-              onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}
+              onClick={() =>
+                setCursor(
+                  new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1),
+                )
+              }
               className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50"
             >
               <ChevronRightIcon className="w-4 h-4" />
@@ -548,7 +499,12 @@ export const BookingCalendarSection = () => {
             <>
               <div className="grid grid-cols-7 gap-1 mb-1">
                 {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
-                  <div key={d} className="text-center text-[10px] font-bold text-gray-400 uppercase py-1">{d}</div>
+                  <div
+                    key={d}
+                    className="text-center text-[10px] font-bold text-gray-400 uppercase py-1"
+                  >
+                    {d}
+                  </div>
                 ))}
               </div>
               <div className="grid grid-cols-7 gap-1">
@@ -566,8 +522,8 @@ export const BookingCalendarSection = () => {
                         isSelected
                           ? "bg-[#C9A96E] text-white shadow-md"
                           : count > 0
-                          ? "bg-[#C9A96E]/10 text-gray-800 hover:bg-[#C9A96E]/20"
-                          : "text-gray-500 hover:bg-gray-50"
+                            ? "bg-[#C9A96E]/10 text-gray-800 hover:bg-[#C9A96E]/20"
+                            : "text-gray-500 hover:bg-gray-50"
                       } ${isToday && !isSelected ? "ring-1 ring-[#C9A96E]" : ""}`}
                     >
                       {d.getDate()}
@@ -591,14 +547,23 @@ export const BookingCalendarSection = () => {
             {selected ? fmtDate(selected) : "Pick a date"}
           </h3>
           {!selected ? (
-            <p className="text-gray-400 text-xs">Click a day to see which rooms are booked.</p>
+            <p className="text-gray-400 text-xs">
+              Click a day to see which rooms are booked.
+            </p>
           ) : selectedBookings.length === 0 ? (
-            <p className="text-gray-400 text-xs">No rooms booked this day — fully vacant.</p>
+            <p className="text-gray-400 text-xs">
+              No rooms booked this day — fully vacant.
+            </p>
           ) : (
             <div className="space-y-3">
               {selectedBookings.map((b) => (
-                <div key={b.id} className="border border-gray-100 rounded-xl p-3">
-                  <p className="text-sm font-semibold text-gray-800 truncate">{b.listingName}</p>
+                <div
+                  key={b.id}
+                  className="border border-gray-100 rounded-xl p-3"
+                >
+                  <p className="text-sm font-semibold text-gray-800 truncate">
+                    {b.listingName}
+                  </p>
                   <p className="text-xs text-gray-500">{b.guestName}</p>
                   <p className="text-[11px] text-gray-400 mt-1">
                     {fmtDate(b.checkIn)} → {fmtDate(b.checkOut)}
@@ -625,21 +590,31 @@ export const SalesAnalyticsSection = () => {
   useEffect(() => {
     if (!user) return;
     setLoading(true);
-    AnalyticsDB.summary(user.id, range).then(setData).finally(() => setLoading(false));
+    AnalyticsDB.summary(user.id, range)
+      .then(setData)
+      .finally(() => setLoading(false));
   }, [user, range]);
 
   const chartData = (data?.series ?? []).map((p) => ({
-    date: new Date(p.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    date: new Date(p.date).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    }),
     Bookings: p.bookingRevenue,
     Orders: p.orderRevenue,
   }));
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-50 p-6" style={{ animation: "fadeUp 0.3s ease both" }}>
+    <div
+      className="flex-1 overflow-y-auto bg-gray-50 p-6"
+      style={{ animation: "fadeUp 0.3s ease both" }}
+    >
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Sales Analytics</h2>
-          <p className="text-gray-400 text-sm mt-0.5">Revenue trends across bookings and in-stay orders</p>
+          <p className="text-gray-400 text-sm mt-0.5">
+            Revenue trends across bookings and in-stay orders
+          </p>
         </div>
         <div className="flex gap-2">
           {[7, 14, 30].map((d) => (
@@ -656,20 +631,45 @@ export const SalesAnalyticsSection = () => {
 
       {loading || !data ? (
         <div className="space-y-6">
-          <div className="flex gap-4 flex-wrap">{[...Array(4)].map((_, i) => <Sk key={i} h="h-24" />)}</div>
+          <div className="flex gap-4 flex-wrap">
+            {[...Array(4)].map((_, i) => (
+              <Sk key={i} h="h-24" />
+            ))}
+          </div>
           <Sk h="h-80" />
         </div>
       ) : (
         <>
           <div className="flex gap-4 flex-wrap mb-6">
-            <StatCard icon={<BanknotesIcon className="w-5 h-5 text-[#C9A96E]" />} label="Total Revenue" value={fmt$(data.totalRevenue)} />
-            <StatCard icon={<BuildingOffice2Icon className="w-5 h-5 text-[#C9A96E]" />} label="Booking Revenue" value={fmt$(data.totalBookingRevenue)} delay={60} />
-            <StatCard icon={<ShoppingBagIcon className="w-5 h-5 text-[#C9A96E]" />} label="Order Revenue" value={fmt$(data.totalOrderRevenue)} delay={120} />
-            <StatCard icon={<ChartBarIcon className="w-5 h-5 text-[#C9A96E]" />} label="Occupancy Rate" value={`${data.occupancyRate}%`} delay={180} />
+            <StatCard
+              icon={<BanknotesIcon className="w-5 h-5 text-[#C9A96E]" />}
+              label="Total Revenue"
+              value={fmt$(data.totalRevenue)}
+            />
+            <StatCard
+              icon={<BuildingOffice2Icon className="w-5 h-5 text-[#C9A96E]" />}
+              label="Booking Revenue"
+              value={fmt$(data.totalBookingRevenue)}
+              delay={60}
+            />
+            <StatCard
+              icon={<ShoppingBagIcon className="w-5 h-5 text-[#C9A96E]" />}
+              label="Order Revenue"
+              value={fmt$(data.totalOrderRevenue)}
+              delay={120}
+            />
+            <StatCard
+              icon={<ChartBarIcon className="w-5 h-5 text-[#C9A96E]" />}
+              label="Occupancy Rate"
+              value={`${data.occupancyRate}%`}
+              delay={180}
+            />
           </div>
 
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
-            <h3 className="font-bold text-gray-900 mb-4 text-sm">Revenue Over Time</h3>
+            <h3 className="font-bold text-gray-900 mb-4 text-sm">
+              Revenue Over Time
+            </h3>
             <div style={{ width: "100%", height: 300 }}>
               <ResponsiveContainer>
                 <AreaChart data={chartData}>
@@ -679,31 +679,90 @@ export const SalesAnalyticsSection = () => {
                       <stop offset="95%" stopColor={GOLD} stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="gOrders" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#6EADC9" stopOpacity={0.35} />
+                      <stop
+                        offset="5%"
+                        stopColor="#6EADC9"
+                        stopOpacity={0.35}
+                      />
                       <stop offset="95%" stopColor="#6EADC9" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f1" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #f1f1f1", fontSize: 12 }} />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 11, fill: "#9ca3af" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: "#9ca3af" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: 12,
+                      border: "1px solid #f1f1f1",
+                      fontSize: 12,
+                    }}
+                  />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Area type="monotone" dataKey="Bookings" stroke={GOLD} fill="url(#gBookings)" strokeWidth={2} />
-                  <Area type="monotone" dataKey="Orders" stroke="#6EADC9" fill="url(#gOrders)" strokeWidth={2} />
+                  <Area
+                    type="monotone"
+                    dataKey="Bookings"
+                    stroke={GOLD}
+                    fill="url(#gBookings)"
+                    strokeWidth={2}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="Orders"
+                    stroke="#6EADC9"
+                    fill="url(#gOrders)"
+                    strokeWidth={2}
+                  />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           </div>
 
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <h3 className="font-bold text-gray-900 mb-4 text-sm">Top Earning Properties</h3>
+            <h3 className="font-bold text-gray-900 mb-4 text-sm">
+              Top Earning Properties
+            </h3>
             <div style={{ width: "100%", height: 220 }}>
               <ResponsiveContainer>
-                <BarChart data={data.topListings} layout="vertical" margin={{ left: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f1" horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 12, fill: "#374151" }} axisLine={false} tickLine={false} width={100} />
-                  <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #f1f1f1", fontSize: 12 }} />
+                <BarChart
+                  data={data.topListings}
+                  layout="vertical"
+                  margin={{ left: 20 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="#f1f1f1"
+                    horizontal={false}
+                  />
+                  <XAxis
+                    type="number"
+                    tick={{ fontSize: 11, fill: "#9ca3af" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    tick={{ fontSize: 12, fill: "#374151" }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={100}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: 12,
+                      border: "1px solid #f1f1f1",
+                      fontSize: 12,
+                    }}
+                  />
                   <Bar dataKey="revenue" fill={GOLD} radius={[0, 6, 6, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -733,13 +792,21 @@ export const StaffManagementSection = () => {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ fullName: "", role: "front_desk" as StaffRole, phone: "", email: "", deviceUserId: "" });
+  const [form, setForm] = useState({
+    fullName: "",
+    role: "front_desk" as StaffRole,
+    phone: "",
+    email: "",
+    deviceUserId: "",
+  });
   const [saving, setSaving] = useState(false);
 
   const load = () => {
     if (!user) return;
     setLoading(true);
-    StaffDB.byHost(user.id).then(setStaff).finally(() => setLoading(false));
+    StaffDB.byHost(user.id)
+      .then(setStaff)
+      .finally(() => setLoading(false));
   };
   useEffect(load, [user]);
 
@@ -752,10 +819,18 @@ export const StaffManagementSection = () => {
       role: form.role,
       phone: form.phone.trim() || undefined,
       email: form.email.trim() || undefined,
-      deviceUserId: form.deviceUserId.trim() ? Number(form.deviceUserId.trim()) : undefined,
+      deviceUserId: form.deviceUserId.trim()
+        ? Number(form.deviceUserId.trim())
+        : undefined,
     });
     setStaff((p) => [...p, rec]);
-    setForm({ fullName: "", role: "front_desk", phone: "", email: "", deviceUserId: "" });
+    setForm({
+      fullName: "",
+      role: "front_desk",
+      phone: "",
+      email: "",
+      deviceUserId: "",
+    });
     setShowForm(false);
     setSaving(false);
   };
@@ -772,14 +847,20 @@ export const StaffManagementSection = () => {
     await StaffDB.setStatus(s.id, next);
   };
 
-  const inp = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#C9A96E] focus:ring-2 focus:ring-[#C9A96E]/10 transition-all bg-white";
+  const inp =
+    "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-[#C9A96E] focus:ring-2 focus:ring-[#C9A96E]/10 transition-all bg-white";
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-50 p-6" style={{ animation: "fadeUp 0.3s ease both" }}>
+    <div
+      className="flex-1 overflow-y-auto bg-gray-50 p-6"
+      style={{ animation: "fadeUp 0.3s ease both" }}
+    >
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Staff Management</h2>
-          <p className="text-gray-400 text-sm mt-0.5">{staff.length} team member{staff.length !== 1 ? "s" : ""}</p>
+          <p className="text-gray-400 text-sm mt-0.5">
+            {staff.length} team member{staff.length !== 1 ? "s" : ""}
+          </p>
         </div>
         <button
           onClick={() => setShowForm((v) => !v)}
@@ -790,23 +871,64 @@ export const StaffManagementSection = () => {
       </div>
 
       {showForm && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6 grid grid-cols-1 sm:grid-cols-2 gap-4" style={{ animation: "fadeUp 0.2s ease both" }}>
-          <input className={inp} placeholder="Full name" value={form.fullName} onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))} />
-          <select className={inp} value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as StaffRole }))}>
-            {(Object.keys(ROLE_LABELS) as StaffRole[]).map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+        <div
+          className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6 grid grid-cols-1 sm:grid-cols-2 gap-4"
+          style={{ animation: "fadeUp 0.2s ease both" }}
+        >
+          <input
+            className={inp}
+            placeholder="Full name"
+            value={form.fullName}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, fullName: e.target.value }))
+            }
+          />
+          <select
+            className={inp}
+            value={form.role}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, role: e.target.value as StaffRole }))
+            }
+          >
+            {(Object.keys(ROLE_LABELS) as StaffRole[]).map((r) => (
+              <option key={r} value={r}>
+                {ROLE_LABELS[r]}
+              </option>
+            ))}
           </select>
-          <input className={inp} placeholder="Phone" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
-          <input className={inp} placeholder="Email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+          <input
+            className={inp}
+            placeholder="Phone"
+            value={form.phone}
+            onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+          />
+          <input
+            className={inp}
+            placeholder="Email"
+            value={form.email}
+            onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+          />
           <input
             className={inp}
             placeholder="Fingerprint device user # (optional)"
             type="number"
             value={form.deviceUserId}
-            onChange={(e) => setForm((f) => ({ ...f, deviceUserId: e.target.value }))}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, deviceUserId: e.target.value }))
+            }
           />
           <div className="sm:col-span-2 flex justify-end gap-2">
-            <button onClick={() => setShowForm(false)} className="text-sm font-semibold text-gray-500 px-4 py-2">Cancel</button>
-            <button disabled={saving} onClick={addStaff} className="text-sm font-semibold text-white bg-[#C9A96E] hover:bg-[#b8935a] px-5 py-2 rounded-xl disabled:opacity-50">
+            <button
+              onClick={() => setShowForm(false)}
+              className="text-sm font-semibold text-gray-500 px-4 py-2"
+            >
+              Cancel
+            </button>
+            <button
+              disabled={saving}
+              onClick={addStaff}
+              className="text-sm font-semibold text-white bg-[#C9A96E] hover:bg-[#b8935a] px-5 py-2 rounded-xl disabled:opacity-50"
+            >
               {saving ? "Saving…" : "Save Staff"}
             </button>
           </div>
@@ -815,7 +937,11 @@ export const StaffManagementSection = () => {
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         {loading ? (
-          <div className="p-6 space-y-3">{[...Array(4)].map((_, i) => <Sk key={i} h="h-12" />)}</div>
+          <div className="p-6 space-y-3">
+            {[...Array(4)].map((_, i) => (
+              <Sk key={i} h="h-12" />
+            ))}
+          </div>
         ) : staff.length === 0 ? (
           <div className="p-14 text-center">
             <UserGroupIcon className="w-10 h-10 text-gray-200 mx-auto mb-3" />
@@ -826,30 +952,69 @@ export const StaffManagementSection = () => {
             <table className="w-full">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
-                  {["Name", "Role", "Contact", "Fingerprint #", "Status", "Hired", ""].map((h) => (
-                    <th key={h} className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3">{h}</th>
+                  {[
+                    "Name",
+                    "Role",
+                    "Contact",
+                    "Fingerprint #",
+                    "Status",
+                    "Hired",
+                    "",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3"
+                    >
+                      {h}
+                    </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {staff.map((s, i) => (
-                  <tr key={s.id} className="border-b border-gray-50 hover:bg-gray-50/60" style={{ animation: `fadeUp 0.3s ease ${i * 30}ms both` }}>
+                  <tr
+                    key={s.id}
+                    className="border-b border-gray-50 hover:bg-gray-50/60"
+                    style={{ animation: `fadeUp 0.3s ease ${i * 30}ms both` }}
+                  >
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ background: "linear-gradient(135deg,#C9A96E,#8a6030)" }}>
+                        <div
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                          style={{
+                            background:
+                              "linear-gradient(135deg,#C9A96E,#8a6030)",
+                          }}
+                        >
                           {s.fullName[0]}
                         </div>
-                        <p className="text-sm font-medium text-gray-800">{s.fullName}</p>
+                        <p className="text-sm font-medium text-gray-800">
+                          {s.fullName}
+                        </p>
                       </div>
                     </td>
-                    <td className="px-5 py-3 text-sm text-gray-600">{ROLE_LABELS[s.role]}</td>
+                    <td className="px-5 py-3 text-sm text-gray-600">
+                      {ROLE_LABELS[s.role]}
+                    </td>
                     <td className="px-5 py-3 text-xs text-gray-500">
-                      {s.phone && <p className="flex items-center gap-1"><PhoneIcon className="w-3 h-3" />{s.phone}</p>}
-                      {s.email && <p className="flex items-center gap-1 truncate max-w-[160px]"><EnvelopeIcon className="w-3 h-3" />{s.email}</p>}
+                      {s.phone && (
+                        <p className="flex items-center gap-1">
+                          <PhoneIcon className="w-3 h-3" />
+                          {s.phone}
+                        </p>
+                      )}
+                      {s.email && (
+                        <p className="flex items-center gap-1 truncate max-w-[160px]">
+                          <EnvelopeIcon className="w-3 h-3" />
+                          {s.email}
+                        </p>
+                      )}
                     </td>
                     <td className="px-5 py-3 text-xs text-gray-500">
                       {s.deviceUserId !== undefined ? (
-                        <span className="font-mono bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5">#{s.deviceUserId}</span>
+                        <span className="font-mono bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5">
+                          #{s.deviceUserId}
+                        </span>
                       ) : (
                         <span className="text-gray-300">Not linked</span>
                       )}
@@ -859,12 +1024,19 @@ export const StaffManagementSection = () => {
                         onClick={() => toggleStatus(s)}
                         className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${s.status === "active" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}
                       >
-                        {s.status === "active" ? "Active" : s.status.replace("_", " ")}
+                        {s.status === "active"
+                          ? "Active"
+                          : s.status.replace("_", " ")}
                       </button>
                     </td>
-                    <td className="px-5 py-3 text-xs text-gray-400 whitespace-nowrap">{fmtDate(s.hiredAt)}</td>
+                    <td className="px-5 py-3 text-xs text-gray-400 whitespace-nowrap">
+                      {fmtDate(s.hiredAt)}
+                    </td>
                     <td className="px-5 py-3 text-right">
-                      <button onClick={() => removeStaff(s.id)} className="text-gray-300 hover:text-red-500 transition-colors">
+                      <button
+                        onClick={() => removeStaff(s.id)}
+                        className="text-gray-300 hover:text-red-500 transition-colors"
+                      >
                         <TrashIcon className="w-4 h-4" />
                       </button>
                     </td>
@@ -885,9 +1057,13 @@ export const StaffManagementSection = () => {
 export const AttendanceSection = () => {
   const { user } = useAuth();
   const [staff, setStaff] = useState<StaffMember[]>([]);
-  const [records, setRecords] = useState<(AttendanceRecord & { staffName: string })[]>([]);
+  const [records, setRecords] = useState<
+    (AttendanceRecord & { staffName: string })[]
+  >([]);
   const [loading, setLoading] = useState(true);
-  const [dayFilter, setDayFilter] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [dayFilter, setDayFilter] = useState<string>(
+    new Date().toISOString().slice(0, 10),
+  );
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = () => {
@@ -904,7 +1080,9 @@ export const AttendanceSection = () => {
 
   const today = new Date().toISOString().slice(0, 10);
   const openRecordFor = (staffId: string) =>
-    records.find((r) => r.staffId === staffId && r.date === today && !r.clockOut);
+    records.find(
+      (r) => r.staffId === staffId && r.date === today && !r.clockOut,
+    );
 
   const doClockIn = async (staffId: string) => {
     setBusyId(staffId);
@@ -918,7 +1096,11 @@ export const AttendanceSection = () => {
     setBusyId(recordId);
     const updated = await AttendanceDB.clockOut(recordId);
     if (updated) {
-      setRecords((p) => p.map((r) => (r.id === recordId ? { ...updated, staffName: r.staffName } : r)));
+      setRecords((p) =>
+        p.map((r) =>
+          r.id === recordId ? { ...updated, staffName: r.staffName } : r,
+        ),
+      );
     }
     setBusyId(null);
   };
@@ -936,11 +1118,16 @@ export const AttendanceSection = () => {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-50 p-6" style={{ animation: "fadeUp 0.3s ease both" }}>
+    <div
+      className="flex-1 overflow-y-auto bg-gray-50 p-6"
+      style={{ animation: "fadeUp 0.3s ease both" }}
+    >
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Staff Attendance</h2>
-          <p className="text-gray-400 text-sm mt-0.5">Track clock-in / clock-out times per day</p>
+          <p className="text-gray-400 text-sm mt-0.5">
+            Track clock-in / clock-out times per day
+          </p>
         </div>
         <input
           type="date"
@@ -952,66 +1139,122 @@ export const AttendanceSection = () => {
 
       {staff.length > 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-6">
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Quick Clock In / Out</p>
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+            Quick Clock In / Out
+          </p>
           <div className="flex flex-wrap gap-2">
-            {staff.filter((s) => s.status === "active").map((s) => {
-              const open = openRecordFor(s.id);
-              return (
-                <button
-                  key={s.id}
-                  disabled={busyId === s.id || busyId === open?.id}
-                  onClick={() => (open ? doClockOut(open.id) : doClockIn(s.id))}
-                  className={`text-xs font-semibold px-3.5 py-2 rounded-full border transition-all disabled:opacity-50 ${
-                    open
-                      ? "bg-red-50 text-red-600 border-red-200 hover:bg-red-100"
-                      : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                  }`}
-                >
-                  {s.fullName} — {open ? "Clock Out" : "Clock In"}
-                </button>
-              );
-            })}
+            {staff
+              .filter((s) => s.status === "active")
+              .map((s) => {
+                const open = openRecordFor(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    disabled={busyId === s.id || busyId === open?.id}
+                    onClick={() =>
+                      open ? doClockOut(open.id) : doClockIn(s.id)
+                    }
+                    className={`text-xs font-semibold px-3.5 py-2 rounded-full border transition-all disabled:opacity-50 ${
+                      open
+                        ? "bg-red-50 text-red-600 border-red-200 hover:bg-red-100"
+                        : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                    }`}
+                  >
+                    {s.fullName} — {open ? "Clock Out" : "Clock In"}
+                  </button>
+                );
+              })}
           </div>
         </div>
       )}
 
       <div className="flex gap-4 flex-wrap mb-6">
-        <StatCard icon={<CheckCircleIcon className="w-5 h-5 text-emerald-500" />} label="On Time" value={onTimeCount} accent="#16a34a" />
-        <StatCard icon={<ClockIcon className="w-5 h-5 text-amber-500" />} label="Late" value={lateCount} delay={60} accent="#d97706" />
-        <StatCard icon={<ExclamationTriangleIcon className="w-5 h-5 text-red-500" />} label="Absent" value={absentCount} delay={120} accent="#dc2626" />
+        <StatCard
+          icon={<CheckCircleIcon className="w-5 h-5 text-emerald-500" />}
+          label="On Time"
+          value={onTimeCount}
+          accent="#16a34a"
+        />
+        <StatCard
+          icon={<ClockIcon className="w-5 h-5 text-amber-500" />}
+          label="Late"
+          value={lateCount}
+          delay={60}
+          accent="#d97706"
+        />
+        <StatCard
+          icon={<ExclamationTriangleIcon className="w-5 h-5 text-red-500" />}
+          label="Absent"
+          value={absentCount}
+          delay={120}
+          accent="#dc2626"
+        />
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         {loading ? (
-          <div className="p-6 space-y-3">{[...Array(4)].map((_, i) => <Sk key={i} h="h-12" />)}</div>
+          <div className="p-6 space-y-3">
+            {[...Array(4)].map((_, i) => (
+              <Sk key={i} h="h-12" />
+            ))}
+          </div>
         ) : dayRecords.length === 0 ? (
           <div className="p-14 text-center">
             <ClockIcon className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-            <p className="text-gray-400 text-sm">No attendance records for this day</p>
+            <p className="text-gray-400 text-sm">
+              No attendance records for this day
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
-                  {["Staff", "Clock In", "Clock Out", "Hours", "Status"].map((h) => (
-                    <th key={h} className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3">{h}</th>
-                  ))}
+                  {["Staff", "Clock In", "Clock Out", "Hours", "Status"].map(
+                    (h) => (
+                      <th
+                        key={h}
+                        className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3"
+                      >
+                        {h}
+                      </th>
+                    ),
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {dayRecords.map((r, i) => (
-                  <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50/60" style={{ animation: `fadeUp 0.3s ease ${i * 30}ms both` }}>
-                    <td className="px-5 py-3 text-sm font-medium text-gray-800">{r.staffName}</td>
-                    <td className="px-5 py-3 text-sm text-gray-600">
-                      {r.clockIn ? new Date(r.clockIn).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "—"}
+                  <tr
+                    key={r.id}
+                    className="border-b border-gray-50 hover:bg-gray-50/60"
+                    style={{ animation: `fadeUp 0.3s ease ${i * 30}ms both` }}
+                  >
+                    <td className="px-5 py-3 text-sm font-medium text-gray-800">
+                      {r.staffName}
                     </td>
                     <td className="px-5 py-3 text-sm text-gray-600">
-                      {r.clockOut ? new Date(r.clockOut).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "—"}
+                      {r.clockIn
+                        ? new Date(r.clockIn).toLocaleTimeString("en-US", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "—"}
                     </td>
-                    <td className="px-5 py-3 text-sm text-gray-500">{r.hoursWorked ? `${r.hoursWorked}h` : "—"}</td>
+                    <td className="px-5 py-3 text-sm text-gray-600">
+                      {r.clockOut
+                        ? new Date(r.clockOut).toLocaleTimeString("en-US", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "—"}
+                    </td>
+                    <td className="px-5 py-3 text-sm text-gray-500">
+                      {r.hoursWorked ? `${r.hoursWorked}h` : "—"}
+                    </td>
                     <td className="px-5 py-3">
-                      <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${STATUS_STYLE[r.status]}`}>
+                      <span
+                        className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${STATUS_STYLE[r.status]}`}
+                      >
                         {r.status.replace("_", " ")}
                       </span>
                     </td>
@@ -1037,12 +1280,20 @@ export const GuestProfilesSection = () => {
   const [selected, setSelected] = useState<GuestProfile | null>(null);
   const [orders, setOrders] = useState<GuestOrderItem[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
-  const [orderForm, setOrderForm] = useState({ itemName: "", category: "snack" as OrderCategory, quantity: 1, unitPrice: 0, listingId: "" });
+  const [orderForm, setOrderForm] = useState({
+    itemName: "",
+    category: "snack" as OrderCategory,
+    quantity: 1,
+    unitPrice: 0,
+    listingId: "",
+  });
   const [savingOrder, setSavingOrder] = useState(false);
 
   useEffect(() => {
     if (!user) return;
-    GuestsDB.byHost(user.id).then(setGuests).finally(() => setLoading(false));
+    GuestsDB.byHost(user.id)
+      .then(setGuests)
+      .finally(() => setLoading(false));
     ListingsDB.byHost(user.id)
       .then((l) => l.map(listingToHotel))
       .then((h) => {
@@ -1054,11 +1305,19 @@ export const GuestProfilesSection = () => {
   const openGuest = async (g: GuestProfile) => {
     setSelected(g);
     setOrdersLoading(true);
-    GuestOrdersDB.byGuest(g.id).then(setOrders).finally(() => setOrdersLoading(false));
+    GuestOrdersDB.byGuest(g.id)
+      .then(setOrders)
+      .finally(() => setOrdersLoading(false));
   };
 
   const logOrder = async () => {
-    if (!user || !selected || !orderForm.itemName.trim() || !orderForm.listingId) return;
+    if (
+      !user ||
+      !selected ||
+      !orderForm.itemName.trim() ||
+      !orderForm.listingId
+    )
+      return;
     setSavingOrder(true);
     const order = await GuestOrdersDB.add({
       guestId: selected.id,
@@ -1070,41 +1329,80 @@ export const GuestProfilesSection = () => {
       unitPrice: orderForm.unitPrice,
     });
     setOrders((p) => [order, ...p]);
-    setSelected((s) => (s ? { ...s, totalSpend: s.totalSpend + order.unitPrice * order.quantity } : s));
-    setGuests((p) => p.map((g) => (g.id === selected.id ? { ...g, totalSpend: g.totalSpend + order.unitPrice * order.quantity } : g)));
+    setSelected((s) =>
+      s
+        ? { ...s, totalSpend: s.totalSpend + order.unitPrice * order.quantity }
+        : s,
+    );
+    setGuests((p) =>
+      p.map((g) =>
+        g.id === selected.id
+          ? {
+              ...g,
+              totalSpend: g.totalSpend + order.unitPrice * order.quantity,
+            }
+          : g,
+      ),
+    );
     setOrderForm((f) => ({ ...f, itemName: "", quantity: 1, unitPrice: 0 }));
     setSavingOrder(false);
   };
 
   const catIcon = (c: OrderCategory) =>
-    c === "snack" ? <CakeIcon className="w-3.5 h-3.5" /> : c === "drink" ? <BeakerIcon className="w-3.5 h-3.5" /> : <ShoppingBagIcon className="w-3.5 h-3.5" />;
+    c === "snack" ? (
+      <CakeIcon className="w-3.5 h-3.5" />
+    ) : c === "drink" ? (
+      <BeakerIcon className="w-3.5 h-3.5" />
+    ) : (
+      <ShoppingBagIcon className="w-3.5 h-3.5" />
+    );
 
-  const inp = "border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-[#C9A96E] bg-white";
+  const inp =
+    "border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-[#C9A96E] bg-white";
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-50 p-6" style={{ animation: "fadeUp 0.3s ease both" }}>
+    <div
+      className="flex-1 overflow-y-auto bg-gray-50 p-6"
+      style={{ animation: "fadeUp 0.3s ease both" }}
+    >
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-gray-900">Guest Profiles</h2>
-        <p className="text-gray-400 text-sm mt-0.5">Spend, stay history and orders per guest</p>
+        <p className="text-gray-400 text-sm mt-0.5">
+          Spend, stay history and orders per guest
+        </p>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-6">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           {loading ? (
-            <div className="p-6 space-y-3">{[...Array(4)].map((_, i) => <Sk key={i} h="h-14" />)}</div>
+            <div className="p-6 space-y-3">
+              {[...Array(4)].map((_, i) => (
+                <Sk key={i} h="h-14" />
+              ))}
+            </div>
           ) : guests.length === 0 ? (
             <div className="p-14 text-center">
               <UserGroupIcon className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-              <p className="text-gray-400 text-sm">No guest history yet — profiles build automatically from bookings</p>
+              <p className="text-gray-400 text-sm">
+                No guest history yet — profiles build automatically from
+                bookings
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100">
-                    {["Guest", "Stays", "Total Spend", "Last Stay", ""].map((h) => (
-                      <th key={h} className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3">{h}</th>
-                    ))}
+                    {["Guest", "Stays", "Total Spend", "Last Stay", ""].map(
+                      (h) => (
+                        <th
+                          key={h}
+                          className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-5 py-3"
+                        >
+                          {h}
+                        </th>
+                      ),
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -1116,18 +1414,30 @@ export const GuestProfilesSection = () => {
                       style={{ animation: `fadeUp 0.3s ease ${i * 30}ms both` }}
                     >
                       <td className="px-5 py-3">
-                        <p className="text-sm font-medium text-gray-800">{g.fullName}</p>
+                        <p className="text-sm font-medium text-gray-800">
+                          {g.fullName}
+                        </p>
                         <p className="text-xs text-gray-400">{g.email}</p>
                       </td>
                       <td className="px-5 py-3">
-                        <span className="text-sm text-gray-600">{g.totalStays}</span>
+                        <span className="text-sm text-gray-600">
+                          {g.totalStays}
+                        </span>
                         {g.isReturning && (
-                          <span className="ml-2 text-[10px] font-bold text-[#C9A96E] bg-[#C9A96E]/10 px-1.5 py-0.5 rounded-full">Returning</span>
+                          <span className="ml-2 text-[10px] font-bold text-[#C9A96E] bg-[#C9A96E]/10 px-1.5 py-0.5 rounded-full">
+                            Returning
+                          </span>
                         )}
                       </td>
-                      <td className="px-5 py-3 text-sm font-semibold text-gray-800">{fmt$(g.totalSpend)}</td>
-                      <td className="px-5 py-3 text-xs text-gray-400 whitespace-nowrap">{g.lastStayAt && fmtDate(g.lastStayAt)}</td>
-                      <td className="px-5 py-3 text-right text-gray-300"><ChevronRightIcon className="w-4 h-4" /></td>
+                      <td className="px-5 py-3 text-sm font-semibold text-gray-800">
+                        {fmt$(g.totalSpend)}
+                      </td>
+                      <td className="px-5 py-3 text-xs text-gray-400 whitespace-nowrap">
+                        {g.lastStayAt && fmtDate(g.lastStayAt)}
+                      </td>
+                      <td className="px-5 py-3 text-right text-gray-300">
+                        <ChevronRightIcon className="w-4 h-4" />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1140,69 +1450,162 @@ export const GuestProfilesSection = () => {
           {!selected ? (
             <div className="text-center py-10">
               <UserGroupIcon className="w-8 h-8 text-gray-200 mx-auto mb-2" />
-              <p className="text-gray-400 text-xs">Select a guest to view details</p>
+              <p className="text-gray-400 text-xs">
+                Select a guest to view details
+              </p>
             </div>
           ) : (
             <>
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold shrink-0" style={{ background: "linear-gradient(135deg,#C9A96E,#8a6030)" }}>
+                <div
+                  className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold shrink-0"
+                  style={{
+                    background: "linear-gradient(135deg,#C9A96E,#8a6030)",
+                  }}
+                >
                   {selected.fullName[0]}
                 </div>
                 <div>
-                  <p className="font-bold text-gray-900 text-sm">{selected.fullName}</p>
+                  <p className="font-bold text-gray-900 text-sm">
+                    {selected.fullName}
+                  </p>
                   <p className="text-xs text-gray-400">{selected.email}</p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 mb-5">
                 <div className="bg-gray-50 rounded-xl p-3">
-                  <p className="text-[10px] text-gray-400 uppercase font-bold">Total Spend</p>
-                  <p className="text-sm font-bold text-gray-800">{fmt$(selected.totalSpend)}</p>
+                  <p className="text-[10px] text-gray-400 uppercase font-bold">
+                    Total Spend
+                  </p>
+                  <p className="text-sm font-bold text-gray-800">
+                    {fmt$(selected.totalSpend)}
+                  </p>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-3">
-                  <p className="text-[10px] text-gray-400 uppercase font-bold">Total Stays</p>
-                  <p className="text-sm font-bold text-gray-800">{selected.totalStays}</p>
+                  <p className="text-[10px] text-gray-400 uppercase font-bold">
+                    Total Stays
+                  </p>
+                  <p className="text-sm font-bold text-gray-800">
+                    {selected.totalStays}
+                  </p>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-3">
-                  <p className="text-[10px] text-gray-400 uppercase font-bold">First Stay</p>
-                  <p className="text-sm font-bold text-gray-800">{selected.firstStayAt && fmtDate(selected.firstStayAt)}</p>
+                  <p className="text-[10px] text-gray-400 uppercase font-bold">
+                    First Stay
+                  </p>
+                  <p className="text-sm font-bold text-gray-800">
+                    {selected.firstStayAt && fmtDate(selected.firstStayAt)}
+                  </p>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-3">
-                  <p className="text-[10px] text-gray-400 uppercase font-bold">Last Stay</p>
-                  <p className="text-sm font-bold text-gray-800">{selected.lastStayAt && fmtDate(selected.lastStayAt)}</p>
+                  <p className="text-[10px] text-gray-400 uppercase font-bold">
+                    Last Stay
+                  </p>
+                  <p className="text-sm font-bold text-gray-800">
+                    {selected.lastStayAt && fmtDate(selected.lastStayAt)}
+                  </p>
                 </div>
               </div>
 
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Snacks & Drinks Ordered</p>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                Snacks & Drinks Ordered
+              </p>
               {ordersLoading ? (
-                <div className="space-y-2 mb-3">{[...Array(3)].map((_, i) => <Sk key={i} h="h-9" />)}</div>
+                <div className="space-y-2 mb-3">
+                  {[...Array(3)].map((_, i) => (
+                    <Sk key={i} h="h-9" />
+                  ))}
+                </div>
               ) : orders.length === 0 ? (
                 <p className="text-xs text-gray-400 mb-3">No orders recorded</p>
               ) : (
                 <div className="space-y-2 max-h-40 overflow-y-auto mb-3">
                   {orders.map((o) => (
-                    <div key={o.id} className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2">
-                      <span className="flex items-center gap-1.5 text-gray-700">{catIcon(o.category)} {o.itemName} ×{o.quantity}</span>
-                      <span className="text-gray-500">{o.unitPrice ? fmt$(o.unitPrice * o.quantity) : "—"}</span>
+                    <div
+                      key={o.id}
+                      className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2"
+                    >
+                      <span className="flex items-center gap-1.5 text-gray-700">
+                        {catIcon(o.category)} {o.itemName} ×{o.quantity}
+                      </span>
+                      <span className="text-gray-500">
+                        {o.unitPrice ? fmt$(o.unitPrice * o.quantity) : "—"}
+                      </span>
                     </div>
                   ))}
                 </div>
               )}
 
               <div className="border-t border-gray-100 pt-3">
-                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Log an Order</p>
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                  Log an Order
+                </p>
                 <div className="grid grid-cols-2 gap-2 mb-2">
-                  <input className={inp} placeholder="Item name" value={orderForm.itemName} onChange={(e) => setOrderForm((f) => ({ ...f, itemName: e.target.value }))} />
-                  <select className={inp} value={orderForm.category} onChange={(e) => setOrderForm((f) => ({ ...f, category: e.target.value as OrderCategory }))}>
+                  <input
+                    className={inp}
+                    placeholder="Item name"
+                    value={orderForm.itemName}
+                    onChange={(e) =>
+                      setOrderForm((f) => ({ ...f, itemName: e.target.value }))
+                    }
+                  />
+                  <select
+                    className={inp}
+                    value={orderForm.category}
+                    onChange={(e) =>
+                      setOrderForm((f) => ({
+                        ...f,
+                        category: e.target.value as OrderCategory,
+                      }))
+                    }
+                  >
                     <option value="snack">Snack</option>
                     <option value="drink">Drink</option>
                     <option value="room_service">Room Service</option>
                     <option value="other">Other</option>
                   </select>
-                  <input type="number" min={1} className={inp} placeholder="Qty" value={orderForm.quantity} onChange={(e) => setOrderForm((f) => ({ ...f, quantity: Number(e.target.value) || 1 }))} />
-                  <input type="number" min={0} className={inp} placeholder="Unit price (₦)" value={orderForm.unitPrice} onChange={(e) => setOrderForm((f) => ({ ...f, unitPrice: Number(e.target.value) || 0 }))} />
+                  <input
+                    type="number"
+                    min={1}
+                    className={inp}
+                    placeholder="Qty"
+                    value={orderForm.quantity}
+                    onChange={(e) =>
+                      setOrderForm((f) => ({
+                        ...f,
+                        quantity: Number(e.target.value) || 1,
+                      }))
+                    }
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    className={inp}
+                    placeholder="Unit price (₦)"
+                    value={orderForm.unitPrice}
+                    onChange={(e) =>
+                      setOrderForm((f) => ({
+                        ...f,
+                        unitPrice: Number(e.target.value) || 0,
+                      }))
+                    }
+                  />
                   {hotels.length > 1 && (
-                    <select className={`${inp} col-span-2`} value={orderForm.listingId} onChange={(e) => setOrderForm((f) => ({ ...f, listingId: e.target.value }))}>
-                      {hotels.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+                    <select
+                      className={`${inp} col-span-2`}
+                      value={orderForm.listingId}
+                      onChange={(e) =>
+                        setOrderForm((f) => ({
+                          ...f,
+                          listingId: e.target.value,
+                        }))
+                      }
+                    >
+                      {hotels.map((h) => (
+                        <option key={h.id} value={h.id}>
+                          {h.name}
+                        </option>
+                      ))}
                     </select>
                   )}
                 </div>
@@ -1238,16 +1641,20 @@ export const CameraGridSection = () => {
 
   useEffect(() => {
     if (!user) return;
-    ListingsDB.byHost(user.id).then((l) => l.map(listingToHotel)).then((h) => {
-      setHotels(h);
-      if (h[0]) setListingId(h[0].id);
-    });
+    ListingsDB.byHost(user.id)
+      .then((l) => l.map(listingToHotel))
+      .then((h) => {
+        setHotels(h);
+        if (h[0]) setListingId(h[0].id);
+      });
   }, [user]);
 
   useEffect(() => {
     if (!listingId) return;
     setLoading(true);
-    CamerasDB.byListing(listingId).then(setCameras).finally(() => setLoading(false));
+    CamerasDB.byListing(listingId)
+      .then(setCameras)
+      .finally(() => setLoading(false));
   }, [listingId]);
 
   const addCamera = async () => {
@@ -1262,26 +1669,46 @@ export const CameraGridSection = () => {
   const connectStream = async () => {
     if (!focused || !streamInput.trim()) return;
     await CamerasDB.connectStream(focused.id, streamInput.trim());
-    setCameras((p) => p.map((c) => (c.id === focused.id ? { ...c, streamUrl: streamInput.trim(), status: "online" } : c)));
-    setFocused((f) => (f ? { ...f, streamUrl: streamInput.trim(), status: "online" } : f));
+    setCameras((p) =>
+      p.map((c) =>
+        c.id === focused.id
+          ? { ...c, streamUrl: streamInput.trim(), status: "online" }
+          : c,
+      ),
+    );
+    setFocused((f) =>
+      f ? { ...f, streamUrl: streamInput.trim(), status: "online" } : f,
+    );
     setStreamInput("");
   };
 
   const onlineCount = cameras.filter((c) => c.status === "online").length;
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-50 p-6" style={{ animation: "fadeUp 0.3s ease both" }}>
+    <div
+      className="flex-1 overflow-y-auto bg-gray-50 p-6"
+      style={{ animation: "fadeUp 0.3s ease both" }}
+    >
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Room Cameras</h2>
           <p className="text-gray-400 text-sm mt-0.5">
-            {onlineCount}/{cameras.length} feeds online — connect each room's camera to view live
+            {onlineCount}/{cameras.length} feeds online — connect each room's
+            camera to view live
           </p>
         </div>
         <div className="flex gap-2 items-center flex-wrap">
           {hotels.length > 1 && (
-            <select value={listingId} onChange={(e) => setListingId(e.target.value)} className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-[#C9A96E] bg-white">
-              {hotels.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+            <select
+              value={listingId}
+              onChange={(e) => setListingId(e.target.value)}
+              className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 outline-none focus:border-[#C9A96E] bg-white"
+            >
+              {hotels.map((h) => (
+                <option key={h.id} value={h.id}>
+                  {h.name}
+                </option>
+              ))}
             </select>
           )}
           <input
@@ -1302,15 +1729,24 @@ export const CameraGridSection = () => {
 
       <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-xl px-4 py-3 mb-6 flex items-start gap-2">
         <ExclamationTriangleIcon className="w-4 h-4 shrink-0 mt-0.5" />
-        <span>This is the camera control UI. Click a tile and paste a stream URL (HLS/RTSP-via-proxy from your NVR provider) to go live for that room.</span>
+        <span>
+          This is the camera control UI. Click a tile and paste a stream URL
+          (HLS/RTSP-via-proxy from your NVR provider) to go live for that room.
+        </span>
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">{[...Array(8)].map((_, i) => <Sk key={i} h="h-36" />)}</div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          {[...Array(8)].map((_, i) => (
+            <Sk key={i} h="h-36" />
+          ))}
+        </div>
       ) : cameras.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-100 p-14 text-center">
           <VideoCameraIcon className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-          <p className="text-gray-400 text-sm">No cameras added yet — add one above</p>
+          <p className="text-gray-400 text-sm">
+            No cameras added yet — add one above
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -1319,7 +1755,10 @@ export const CameraGridSection = () => {
               key={c.id}
               onClick={() => setFocused(c)}
               className="bg-gray-900 rounded-2xl overflow-hidden relative group text-left shadow-sm hover:shadow-lg transition-all"
-              style={{ animation: `fadeUp 0.3s ease ${i * 30}ms both`, aspectRatio: "4/3" }}
+              style={{
+                animation: `fadeUp 0.3s ease ${i * 30}ms both`,
+                aspectRatio: "4/3",
+              }}
             >
               <div className="absolute inset-0 flex items-center justify-center">
                 {c.status === "online" ? (
@@ -1329,11 +1768,17 @@ export const CameraGridSection = () => {
                 )}
               </div>
               <div className="absolute top-2 left-2 flex items-center gap-1.5">
-                <span className={`w-2 h-2 rounded-full ${c.status === "online" ? "bg-emerald-400 animate-pulse" : "bg-gray-500"}`} />
-                <span className="text-[10px] font-bold text-white/80 uppercase">{c.status}</span>
+                <span
+                  className={`w-2 h-2 rounded-full ${c.status === "online" ? "bg-emerald-400 animate-pulse" : "bg-gray-500"}`}
+                />
+                <span className="text-[10px] font-bold text-white/80 uppercase">
+                  {c.status}
+                </span>
               </div>
               <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2">
-                <p className="text-white text-xs font-semibold">{c.roomLabel}</p>
+                <p className="text-white text-xs font-semibold">
+                  {c.roomLabel}
+                </p>
               </div>
             </button>
           ))}
@@ -1341,15 +1786,33 @@ export const CameraGridSection = () => {
       )}
 
       {focused && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6" onClick={() => setFocused(null)}>
-          <div className="bg-gray-900 rounded-2xl overflow-hidden max-w-2xl w-full" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6"
+          onClick={() => setFocused(null)}
+        >
+          <div
+            className="bg-gray-900 rounded-2xl overflow-hidden max-w-2xl w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between px-5 py-3 border-b border-white/10">
-              <p className="text-white text-sm font-semibold">{focused.roomLabel}</p>
-              <button onClick={() => setFocused(null)} className="text-white/50 hover:text-white"><XMarkIcon className="w-5 h-5" /></button>
+              <p className="text-white text-sm font-semibold">
+                {focused.roomLabel}
+              </p>
+              <button
+                onClick={() => setFocused(null)}
+                className="text-white/50 hover:text-white"
+              >
+                <XMarkIcon className="w-5 h-5" />
+              </button>
             </div>
             <div className="aspect-video flex items-center justify-center bg-black">
               {focused.streamUrl ? (
-                <video src={focused.streamUrl} controls autoPlay className="w-full h-full" />
+                <video
+                  src={focused.streamUrl}
+                  controls
+                  autoPlay
+                  className="w-full h-full"
+                />
               ) : (
                 <div className="text-center text-white/40 text-sm">
                   <VideoCameraSlashIcon className="w-10 h-10 mx-auto mb-2" />
@@ -1365,7 +1828,10 @@ export const CameraGridSection = () => {
                   placeholder="Paste HLS/stream URL…"
                   className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-white/30 outline-none focus:border-[#C9A96E]"
                 />
-                <button onClick={connectStream} className="text-xs font-semibold text-white bg-[#C9A96E] hover:bg-[#b8935a] px-4 py-2 rounded-lg">
+                <button
+                  onClick={connectStream}
+                  className="text-xs font-semibold text-white bg-[#C9A96E] hover:bg-[#b8935a] px-4 py-2 rounded-lg"
+                >
                   Connect
                 </button>
               </div>
