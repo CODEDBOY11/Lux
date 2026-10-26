@@ -3403,7 +3403,7 @@ export const AnalyticsDB = {
      paystack_customer_code text,
      paystack_subscription_code text,
      paystack_email_token text,       -- needed to cancel via API later
-     current_period_end timestamptz,
+     expires_at timestamptz,
      updated_at timestamptz default now(),
      created_at timestamptz default now()
    );
@@ -3455,7 +3455,7 @@ function toSubscription(hostId: string, r: any): HostSubscription {
     hostId,
     plan: r.plan,
     status: r.status,
-    currentPeriodEnd: r.current_period_end ?? undefined,
+    currentPeriodEnd: r.expires_at ?? undefined,
   };
 }
 
@@ -3464,7 +3464,7 @@ export const SubscriptionsDB = {
   async getByHost(hostId: string): Promise<HostSubscription> {
     const { data, error } = await supabase
       .from("host_subscriptions")
-      .select("plan, status, current_period_end")
+      .select("plan, status, expires_at")
       .eq("host_id", hostId)
       .maybeSingle();
     if (error) {
