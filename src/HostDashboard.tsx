@@ -5,6 +5,7 @@ import ReviewsSection from "./ReviewSection";
 import { WalletDB, RoomTypesDB, type RoomType } from "./index";
 import PropertyVerificationForm from "./Verification/Property";
 import { BankAccountPicker, type ResolvedAccount } from "./BankAccountPicker";
+import NotificationBell from "./NotificationBell";
 import ValidateBooking from "./ValidateBooking";
 import {
   HomeIcon,
@@ -17,7 +18,6 @@ import {
   ArrowRightOnRectangleIcon,
   Bars3Icon,
   XMarkIcon,
-  BellIcon,
   MagnifyingGlassIcon,
   MapPinIcon,
   HeartIcon,
@@ -409,11 +409,9 @@ const Sidebar = ({
 const TopBar = ({
   title,
   onHamburger,
-  pending,
 }: {
   title: string;
   onHamburger: () => void;
-  pending: number;
 }) => {
   const { user } = useAuth();
   const isGuest = user?.role === "guest";
@@ -436,15 +434,7 @@ const TopBar = ({
             className="bg-transparent text-sm text-gray-600 w-full outline-none placeholder:text-gray-400"
           />
         </div>
-        <button className="relative w-9 h-9 rounded-xl border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-colors">
-          <BellIcon className="w-4 h-4" />
-          {pending > 0 && (
-            <span
-              className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full"
-              style={{ background: isGuest ? "#6EADC9" : "#C9A96E" }}
-            />
-          )}
-        </button>
+        <NotificationBell userId={user!.id} isGuest={isGuest} />
         <div
           className="w-9 h-9 rounded-full flex items-center justify-center shadow-sm cursor-pointer text-white text-sm font-bold"
           style={{
@@ -3119,7 +3109,6 @@ const HostDashboardShell = ({
         <TopBar
           title={PAGE_TITLES[active]}
           onHamburger={() => setMobileOpen(true)}
-          pending={pending}
         />
         <main className="flex-1 overflow-hidden flex flex-col">
           {content()}
