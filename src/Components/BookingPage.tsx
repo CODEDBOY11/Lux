@@ -3302,15 +3302,61 @@ export default function BookingPage({
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: 6,
-                    fontSize: 13,
-                    color: "rgba(245,240,232,0.5)",
+                    gap: 10,
+                    flexWrap: "wrap",
                   }}
                 >
-                  <MapPinIcon
-                    style={{ width: 14, height: 14, color: "#C9A96E" }}
-                  />
-                  {hotel.location}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      fontSize: 13,
+                      color: "rgba(245,240,232,0.5)",
+                    }}
+                  >
+                    <MapPinIcon
+                      style={{ width: 14, height: 14, color: "#C9A96E" }}
+                    />
+                    {hotel.location}
+                  </div>
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                      hotel.location + (hotel.name ? ` ${hotel.name}` : ""),
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 5,
+                      padding: "4px 10px",
+                      borderRadius: 99,
+                      background: "rgba(201,169,110,0.08)",
+                      border: "1px solid rgba(201,169,110,0.25)",
+                      color: "#C9A96E",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: "0.04em",
+                      textDecoration: "none",
+                      transition: "all 0.15s",
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLAnchorElement).style.background =
+                        "rgba(201,169,110,0.15)";
+                      (e.currentTarget as HTMLAnchorElement).style.borderColor =
+                        "rgba(201,169,110,0.5)";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLAnchorElement).style.background =
+                        "rgba(201,169,110,0.08)";
+                      (e.currentTarget as HTMLAnchorElement).style.borderColor =
+                        "rgba(201,169,110,0.25)";
+                    }}
+                  >
+                    <MapPinIcon style={{ width: 11, height: 11 }} />
+                    View on Maps
+                  </a>
                 </div>
               </div>
             </div>
