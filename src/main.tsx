@@ -1,16 +1,15 @@
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
+import { Analytics } from "@vercel/analytics/react";
 import "./index.css";
 import App from "./App.tsx";
-import { inject } from "@vercel/analytics";
-
-inject();
 
 createRoot(document.getElementById("root")!).render(
   <HelmetProvider>
     <BrowserRouter>
       <App />
+      <Analytics />
     </BrowserRouter>
   </HelmetProvider>,
 );
