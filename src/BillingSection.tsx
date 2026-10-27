@@ -33,46 +33,52 @@ import { useAuth } from "./AuthContext";
 const fmt$ = (n: number) =>
   "₦" + n.toLocaleString("en-NG", { maximumFractionDigits: 0 });
 
-const fmtDate = (d: string) =>
-  new Date(d).toLocaleDateString("en-GB", {
+const fmtDate = (d?: string) => {
+  if (!d) return "—";
+
+  return new Date(d).toLocaleDateString("en-GB", {
     day: "numeric",
     month: "long",
     year: "numeric",
   });
+};
 
-const daysLeft = (expiresAt: string) => {
+const daysLeft = (expiresAt?: string) => {
+  if (!expiresAt) return 0;
+
   const diff = new Date(expiresAt).getTime() - Date.now();
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 };
 
-const subscriptionCreatedAt = (subscription: HostSubscription) => {
-  const fields = subscription as HostSubscription & {
-    createdAt?: string;
-    created_at?: string;
-    startDate?: string;
-    start_date?: string;
-  };
-  return (
-    fields.createdAt ??
-    fields.created_at ??
-    fields.startDate ??
-    fields.start_date ??
-    new Date().toISOString()
-  );
+const subscriptionExpiry = (startedAt?: string) => {
+  if (!startedAt) return new Date().toISOString();
+
+  const expiry = new Date(startedAt);
+  expiry.setMonth(expiry.getMonth() + 1);
+  return expiry.toISOString();
 };
 
-const subscriptionExpiresAt = (subscription: HostSubscription) => {
-  const expiresAt = new Date(subscriptionCreatedAt(subscription));
-  expiresAt.setMonth(expiresAt.getMonth() + 1);
-  return expiresAt.toISOString();
-};
+declare global {
+  interface Window {
+    PaystackPop: {
+      setup: (options: {
+        key: string;
+        email: string;
+        amount: number;
+        currency?: string;
+        ref: string;
+        metadata?: Record<string, unknown>;
+        onClose: () => void;
+        callback: (response: { reference: string; status: string }) => void;
+      }) => { openIframe: () => void };
+    };
+  }
+}
 
 /* ── pro features list ───────────────────────────────────────── */
 const PRO_FEATURES = [
-  "Occupancy board & booking calendar",
   "Sales analytics & revenue charts",
   "Staff management & attendance",
-  "Guest profiles & history",
   "Camera grid integration",
   "Priority listing placement",
   "Unlimited booking exports",
@@ -90,7 +96,7 @@ export default function BillingSection() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const isPro = subscription ? SubscriptionsDB.isPro(subscription) : false;
+  const isPro = subscription !== null && SubscriptionsDB.isPro(subscription);
 
   useEffect(() => {
     if (!user) return;
@@ -175,7 +181,7 @@ export default function BillingSection() {
         <h2 className="text-2xl font-bold text-gray-900 tracking-tight">
           Billing & Subscription
         </h2>
-        <p className="text-sm text-gray-500 mt-1">Manage your Zibra Pro plan</p>
+        <p className="text-sm text-gray-500 mt-1">Manage your Eden Pro plan</p>
       </div>
 
       {/* ── Active subscription card ── */}
@@ -208,20 +214,26 @@ export default function BillingSection() {
               </div>
               <div>
                 <div className="font-bold text-gray-900 text-base">
-                  Zibra Pro · Active
+                  Eden Pro · Active
                 </div>
                 <div className="text-xs text-gray-500 mt-0.5">
-                  Expires {fmtDate(subscriptionExpiresAt(subscription))} ·{" "}
+                  Expires{" "}
+                  {fmtDate(subscriptionExpiry(subscription.currentPeriodEnd))} ·{" "}
                   <span
                     style={{
                       color:
-                        daysLeft(subscriptionExpiresAt(subscription)) <= 5
+                        daysLeft(
+                          subscriptionExpiry(subscription.currentPeriodEnd),
+                        ) <= 5
                           ? "#dc2626"
                           : "#16a34a",
                       fontWeight: 700,
                     }}
                   >
-                    {daysLeft(subscriptionExpiresAt(subscription))} days left
+                    {daysLeft(
+                      subscriptionExpiry(subscription.currentPeriodEnd),
+                    )}{" "}
+                    days left
                   </span>
                 </div>
               </div>
@@ -244,7 +256,7 @@ export default function BillingSection() {
           </div>
 
           {/* Renew early prompt if ≤ 7 days left */}
-          {daysLeft(subscriptionExpiresAt(subscription)) <= 7 && (
+          {daysLeft(subscriptionExpiry(subscription.currentPeriodEnd)) <= 7 && (
             <div
               style={{
                 marginTop: 16,
@@ -273,7 +285,7 @@ export default function BillingSection() {
           )}
 
           {/* Renew button — only show when ≤ 7 days left */}
-          {daysLeft(subscriptionExpiresAt(subscription)) <= 7 && (
+          {daysLeft(subscriptionExpiry(subscription.currentPeriodEnd)) <= 7 && (
             <button
               onClick={handleSubscribe}
               disabled={paying}
@@ -352,7 +364,7 @@ export default function BillingSection() {
                 marginTop: 2,
               }}
             >
-              All Pro features are now unlocked. Enjoy Zibra Pro.
+              All Pro features are now unlocked. Enjoy Eden Pro.
             </p>
           </div>
         </div>
@@ -415,7 +427,7 @@ export default function BillingSection() {
                   letterSpacing: "0.04em",
                 }}
               >
-                Zibra Pro
+                Eden Pro
               </span>
             </div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
@@ -590,9 +602,9 @@ export default function BillingSection() {
                 alignItems: "center",
               }}
             >
-              <span>{fmtDate(subscriptionCreatedAt(subscription))}</span>
+              <span>{fmtDate(subscription.currentPeriodEnd)}</span>
               <span style={{ fontWeight: 600 }}>Pro Monthly</span>
-              <span>{fmt$(PRO_PLAN_PRICE_NGN)}</span>
+              <span>{fmt$(Number(subscription.plan))}</span>
               <span
                 style={{
                   background: "#dcfce7",

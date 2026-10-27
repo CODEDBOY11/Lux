@@ -26,6 +26,7 @@ import Footer from "./Components/footer/footer";
 import Hero from "./Components/Hero";
 import PrivacyPolicy from "./Components/Pivacypolicy";
 import TermsOfUse from "./Components/Termsofuse";
+import BiometricVerify from "./Components/BiometricVerify";
 
 import { ListingsDB, type Hotel, type Listing } from "./index";
 
@@ -159,10 +160,56 @@ function HomePage() {
   );
 }
 
-// Admin wrapper — passes logged-in user's id to AdminDashboard
+// ── Host dashboard wrapper with biometric gate ─────────────────
+function HostDashboardWrapper() {
+  const { user } = useAuth();
+  const [biometricPassed, setBiometricPassed] = useState(false);
+
+  // Reset gate if user logs out and back in
+  useEffect(() => {
+    if (!user) setBiometricPassed(false);
+  }, [user]);
+
+  if (!user) return <Navigate to="/host/login" replace />;
+
+  if (!biometricPassed) {
+    return (
+      <BiometricVerify
+        userId={user.id}
+        email={user.email ?? ""}
+        isHost={true}
+        onVerified={() => setBiometricPassed(true)}
+        onSignOut={() => supabase.auth.signOut()}
+      />
+    );
+  }
+
+  return <HostDashboard />;
+}
+
+// ── Admin dashboard wrapper with biometric gate ────────────────
 function AdminDashboardWrapper() {
   const { user } = useAuth();
+  const [biometricPassed, setBiometricPassed] = useState(false);
+
+  useEffect(() => {
+    if (!user) setBiometricPassed(false);
+  }, [user]);
+
   if (!user) return <Navigate to="/admin/login" replace />;
+
+  if (!biometricPassed) {
+    return (
+      <BiometricVerify
+        userId={user.id}
+        email={user.email ?? ""}
+        isHost={false} // blue accent for admin
+        onVerified={() => setBiometricPassed(true)}
+        onSignOut={() => supabase.auth.signOut()}
+      />
+    );
+  }
+
   return <AdminDashboard adminId={user.id} />;
 }
 
@@ -170,8 +217,6 @@ function AuthCallback() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Supabase automatically handles the token from the URL hash.
-    // onAuthStateChange in AuthContext fires and navigates from there.
     supabase.auth.getSession().then(({ data }) => {
       if (!data.session) {
         navigate("/login", { replace: true });
@@ -214,7 +259,7 @@ function AuthCallback() {
 function AppRoutes() {
   return (
     <Routes>
-      {/* Generic /login and /signup — simple chooser, no portal switcher */}
+      {/* Generic /login and /signup */}
       <Route
         path="/login"
         element={
@@ -232,7 +277,7 @@ function AppRoutes() {
         }
       />
 
-      {/* Guest auth — fixed role, no switcher */}
+      {/* Guest auth */}
       <Route
         path="/guest/login"
         element={
@@ -250,7 +295,7 @@ function AppRoutes() {
         }
       />
 
-      {/* Host auth — fixed role, no switcher */}
+      {/* Host auth */}
       <Route
         path="/host/login"
         element={
@@ -268,7 +313,7 @@ function AppRoutes() {
         }
       />
 
-      {/* Admin login — quiet, unlinked from public nav, no signup ever */}
+      {/* Admin login */}
       <Route
         path="/admin/login"
         element={
@@ -283,6 +328,7 @@ function AppRoutes() {
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/terms" element={<TermsOfUse />} />
 
+      {/* /dashboard — host with biometric gate */}
       <Route
         path="/dashboard"
         element={
@@ -290,10 +336,12 @@ function AppRoutes() {
             role="host"
             fallback={<Navigate to="/host/login" replace />}
           >
-            <HostDashboard />
+            <HostDashboardWrapper />
           </ProtectedRoute>
         }
       />
+
+      {/* /account — guest, no biometric */}
       <Route
         path="/account"
         element={
@@ -305,6 +353,8 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+
+      {/* /admin — admin with biometric gate */}
       <Route
         path="/admin"
         element={
