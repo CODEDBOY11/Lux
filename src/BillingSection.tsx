@@ -24,10 +24,10 @@ import {
   XCircleIcon,
   LockClosedIcon,
 } from "@heroicons/react/24/outline";
-import { supabase } from "../index";
-import { SubscriptionsDB, PRO_PLAN_PRICE_NGN } from "../index";
-import type { HostSubscription } from "../index";
-import { useAuth } from "../AuthContext";
+import { supabase } from "./index";
+import { SubscriptionsDB, PRO_PLAN_PRICE_NGN } from "./index";
+import type { HostSubscription } from "./index";
+import { useAuth } from "./AuthContext";
 
 /* ── helpers ─────────────────────────────────────────────────── */
 const fmt$ = (n: number) =>
@@ -48,7 +48,16 @@ const daysLeft = (expiresAt: string) => {
 declare global {
   interface Window {
     PaystackPop: {
-      setup: (opts: Record<string, unknown>) => { openIframe: () => void };
+      setup: (options: {
+        key: string;
+        email: string;
+        amount: number;
+        currency?: string;
+        ref: string;
+        metadata?: Record<string, unknown>;
+        onClose: () => void;
+        callback: (response: { reference: string; status: string }) => void;
+      }) => { openIframe: () => void };
     };
   }
 }
@@ -74,7 +83,7 @@ export default function BillingSection() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const isPro = SubscriptionsDB.isPro(subscription);
+  const isPro = subscription !== null && SubscriptionsDB.isPro(subscription);
 
   useEffect(() => {
     if (!user) return;
@@ -95,7 +104,6 @@ export default function BillingSection() {
       amount: PRO_PLAN_PRICE_NGN * 100, // kobo
       currency: "NGN",
       ref: `ZB-PRO-${user.id.slice(0, 8).toUpperCase()}-${Date.now()}`,
-      label: "Eden Pro — Monthly",
       metadata: {
         custom_fields: [
           {
@@ -106,7 +114,7 @@ export default function BillingSection() {
           { display_name: "Plan", variable_name: "plan", value: "pro_monthly" },
         ],
       },
-      onSuccess: async (txn: { reference: string }) => {
+      callback: async (txn: { reference: string; status: string }) => {
         setPaying(true);
         try {
           const { error: fnErr } = await supabase.functions.invoke(
@@ -196,18 +204,24 @@ export default function BillingSection() {
                   Eden Pro · Active
                 </div>
                 <div className="text-xs text-gray-500 mt-0.5">
-                  Expires {fmtDate(subscription.expiresAt)} ·{" "}
-                  <span
-                    style={{
-                      color:
-                        daysLeft(subscription.expiresAt) <= 5
-                          ? "#dc2626"
-                          : "#16a34a",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {daysLeft(subscription.expiresAt)} days left
-                  </span>
+                  {subscription.currentPeriodEnd ? (
+                    <>
+                      Expires {fmtDate(subscription.currentPeriodEnd)} ·{" "}
+                      <span
+                        style={{
+                          color:
+                            daysLeft(subscription.currentPeriodEnd) <= 5
+                              ? "#dc2626"
+                              : "#16a34a",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {daysLeft(subscription.currentPeriodEnd)} days left
+                      </span>
+                    </>
+                  ) : (
+                    "Expiration date unavailable"
+                  )}
                 </div>
               </div>
             </div>
@@ -229,75 +243,77 @@ export default function BillingSection() {
           </div>
 
           {/* Renew early prompt if ≤ 7 days left */}
-          {daysLeft(subscription.expiresAt) <= 7 && (
-            <div
-              style={{
-                marginTop: 16,
-                padding: "10px 14px",
-                background: "#fef9c3",
-                border: "1px solid #fef08a",
-                borderRadius: 10,
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <span style={{ fontSize: 14 }}>⚠️</span>
-              <p
+          {subscription.currentPeriodEnd &&
+            daysLeft(subscription.currentPeriodEnd) <= 7 && (
+              <div
                 style={{
-                  margin: 0,
-                  fontSize: 13,
-                  color: "#854d0e",
-                  fontWeight: 500,
+                  marginTop: 16,
+                  padding: "10px 14px",
+                  background: "#fef9c3",
+                  border: "1px solid #fef08a",
+                  borderRadius: 10,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
                 }}
               >
-                Your Pro plan expires soon. Renew now to keep your features
-                active.
-              </p>
-            </div>
-          )}
+                <span style={{ fontSize: 14 }}>⚠️</span>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 13,
+                    color: "#854d0e",
+                    fontWeight: 500,
+                  }}
+                >
+                  Your Pro plan expires soon. Renew now to keep your features
+                  active.
+                </p>
+              </div>
+            )}
 
           {/* Renew button — only show when ≤ 7 days left */}
-          {daysLeft(subscription.expiresAt) <= 7 && (
-            <button
-              onClick={handleSubscribe}
-              disabled={paying}
-              style={{
-                marginTop: 14,
-                width: "100%",
-                padding: "11px 16px",
-                background: paying ? "rgba(201,169,110,0.4)" : "#C9A96E",
-                color: "#fff",
-                border: "none",
-                borderRadius: 10,
-                fontWeight: 700,
-                fontSize: 13,
-                cursor: paying ? "not-allowed" : "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-              }}
-            >
-              {paying ? (
-                <>
-                  <ArrowPathIcon
-                    style={{
-                      width: 16,
-                      height: 16,
-                      animation: "spin 0.8s linear infinite",
-                    }}
-                  />
-                  Processing…
-                </>
-              ) : (
-                <>
-                  <ArrowPathIcon style={{ width: 16, height: 16 }} />
-                  Renew for {fmt$(PRO_PLAN_PRICE_NGN)}
-                </>
-              )}
-            </button>
-          )}
+          {subscription.currentPeriodEnd &&
+            daysLeft(subscription.currentPeriodEnd) <= 7 && (
+              <button
+                onClick={handleSubscribe}
+                disabled={paying}
+                style={{
+                  marginTop: 14,
+                  width: "100%",
+                  padding: "11px 16px",
+                  background: paying ? "rgba(201,169,110,0.4)" : "#C9A96E",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 10,
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: paying ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                }}
+              >
+                {paying ? (
+                  <>
+                    <ArrowPathIcon
+                      style={{
+                        width: 16,
+                        height: 16,
+                        animation: "spin 0.8s linear infinite",
+                      }}
+                    />
+                    Processing…
+                  </>
+                ) : (
+                  <>
+                    <ArrowPathIcon style={{ width: 16, height: 16 }} />
+                    Renew for {fmt$(PRO_PLAN_PRICE_NGN)}
+                  </>
+                )}
+              </button>
+            )}
         </div>
       )}
 
@@ -575,9 +591,13 @@ export default function BillingSection() {
                 alignItems: "center",
               }}
             >
-              <span>{fmtDate(subscription.startedAt)}</span>
+              <span>
+                {subscription.currentPeriodEnd
+                  ? fmtDate(subscription.currentPeriodEnd)
+                  : "—"}
+              </span>
               <span style={{ fontWeight: 600 }}>Pro Monthly</span>
-              <span>{fmt$(subscription.amountNgn)}</span>
+              <span>{fmt$(PRO_PLAN_PRICE_NGN)}</span>
               <span
                 style={{
                   background: "#dcfce7",
