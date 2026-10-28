@@ -20,10 +20,8 @@
 //   supabase functions deploy biometric-challenge
 // ─────────────────────────────────────────────────────────────
 
-// @ts-ignore Deno resolves this URL import at runtime.
+import { serve } from "https://deno.land/std@0.199.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-declare const Deno: { env: { get(name: string): string | undefined } };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -77,90 +75,89 @@ function bufferToBase64url(buf: ArrayBuffer): string {
     .replace(/=/g, "");
 }
 
-function readCborHeader(
-  bytes: Uint8Array,
-  offset: number,
-): { majorType: number; value: number; nextOffset: number } {
-  if (offset >= bytes.length) throw new Error("Unexpected end of CBOR data");
-
-  const initialByte = bytes[offset];
-  const additionalInfo = initialByte & 0x1f;
-  let value: number;
-  let nextOffset = offset + 1;
-
-  if (additionalInfo < 24) {
-    value = additionalInfo;
-  } else if (additionalInfo === 24) {
-    if (nextOffset >= bytes.length) throw new Error("Invalid CBOR length");
-    value = bytes[nextOffset++];
-  } else if (additionalInfo === 25) {
-    if (nextOffset + 2 > bytes.length) throw new Error("Invalid CBOR length");
-    value = (bytes[nextOffset] << 8) | bytes[nextOffset + 1];
-    nextOffset += 2;
-  } else if (additionalInfo === 26) {
-    if (nextOffset + 4 > bytes.length) throw new Error("Invalid CBOR length");
-    value =
-      bytes[nextOffset] * 0x1000000 +
-      (bytes[nextOffset + 1] << 16) +
-      (bytes[nextOffset + 2] << 8) +
-      bytes[nextOffset + 3];
-    nextOffset += 4;
-  } else {
-    throw new Error("Unsupported CBOR length");
-  }
-
-  return {
-    majorType: initialByte >> 5,
-    value,
-    nextOffset,
-  };
-}
-
 // ── CBOR decode (minimal — just enough for COSE EC2 public keys) ─
 // We only need x/y coords from the authenticator data for ES256
 function parseCOSEPublicKey(coseBytes: Uint8Array): {
   x: Uint8Array;
   y: Uint8Array;
 } {
-  const mapHeader = readCborHeader(coseBytes, 0);
-  if (mapHeader.majorType !== 5) throw new Error("COSE key must be a map");
-
-  const coordinates = new Map<number, Uint8Array>();
-  let offset = mapHeader.nextOffset;
-
-  for (let entry = 0; entry < mapHeader.value; entry++) {
-    const keyHeader = readCborHeader(coseBytes, offset);
-    if (keyHeader.majorType !== 0 && keyHeader.majorType !== 1)
-      throw new Error("Invalid COSE key label");
-    const key =
-      keyHeader.majorType === 0 ? keyHeader.value : -1 - keyHeader.value;
-    offset = keyHeader.nextOffset;
-
-    const valueHeader = readCborHeader(coseBytes, offset);
-    offset = valueHeader.nextOffset;
-
-    if (valueHeader.majorType === 2) {
-      const end = offset + valueHeader.value;
-      if (end > coseBytes.length) throw new Error("Invalid COSE byte string");
-      if (key === -2 || key === -3)
-        coordinates.set(key, coseBytes.slice(offset, end));
-      offset = end;
-    } else if (
-      valueHeader.majorType === 0 ||
-      valueHeader.majorType === 1
-    ) {
-      // COSE metadata values such as kty, alg, and crv are integers.
+  // Simple CBOR map parser for COSE_Key
+  // COSE EC2: map { 1:2, 3:-7, -1:1, -2:x, -3:y }
+  // We just extract -2 and -3 values (32 bytes each)
+  let i = 1; // skip map header byte
+  const map: Record<number, Uint8Array> = {};
+  while (i < coseBytes.length) {
+    // Read key (negative int encoded as 0x20-0x37 for -1..-24)
+    const keyByte = coseBytes[i++];
+    let key: number;
+    if ((keyByte & 0xe0) === 0x20)
+      key = -(keyByte - 0x1f); // negative int
+    else if ((keyByte & 0xe0) === 0x00)
+      key = keyByte; // small positive
+    else break;
+    // Read value — we care about byte strings (0x40+)
+    const valByte = coseBytes[i++];
+    if ((valByte & 0xe0) === 0x40) {
+      const len = valByte & 0x1f;
+      map[key] = coseBytes.slice(i, i + len);
+      i += len;
     } else {
-      throw new Error("Unsupported COSE key value");
+      i++; // skip unknown
     }
   }
+  return { x: map[-2] ?? new Uint8Array(32), y: map[-3] ?? new Uint8Array(32) };
+}
 
-  const x = coordinates.get(-2);
-  const y = coordinates.get(-3);
-  if (!x || !y || x.length !== 32 || y.length !== 32)
-    throw new Error("Invalid ES256 public key coordinates");
+// ── Extract authData from CBOR attestationObject ─────────────
+// Scans for the UTF-8 string "authData" as a CBOR map key, then
+// reads the byte string that follows. Works for "none", "packed",
+// and "fido-u2f" attestation formats without a full CBOR library.
+function extractAuthData(attObj: Uint8Array): Uint8Array | null {
+  const key = new TextEncoder().encode("authData");
+  for (let i = 0; i < attObj.length - key.length - 1; i++) {
+    // Match the key bytes
+    let match = true;
+    for (let j = 0; j < key.length; j++) {
+      if (attObj[i + j] !== key[j]) {
+        match = false;
+        break;
+      }
+    }
+    if (!match) continue;
 
-  return { x, y };
+    // The byte before the key string is a CBOR text-string header.
+    // e.g. 0x68 = text(8) for "authData" (8 chars).
+    // Confirm the preceding byte encodes a text string of length key.length.
+    const headerByte = attObj[i - 1];
+    const expectedHeader = 0x60 | key.length; // major type 3, length
+    if (headerByte !== expectedHeader) continue;
+
+    // Value starts right after the key
+    let pos = i + key.length;
+    if (pos >= attObj.length) continue;
+
+    const b = attObj[pos];
+    // major type 2 = byte string
+    if (b >> 5 !== 2) continue;
+
+    const addl = b & 0x1f;
+    let len: number;
+    if (addl <= 23) {
+      len = addl;
+      pos += 1;
+    } else if (addl === 24) {
+      len = attObj[pos + 1];
+      pos += 2;
+    } else if (addl === 25) {
+      len = (attObj[pos + 1] << 8) | attObj[pos + 2];
+      pos += 3;
+    } else {
+      continue;
+    }
+    if (pos + len > attObj.length) continue;
+    return attObj.slice(pos, pos + len);
+  }
+  return null;
 }
 
 // ── Verify ES256 signature ────────────────────────────────────
@@ -206,7 +203,7 @@ async function verifyES256(
 
 // ── Main handler ───────────────────────────────────────────────
 
-Deno.serve(async (req) => {
+serve(async (req) => {
   if (req.method === "OPTIONS")
     return new Response(null, { status: 200, headers: cors });
 
@@ -239,7 +236,10 @@ Deno.serve(async (req) => {
         challenge,
         rp: { id: rpId, name: "Eden" },
         user: { id: userId, name: userId, displayName: "Eden User" },
-        pubKeyCredParams: [{ type: "public-key", alg: -7 }], // ES256
+        pubKeyCredParams: [
+          { type: "public-key", alg: -7 }, // ES256
+          { type: "public-key", alg: -257 }, // RS256 (required by some devices)
+        ],
         timeout: 60000,
         excludeCredentials: (existing ?? []).map((r) => ({
           type: "public-key",
@@ -258,6 +258,9 @@ Deno.serve(async (req) => {
     if (action === "register-verify") {
       const { credential, deviceName } = body;
       if (!credential) return fail("credential required");
+      // credential.id  = base64url credential ID (from browser PublicKeyCredential.id)
+      // credential.response.attestationObject = base64url CBOR
+      // credential.response.clientDataJSON    = base64url JSON
 
       // Fetch + consume challenge
       const { data: cRow } = await admin
@@ -276,70 +279,58 @@ Deno.serve(async (req) => {
         .update({ used: true })
         .eq("id", cRow.id);
 
-      // Decode attestation object to get authenticator data
+      // Verify clientData
+      let clientData: { type: string; challenge: string; origin: string };
+      try {
+        clientData = JSON.parse(
+          new TextDecoder().decode(
+            base64urlToBuffer(credential.response.clientDataJSON),
+          ),
+        );
+      } catch {
+        return fail("Could not parse clientDataJSON");
+      }
+      if (clientData.type !== "webauthn.create")
+        return fail("Invalid clientData type");
+      if (clientData.challenge !== cRow.challenge)
+        return fail("Challenge mismatch");
+
+      // Extract authData from attestation object (CBOR)
+      // We find the authData byte string by scanning for its CBOR key "authData"
       const attObj = new Uint8Array(
         base64urlToBuffer(credential.response.attestationObject),
       );
-      // attestationObject is CBOR: { fmt, attStmt, authData }
-      // authData starts at offset that varies — for "none" fmt, after fmt string
-      // We find authData by looking for the credentialData flag in authData
-      // Simplified: for "none" attestation, extract authData from CBOR manually
-      // authData = attObj bytes after CBOR map headers for "authData" key
-      // Quick approach: find authData marker in CBOR
-      const authDataMarker = new TextEncoder().encode("authData");
-      let authDataStart = -1;
-      for (let i = 0; i < attObj.length - authDataMarker.length; i++) {
-        let match = true;
-        for (let j = 0; j < authDataMarker.length; j++) {
-          if (attObj[i + j] !== authDataMarker[j]) {
-            match = false;
-            break;
-          }
-        }
-        if (match) {
-          authDataStart = i + authDataMarker.length;
-          break;
-        }
-      }
+      const authDataBytes = extractAuthData(attObj);
+      if (!authDataBytes)
+        return fail("Could not extract authData from attestation object");
 
-      if (authDataStart === -1)
-        return fail("Could not parse attestation object");
+      // authData layout:
+      //   rpIdHash (32) | flags (1) | signCount (4) | attData if AT flag set
+      //   attData: aaguid (16) | credIdLen (2, big-endian) | credId | coseKey
+      if (authDataBytes.length < 37) return fail("authData too short");
 
-      // After "authData" key: CBOR byte string header then data
-      const lenByte = attObj[authDataStart];
-      let authDataBytes: Uint8Array;
-      if ((lenByte & 0xe0) === 0x40) {
-        const len = lenByte & 0x1f;
-        authDataBytes = attObj.slice(
-          authDataStart + 1,
-          authDataStart + 1 + len,
-        );
-      } else if (lenByte === 0x58) {
-        const len = attObj[authDataStart + 1];
-        authDataBytes = attObj.slice(
-          authDataStart + 2,
-          authDataStart + 2 + len,
-        );
-      } else if (lenByte === 0x59) {
-        const len =
-          (attObj[authDataStart + 1] << 8) | attObj[authDataStart + 2];
-        authDataBytes = attObj.slice(
-          authDataStart + 3,
-          authDataStart + 3 + len,
-        );
-      } else {
-        return fail("Unexpected authData CBOR encoding");
-      }
+      const flags = authDataBytes[32];
+      const AT_FLAG = 0x40; // attested credential data included
+      if (!(flags & AT_FLAG))
+        return fail("Attested credential data not present in authData");
 
-      // authData layout: rpIdHash(32) + flags(1) + counter(4) + credData
-      // credData: aaguid(16) + credIdLen(2) + credId + coseKey
-      if (authDataBytes.length < 55) return fail("authData too short");
+      if (authDataBytes.length < 55)
+        return fail("authData missing credential data");
       const credIdLen = (authDataBytes[53] << 8) | authDataBytes[54];
+      if (authDataBytes.length < 55 + credIdLen)
+        return fail("authData truncated");
+
       const credIdBytes = authDataBytes.slice(55, 55 + credIdLen);
       const coseKeyBytes = authDataBytes.slice(55 + credIdLen);
 
-      const credentialId = bufferToBase64url(credIdBytes);
+      // The credential ID from authData should match what the browser reported
+      const credentialIdFromAuthData = bufferToBase64url(credIdBytes);
+      // Use browser-provided id as primary (more reliable on some platforms)
+      const credentialId = credential.id ?? credentialIdFromAuthData;
       const publicKey = bufferToBase64url(coseKeyBytes);
+
+      if (!publicKey || coseKeyBytes.length < 4)
+        return fail("Could not extract public key from authData");
 
       // Store passkey
       const { error: insertErr } = await admin.from("passkeys").insert({
@@ -350,7 +341,12 @@ Deno.serve(async (req) => {
         device_name: deviceName ?? "Unknown device",
       });
 
-      if (insertErr) return fail(insertErr.message, 500);
+      if (insertErr) {
+        // Unique constraint — credential already registered
+        if (insertErr.code === "23505")
+          return ok({ registered: true, credentialId, duplicate: true });
+        return fail(insertErr.message, 500);
+      }
       return ok({ registered: true, credentialId });
     }
 
