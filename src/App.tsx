@@ -166,21 +166,19 @@ function useSessionReady() {
   const [sessionReady, setSessionReady] = useState(false);
 
   useEffect(() => {
-    // Check if we already have a session right now
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session?.access_token) {
-        setMemoryToken(data.session.access_token);
-        setSessionReady(true);
-      }
-    });
-
-    // Capture token immediately on every auth event
+    // Capture token immediately on every auth event — including INITIAL_SESSION
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-        setMemoryToken(session?.access_token ?? null);
-        setSessionReady(true);
+      if (
+        event === "INITIAL_SESSION" ||
+        event === "SIGNED_IN" ||
+        event === "TOKEN_REFRESHED"
+      ) {
+        if (session?.access_token) {
+          setMemoryToken(session.access_token);
+          setSessionReady(true);
+        }
       }
       if (event === "SIGNED_OUT") {
         setMemoryToken(null);
