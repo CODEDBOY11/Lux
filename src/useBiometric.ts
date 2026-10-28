@@ -68,7 +68,19 @@ async function isPlatformAuthenticatorAvailable(): Promise<boolean> {
   }
 }
 
+/** Wait until Supabase has a live session token (max 5 s) */
+async function waitForSession(maxMs = 5000): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < maxMs) {
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.access_token) return;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  throw new Error("Session not ready — please try again");
+}
+
 async function callBiometric(body: Record<string, unknown>) {
+  await waitForSession();
   const { data, error } = await supabase.functions.invoke(
     "biometric-challenge",
     { body },

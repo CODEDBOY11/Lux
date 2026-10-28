@@ -160,9 +160,38 @@ function HomePage() {
   );
 }
 
+// ── Wait for a confirmed SIGNED_IN session before rendering biometric ──
+function useSessionReady() {
+  const [sessionReady, setSessionReady] = useState(false);
+
+  useEffect(() => {
+    // Check if we already have a session right now
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session?.access_token) setSessionReady(true);
+    });
+
+    // Also listen for SIGNED_IN in case we're still in INITIAL_SESSION
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        setSessionReady(true);
+      }
+      if (event === "SIGNED_OUT") {
+        setSessionReady(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  return sessionReady;
+}
+
 // ── Host dashboard wrapper with biometric gate ─────────────────
 function HostDashboardWrapper() {
   const { user } = useAuth();
+  const sessionReady = useSessionReady();
   const [biometricPassed, setBiometricPassed] = useState(false);
 
   // Reset gate if user logs out and back in
@@ -171,6 +200,39 @@ function HostDashboardWrapper() {
   }, [user]);
 
   if (!user) return <Navigate to="/host/login" replace />;
+
+  // Don't mount BiometricVerify until session token is confirmed live
+  if (!sessionReady) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100vh",
+          background: "#0e0d0b",
+          color: "#C9A96E",
+          fontFamily: "Cormorant Garamond, serif",
+          fontSize: 22,
+          gap: 12,
+        }}
+      >
+        <span
+          style={{
+            width: 18,
+            height: 18,
+            border: "2px solid rgba(201,169,110,0.3)",
+            borderTopColor: "#C9A96E",
+            borderRadius: "50%",
+            display: "inline-block",
+            animation: "spin 0.8s linear infinite",
+          }}
+        />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        Securing session…
+      </div>
+    );
+  }
 
   if (!biometricPassed) {
     return (
@@ -190,6 +252,7 @@ function HostDashboardWrapper() {
 // ── Admin dashboard wrapper with biometric gate ────────────────
 function AdminDashboardWrapper() {
   const { user } = useAuth();
+  const sessionReady = useSessionReady();
   const [biometricPassed, setBiometricPassed] = useState(false);
 
   useEffect(() => {
@@ -197,6 +260,38 @@ function AdminDashboardWrapper() {
   }, [user]);
 
   if (!user) return <Navigate to="/admin/login" replace />;
+
+  if (!sessionReady) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100vh",
+          background: "#0e0d0b",
+          color: "#C9A96E",
+          fontFamily: "Cormorant Garamond, serif",
+          fontSize: 22,
+          gap: 12,
+        }}
+      >
+        <span
+          style={{
+            width: 18,
+            height: 18,
+            border: "2px solid rgba(201,169,110,0.3)",
+            borderTopColor: "#C9A96E",
+            borderRadius: "50%",
+            display: "inline-block",
+            animation: "spin 0.8s linear infinite",
+          }}
+        />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        Securing session…
+      </div>
+    );
+  }
 
   if (!biometricPassed) {
     return (
