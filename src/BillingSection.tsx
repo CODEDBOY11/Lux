@@ -24,53 +24,31 @@ import {
   XCircleIcon,
   LockClosedIcon,
 } from "@heroicons/react/24/outline";
-import { supabase } from "./index";
-import { SubscriptionsDB, PRO_PLAN_PRICE_NGN } from "./index";
-import type { HostSubscription } from "./index";
-import { useAuth } from "./AuthContext";
+import { supabase } from "../index";
+import { SubscriptionsDB, PRO_PLAN_PRICE_NGN } from "../index";
+import type { HostSubscription } from "../index";
+import { useAuth } from "../AuthContext";
 
 /* ── helpers ─────────────────────────────────────────────────── */
 const fmt$ = (n: number) =>
   "₦" + n.toLocaleString("en-NG", { maximumFractionDigits: 0 });
 
-const fmtDate = (d?: string) => {
-  if (!d) return "—";
-
-  return new Date(d).toLocaleDateString("en-GB", {
+const fmtDate = (d: string) =>
+  new Date(d).toLocaleDateString("en-GB", {
     day: "numeric",
     month: "long",
     year: "numeric",
   });
-};
 
-const daysLeft = (expiresAt?: string) => {
-  if (!expiresAt) return 0;
-
+const daysLeft = (expiresAt: string) => {
   const diff = new Date(expiresAt).getTime() - Date.now();
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-};
-
-const subscriptionExpiry = (startedAt?: string) => {
-  if (!startedAt) return new Date().toISOString();
-
-  const expiry = new Date(startedAt);
-  expiry.setMonth(expiry.getMonth() + 1);
-  return expiry.toISOString();
 };
 
 declare global {
   interface Window {
     PaystackPop: {
-      setup: (options: {
-        key: string;
-        email: string;
-        amount: number;
-        currency?: string;
-        ref: string;
-        metadata?: Record<string, unknown>;
-        onClose: () => void;
-        callback: (response: { reference: string; status: string }) => void;
-      }) => { openIframe: () => void };
+      setup: (opts: Record<string, unknown>) => { openIframe: () => void };
     };
   }
 }
@@ -96,7 +74,7 @@ export default function BillingSection() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const isPro = subscription !== null && SubscriptionsDB.isPro(subscription);
+  const isPro = SubscriptionsDB.isPro(subscription);
 
   useEffect(() => {
     if (!user) return;
@@ -117,6 +95,7 @@ export default function BillingSection() {
       amount: PRO_PLAN_PRICE_NGN * 100, // kobo
       currency: "NGN",
       ref: `ZB-PRO-${user.id.slice(0, 8).toUpperCase()}-${Date.now()}`,
+      label: "Eden Pro — Monthly",
       metadata: {
         custom_fields: [
           {
@@ -127,7 +106,7 @@ export default function BillingSection() {
           { display_name: "Plan", variable_name: "plan", value: "pro_monthly" },
         ],
       },
-      callback: async (txn: { reference: string; status: string }) => {
+      onSuccess: async (txn: { reference: string }) => {
         setPaying(true);
         try {
           const { error: fnErr } = await supabase.functions.invoke(
@@ -217,23 +196,17 @@ export default function BillingSection() {
                   Eden Pro · Active
                 </div>
                 <div className="text-xs text-gray-500 mt-0.5">
-                  Expires{" "}
-                  {fmtDate(subscriptionExpiry(subscription.currentPeriodEnd))} ·{" "}
+                  Expires {fmtDate(subscription.expiresAt)} ·{" "}
                   <span
                     style={{
                       color:
-                        daysLeft(
-                          subscriptionExpiry(subscription.currentPeriodEnd),
-                        ) <= 5
+                        daysLeft(subscription.expiresAt) <= 5
                           ? "#dc2626"
                           : "#16a34a",
                       fontWeight: 700,
                     }}
                   >
-                    {daysLeft(
-                      subscriptionExpiry(subscription.currentPeriodEnd),
-                    )}{" "}
-                    days left
+                    {daysLeft(subscription.expiresAt)} days left
                   </span>
                 </div>
               </div>
@@ -256,7 +229,7 @@ export default function BillingSection() {
           </div>
 
           {/* Renew early prompt if ≤ 7 days left */}
-          {daysLeft(subscriptionExpiry(subscription.currentPeriodEnd)) <= 7 && (
+          {daysLeft(subscription.expiresAt) <= 7 && (
             <div
               style={{
                 marginTop: 16,
@@ -285,7 +258,7 @@ export default function BillingSection() {
           )}
 
           {/* Renew button — only show when ≤ 7 days left */}
-          {daysLeft(subscriptionExpiry(subscription.currentPeriodEnd)) <= 7 && (
+          {daysLeft(subscription.expiresAt) <= 7 && (
             <button
               onClick={handleSubscribe}
               disabled={paying}
@@ -602,9 +575,9 @@ export default function BillingSection() {
                 alignItems: "center",
               }}
             >
-              <span>{fmtDate(subscription.currentPeriodEnd)}</span>
+              <span>{fmtDate(subscription.startedAt)}</span>
               <span style={{ fontWeight: 600 }}>Pro Monthly</span>
-              <span>{fmt$(Number(subscription.plan))}</span>
+              <span>{fmt$(subscription.amountNgn)}</span>
               <span
                 style={{
                   background: "#dcfce7",
