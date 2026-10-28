@@ -27,6 +27,7 @@ import Hero from "./Components/Hero";
 import PrivacyPolicy from "./Components/Pivacypolicy";
 import TermsOfUse from "./Components/Termsofuse";
 import BiometricVerify from "./Components/BiometricVerify";
+import { setMemoryToken } from "./useBiometric";
 
 import { ListingsDB, type Hotel, type Listing } from "./index";
 
@@ -160,24 +161,29 @@ function HomePage() {
   );
 }
 
-// ── Wait for a confirmed SIGNED_IN session before rendering biometric ──
+// ── Capture token in memory the moment auth fires (bypasses Edge storage block) ──
 function useSessionReady() {
   const [sessionReady, setSessionReady] = useState(false);
 
   useEffect(() => {
     // Check if we already have a session right now
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session?.access_token) setSessionReady(true);
+      if (data.session?.access_token) {
+        setMemoryToken(data.session.access_token);
+        setSessionReady(true);
+      }
     });
 
-    // Also listen for SIGNED_IN in case we're still in INITIAL_SESSION
+    // Capture token immediately on every auth event
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        setMemoryToken(session?.access_token ?? null);
         setSessionReady(true);
       }
       if (event === "SIGNED_OUT") {
+        setMemoryToken(null);
         setSessionReady(false);
       }
     });

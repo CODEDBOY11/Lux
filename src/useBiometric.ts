@@ -68,26 +68,55 @@ async function isPlatformAuthenticatorAvailable(): Promise<boolean> {
   }
 }
 
-/** Wait until Supabase has a live session token (max 5 s) */
-async function waitForSession(maxMs = 5000): Promise<void> {
-  const start = Date.now();
-  while (Date.now() - start < maxMs) {
-    const { data } = await supabase.auth.getSession();
-    if (data.session?.access_token) return;
-    await new Promise((r) => setTimeout(r, 200));
-  }
-  throw new Error("Session not ready — please try again");
+// In-memory token set from outside (bypasses Edge tracking prevention
+// which blocks ALL storage — localStorage AND sessionStorage)
+let _memoryToken: string | null = null;
+
+export function setMemoryToken(token: string | null) {
+  _memoryToken = token;
+}
+
+async function getToken(): Promise<string> {
+  // 1. Use in-memory token first (always available, no storage needed)
+  if (_memoryToken) return _memoryToken;
+
+  // 2. Fallback: try getSession (works in Chrome/Firefox)
+  const { data } = await supabase.auth.getSession();
+  if (data.session?.access_token) return data.session.access_token;
+
+  throw new Error("No session token available — please sign in again");
 }
 
 async function callBiometric(body: Record<string, unknown>) {
-  await waitForSession();
-  const { data, error } = await supabase.functions.invoke(
-    "biometric-challenge",
-    { body },
-  );
-  if (error) throw new Error(error.message);
-  if (data?.error) throw new Error(data.error);
-  return data?.data ?? data;
+  const token = await getToken();
+
+  // Use fetch directly with explicit Authorization header
+  // This bypasses supabase.functions.invoke which relies on storage
+  const SUPABASE_URL =
+    (supabase as unknown as { supabaseUrl: string }).supabaseUrl ??
+    import.meta.env.VITE_SUPABASE_URL;
+  const ANON_KEY =
+    (supabase as unknown as { supabaseKey: string }).supabaseKey ??
+    import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/biometric-challenge`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: ANON_KEY,
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`biometric-challenge ${res.status}: ${text}`);
+  }
+
+  const json = await res.json();
+  if (json?.error) throw new Error(json.error);
+  return json?.data ?? json;
 }
 
 /* ── Hook ──────────────────────────────────────────────────── */
