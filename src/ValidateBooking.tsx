@@ -9,12 +9,13 @@ import {
   CalendarDaysIcon,
   MoonIcon,
   UsersIcon,
+  BuildingOffice2Icon,
   CurrencyDollarIcon,
   ChevronDownIcon,
   ChevronUpIcon,
 } from "@heroicons/react/24/outline";
-import { BookingsDB } from "./index";
-import type { Booking } from "./index";
+import { BookingsDB, RoomTypesDB, RoomsDB } from "./index";
+import type { Booking, RoomType } from "./index";
 
 /* ── helpers ─────────────────────────────────────────── */
 const fmt$ = (n: number) =>
@@ -128,8 +129,11 @@ export default function ValidateBooking() {
   const [loading, setLoading] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [booking, setBooking] = useState<Booking | null>(null);
+  const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
+  const [selectedRoomTypeId, setSelectedRoomTypeId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  const [arrivalRoom, setArrivalRoom] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   /* Reset when panel closes */
@@ -142,8 +146,11 @@ export default function ValidateBooking() {
 
   const resetSearch = () => {
     setBooking(null);
+    setRoomTypes([]);
+    setSelectedRoomTypeId("");
     setError(null);
     setConfirmed(false);
+    setArrivalRoom(null);
     setRefInput("");
   };
 
@@ -154,7 +161,10 @@ export default function ValidateBooking() {
     setLoading(true);
     setError(null);
     setBooking(null);
+    setRoomTypes([]);
+    setSelectedRoomTypeId("");
     setConfirmed(false);
+    setArrivalRoom(null);
 
     try {
       const result = await BookingsDB.getByRef(ref);
@@ -164,9 +174,28 @@ export default function ValidateBooking() {
         );
       } else {
         setBooking(result);
+        const [room, types] = await Promise.all([
+          RoomsDB.byBooking(result.id),
+          result.roomTypeId
+            ? Promise.resolve([])
+            : RoomTypesDB.byListing(result.listingId),
+        ]);
+        setRoomTypes(types);
+        const matchingType = types.find(
+          (type) =>
+            type.name.toLocaleLowerCase() ===
+            result.roomTypeName?.trim().toLocaleLowerCase(),
+        );
+        setSelectedRoomTypeId(result.roomTypeId ?? matchingType?.id ?? "");
+        if (room?.status === "occupied") {
+          setArrivalRoom(room.label);
+          setConfirmed(true);
+        }
       }
-    } catch {
-      setError("Something went wrong. Please try again.");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Something went wrong. Please try again.",
+      );
     } finally {
       setLoading(false);
     }
@@ -176,12 +205,31 @@ export default function ValidateBooking() {
   const handleConfirmArrival = async () => {
     if (!booking) return;
     setConfirming(true);
+    setError(null);
     try {
-      await BookingsDB.updateStatus(booking.id, "confirmed");
-      setBooking({ ...booking, status: "confirmed" });
+      let confirmedBooking = booking;
+      if (!confirmedBooking.roomTypeId) {
+        const roomType = roomTypes.find(
+          (type) => type.id === selectedRoomTypeId,
+        );
+        if (!roomType) {
+          throw new Error("Select the room type for this booking first.");
+        }
+        confirmedBooking = await BookingsDB.setRoomType(
+          confirmedBooking.id,
+          roomType,
+        );
+        setBooking(confirmedBooking);
+      }
+      const room = await RoomsDB.assignBooking(confirmedBooking);
+      setArrivalRoom(room.label);
       setConfirmed(true);
-    } catch {
-      setError("Could not update booking status. Please try again.");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not assign a room to this booking. Please try again.",
+      );
     } finally {
       setConfirming(false);
     }
@@ -474,6 +522,16 @@ export default function ValidateBooking() {
                 value={`${booking.guests} guest${booking.guests !== 1 ? "s" : ""}`}
               />
               <InfoRow
+                icon={<BuildingOffice2Icon style={{ width: 14, height: 14 }} />}
+                label="Room Type"
+                value={
+                  booking.roomTypeName ??
+                  roomTypes.find((type) => type.id === selectedRoomTypeId)
+                    ?.name ??
+                  "Not specified"
+                }
+              />
+              <InfoRow
                 icon={<CurrencyDollarIcon style={{ width: 14, height: 14 }} />}
                 label="Total Paid"
                 value={fmt$(booking.totalAmount)}
@@ -487,28 +545,44 @@ export default function ValidateBooking() {
                 />
               )}
 
-              {/* Confirm arrival CTA */}
-              <div style={{ marginTop: 16 }}>
-                {confirmed || booking.status === "confirmed" ? (
-                  <div
+              {!booking.roomTypeId && !confirmed && booking.status !== "cancelled" && (
+                <label
+                  style={{
+                    display: "block",
+                    marginTop: 12,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: "#6b7280",
+                  }}
+                >
+                  Choose the booked room type
+                  <select
+                    value={selectedRoomTypeId}
+                    onChange={(e) => setSelectedRoomTypeId(e.target.value)}
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 8,
-                      padding: "11px 16px",
-                      background: "#dcfce7",
-                      border: "1px solid #bbf7d0",
-                      borderRadius: 10,
-                      color: "#166534",
-                      fontWeight: 700,
-                      fontSize: 13,
+                      display: "block",
+                      width: "100%",
+                      marginTop: 6,
+                      padding: "10px 12px",
+                      border: "1px solid #d1d5db",
+                      borderRadius: 8,
+                      background: "#fff",
+                      color: "#111827",
                     }}
                   >
-                    <CheckCircleIcon style={{ width: 18, height: 18 }} />
-                    Guest Arrival Confirmed
-                  </div>
-                ) : booking.status === "cancelled" ? (
+                    <option value="">Select a room type</option>
+                    {roomTypes.map((type) => (
+                      <option key={type.id} value={type.id}>
+                        {type.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {/* Confirm arrival CTA */}
+              <div style={{ marginTop: 16 }}>
+                {booking.status === "cancelled" ? (
                   <div
                     style={{
                       display: "flex",
@@ -527,10 +601,32 @@ export default function ValidateBooking() {
                     <XCircleIcon style={{ width: 18, height: 18 }} />
                     This booking has been cancelled
                   </div>
+                ) : confirmed ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 8,
+                      padding: "11px 16px",
+                      background: "#dcfce7",
+                      border: "1px solid #bbf7d0",
+                      borderRadius: 10,
+                      color: "#166534",
+                      fontWeight: 700,
+                      fontSize: 13,
+                    }}
+                  >
+                    <CheckCircleIcon style={{ width: 18, height: 18 }} />
+                    Guest checked in — {arrivalRoom}
+                  </div>
                 ) : (
                   <button
                     onClick={handleConfirmArrival}
-                    disabled={confirming}
+                    disabled={
+                      confirming ||
+                      (!booking.roomTypeId && !selectedRoomTypeId)
+                    }
                     style={{
                       width: "100%",
                       padding: "11px 16px",
@@ -542,7 +638,11 @@ export default function ValidateBooking() {
                       borderRadius: 10,
                       fontWeight: 700,
                       fontSize: 13,
-                      cursor: confirming ? "not-allowed" : "pointer",
+                      cursor:
+                        confirming ||
+                        (!booking.roomTypeId && !selectedRoomTypeId)
+                          ? "not-allowed"
+                          : "pointer",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -568,7 +668,7 @@ export default function ValidateBooking() {
                     ) : (
                       <>
                         <CheckCircleIcon style={{ width: 16, height: 16 }} />
-                        Confirm Guest Arrival
+                        Confirm Arrival & Occupy Room
                       </>
                     )}
                   </button>

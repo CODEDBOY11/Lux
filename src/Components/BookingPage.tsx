@@ -1705,6 +1705,8 @@ export default function BookingPage({
               guestPhone: booking.guest_phone,
               listingId: booking.listing_id,
               listingName: booking.listing_name,
+              roomTypeId: booking.room_type_id ?? undefined,
+              roomTypeName: booking.room_type_name ?? undefined,
               hostId: booking.host_id,
               checkIn: booking.check_in,
               checkOut: booking.check_out,

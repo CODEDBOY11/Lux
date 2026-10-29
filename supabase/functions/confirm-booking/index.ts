@@ -21,6 +21,8 @@ interface ConfirmBookingRequest {
   guestPhone?: string | null;
   listingId: string;
   listingName: string;
+  roomTypeId?: string | null;
+  roomTypeName?: string | null;
   hostId: string;
   checkIn: string;
   checkOut: string;
@@ -78,6 +80,8 @@ serve(async (req: Request): Promise<Response> => {
       guestPhone,
       listingId,
       listingName,
+      roomTypeId,
+      roomTypeName,
       hostId,
       checkIn,
       checkOut,
@@ -105,6 +109,18 @@ serve(async (req: Request): Promise<Response> => {
       return fail("Paid amount does not match booking total");
     }
 
+    if (roomTypeId) {
+      const { data: roomType, error: roomTypeError } = await supabaseAdmin
+        .from("room_types")
+        .select("id")
+        .eq("id", roomTypeId)
+        .eq("listing_id", listingId)
+        .eq("available", true)
+        .maybeSingle();
+      if (roomTypeError) return fail(roomTypeError.message, 500);
+      if (!roomType) return fail("Selected room type is not available");
+    }
+
     // 2. Prevent double-processing the same reference
     const { data: existingBooking } = await supabaseAdmin
       .from("bookings")
@@ -127,6 +143,8 @@ serve(async (req: Request): Promise<Response> => {
         guest_phone: guestPhone ?? "",
         listing_id: listingId,
         listing_name: listingName,
+        room_type_name: roomTypeName ?? null,
+        room_type_id: roomTypeId ?? null,
         host_id: hostId,
         check_in: checkIn,
         check_out: checkOut,

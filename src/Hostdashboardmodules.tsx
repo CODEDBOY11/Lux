@@ -46,11 +46,13 @@ import {
   GuestOrdersDB,
   CamerasDB,
   AnalyticsDB,
+  RoomTypesDB,
   SubscriptionsDB,
   PRO_PLAN_PRICE_NGN,
   type Booking,
   type Hotel,
   type Room,
+  type RoomType,
   type RoomOccupancyStatus,
   type StaffMember,
   type StaffRole,
@@ -197,10 +199,13 @@ export const OccupancyBoard = () => {
   const [hotels, setHotels] = useState<Hotel[]>([]);
   const [listingId, setListingId] = useState<string>("");
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [newLabel, setNewLabel] = useState("");
+  const [newRoomTypeId, setNewRoomTypeId] = useState("");
   const [adding, setAdding] = useState(false);
+  const [occupancyError, setOccupancyError] = useState("");
 
   useEffect(() => {
     if (!user) return;
@@ -222,6 +227,14 @@ export const OccupancyBoard = () => {
   };
   useEffect(load, [listingId]);
 
+  useEffect(() => {
+    if (!listingId) {
+      setRoomTypes([]);
+      return;
+    }
+    RoomTypesDB.byListing(listingId).then(setRoomTypes);
+  }, [listingId]);
+
   const bookingById = useMemo(
     () => new Map(bookings.map((b) => [b.id, b])),
     [bookings],
@@ -237,12 +250,43 @@ export const OccupancyBoard = () => {
   };
 
   const addRoom = async () => {
-    if (!listingId || !newLabel.trim()) return;
+    if (!listingId || !newLabel.trim() || !newRoomTypeId) return;
     setAdding(true);
-    const room = await RoomsDB.add({ listingId, label: newLabel.trim() });
-    setRooms((p) => [...p, room]);
-    setNewLabel("");
-    setAdding(false);
+    setOccupancyError("");
+    try {
+      const room = await RoomsDB.add({
+        listingId,
+        roomTypeId: newRoomTypeId,
+        label: newLabel.trim(),
+      });
+      setRooms((p) => [...p, room]);
+      setNewLabel("");
+    } catch (error) {
+      setOccupancyError(
+        error instanceof Error ? error.message : "Could not add this room.",
+      );
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const changeRoomType = async (room: Room, roomTypeId: string) => {
+    setOccupancyError("");
+    try {
+      const updated = await RoomsDB.updateRoomType(
+        room.id,
+        roomTypeId || null,
+      );
+      setRooms((current) =>
+        current.map((item) => (item.id === room.id ? updated : item)),
+      );
+    } catch (error) {
+      setOccupancyError(
+        error instanceof Error
+          ? error.message
+          : "Could not update this room's type.",
+      );
+    }
   };
 
   const counts = useMemo(() => {
@@ -283,8 +327,20 @@ export const OccupancyBoard = () => {
             placeholder="e.g. Room 305"
             className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#C9A96E] bg-white w-32"
           />
+          <select
+            value={newRoomTypeId}
+            onChange={(e) => setNewRoomTypeId(e.target.value)}
+            className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#C9A96E] bg-white"
+          >
+            <option value="">Select room type</option>
+            {roomTypes.map((roomType) => (
+              <option key={roomType.id} value={roomType.id}>
+                {roomType.name}
+              </option>
+            ))}
+          </select>
           <button
-            disabled={adding || !newLabel.trim()}
+            disabled={adding || !newLabel.trim() || !newRoomTypeId}
             onClick={addRoom}
             className="text-xs font-semibold text-white bg-[#C9A96E] hover:bg-[#b8935a] px-3.5 py-2.5 rounded-xl disabled:opacity-50 whitespace-nowrap"
           >
@@ -292,6 +348,18 @@ export const OccupancyBoard = () => {
           </button>
         </div>
       </div>
+
+      {roomTypes.length === 0 && (
+        <p className="text-xs text-amber-700 bg-amber-50 rounded-xl px-4 py-3 mb-4">
+          Add an available room type to this property before creating rooms or
+          checking guests in.
+        </p>
+      )}
+      {occupancyError && (
+        <p className="text-xs text-red-600 bg-red-50 rounded-xl px-4 py-3 mb-4">
+          {occupancyError}
+        </p>
+      )}
 
       <div className="flex gap-3 flex-wrap mb-6">
         {(Object.keys(OCC_CONFIG) as RoomOccupancyStatus[]).map((s) => (
@@ -349,6 +417,7 @@ export const OccupancyBoard = () => {
                 {r.status === "occupied" && booking ? (
                   <div className="text-xs text-gray-500 space-y-0.5 mb-3">
                     <p className="truncate">👤 {booking.guestName}</p>
+                    <p>Ref: {booking.ref}</p>
                     <p>
                       {fmtDate(booking.checkIn)} → {fmtDate(booking.checkOut)}
                     </p>
@@ -360,6 +429,20 @@ export const OccupancyBoard = () => {
                       : "No recent activity"}
                   </p>
                 )}
+                <select
+                  aria-label={`Room type for ${r.label}`}
+                  value={r.roomTypeId ?? ""}
+                  disabled={!!r.currentBookingId}
+                  onChange={(e) => changeRoomType(r, e.target.value)}
+                  className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 mb-2 outline-none focus:border-[#C9A96E] bg-gray-50 text-gray-600"
+                >
+                  <option value="">Unassigned room type</option>
+                  {roomTypes.map((roomType) => (
+                    <option key={roomType.id} value={roomType.id}>
+                      {roomType.name}
+                    </option>
+                  ))}
+                </select>
                 <select
                   value={r.status}
                   onChange={(e) =>

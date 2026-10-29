@@ -161,6 +161,8 @@ export interface Booking {
   guestEmail: string;
   listingId: string;
   listingName: string;
+  roomTypeId?: string;
+  roomTypeName?: string;
   hostId: string;
   checkIn: string;
   checkOut: string;
@@ -238,6 +240,8 @@ function toBooking(r: any): Booking {
     guestEmail: r.guest_email,
     listingId: r.listing_id,
     listingName: r.listing_name,
+    roomTypeId: r.room_type_id ?? undefined,
+    roomTypeName: r.room_type_name ?? undefined,
     hostId: r.host_id,
     checkIn: r.check_in,
     checkOut: r.check_out,
@@ -853,6 +857,20 @@ export const BookingsDB = {
       .eq("ref", ref)
       .maybeSingle();
     return data ? toBooking(data) : null;
+  },
+
+  async setRoomType(id: string, roomType: RoomType): Promise<Booking> {
+    const { data, error } = await supabase
+      .from("bookings")
+      .update({
+        room_type_id: roomType.id,
+        room_type_name: roomType.name,
+      })
+      .eq("id", id)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return toBooking(data);
   },
 
   /** Returns all booked date ranges for a listing (for calendar UI) */
@@ -2507,6 +2525,11 @@ export const RefundRequestsDB = {
    NEW TABLES — run in Supabase SQL Editor:
    ─────────────────────────────────────────
    -- Physical rooms (occupancy board / booking calendar)
+   -- Run once on existing projects so new bookings retain their room type:
+   alter table bookings
+     add column if not exists room_type_id uuid
+       references room_types(id) on delete set null;
+
    create table rooms (
      id uuid primary key default gen_random_uuid(),
      listing_id uuid references listings(id) on delete cascade not null,
@@ -2682,6 +2705,92 @@ export const RoomsDB = {
       .single();
     if (error) throw new Error(error.message);
     return toRoom(row);
+  },
+
+  async updateRoomType(id: string, roomTypeId: string | null): Promise<Room> {
+    const { data: row, error } = await supabase
+      .from("rooms")
+      .update({ room_type_id: roomTypeId })
+      .eq("id", id)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return toRoom(row);
+  },
+
+  async byBooking(bookingId: string): Promise<Room | null> {
+    const { data, error } = await supabase
+      .from("rooms")
+      .select("*")
+      .eq("current_booking_id", bookingId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? toRoom(data) : null;
+  },
+
+  async assignBooking(booking: Booking): Promise<Room> {
+    if (booking.status !== "confirmed") {
+      throw new Error("Only confirmed bookings can be checked in.");
+    }
+    if (!booking.roomTypeId) {
+      throw new Error(
+        "This booking has no room type saved. Assign a room type to the booking before check-in.",
+      );
+    }
+
+    const existing = await RoomsDB.byBooking(booking.id);
+    if (existing) {
+      if (existing.roomTypeId !== booking.roomTypeId) {
+        throw new Error(
+          "The room already assigned to this booking does not match the booking's room type.",
+        );
+      }
+      if (existing.status === "occupied") return existing;
+      const { data, error } = await supabase
+        .from("rooms")
+        .update({ status: "occupied" })
+        .eq("id", existing.id)
+        .eq("current_booking_id", booking.id)
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      return toRoom(data);
+    }
+
+    const { data: roomRows, error: roomsError } = await supabase
+      .from("rooms")
+      .select("*")
+      .eq("listing_id", booking.listingId)
+      .order("label", { ascending: true });
+    if (roomsError) throw new Error(roomsError.message);
+    const rooms = (roomRows ?? []).map(toRoom);
+    const room = rooms.find(
+      (candidate) =>
+        candidate.roomTypeId === booking.roomTypeId &&
+        candidate.status === "vacant" &&
+        !candidate.currentBookingId,
+    );
+    if (!room) {
+      throw new Error(
+        "No vacant room is assigned to this booking's room type. Assign a vacant room to the matching room type on the Occupancy page, then try again.",
+      );
+    }
+
+    const { data, error } = await supabase
+      .from("rooms")
+      .update({ status: "occupied", current_booking_id: booking.id })
+      .eq("id", room.id)
+      .eq("status", "vacant")
+      .is("current_booking_id", null)
+      .select()
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) {
+      throw new Error(
+        "That room is no longer vacant. Refresh the occupancy page and try again.",
+      );
+    }
+    return toRoom(data);
   },
 
   async updateStatus(
