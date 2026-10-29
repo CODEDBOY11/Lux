@@ -2687,7 +2687,7 @@ const HostHome = ({
           </div>
           <div className="flex-1 relative z-10 min-w-0">
             <p className="text-white font-bold text-sm">
-              Unlock Pro — occupancy, staff, guest CRM, analytics & cameras
+              Unlock Pro — staff, analytics & cameras
             </p>
             <p className="text-white/50 text-xs mt-0.5">
               Starting at {fmt$(PRO_PLAN_PRICE_NGN)}/month · cancel anytime

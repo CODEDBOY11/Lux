@@ -33,7 +33,6 @@ import {
   ExclamationTriangleIcon,
   LockClosedIcon,
   SparklesIcon,
-  CalendarDaysIcon,
 } from "@heroicons/react/24/outline";
 import { useAuth } from "./AuthContext";
 import {
@@ -71,28 +70,11 @@ export const PRO_FEATURES: Record<
   string,
   { title: string; blurb: string; icon: typeof BuildingOffice2Icon }
 > = {
-  occupancy: {
-    title: "Room Occupancy",
-    blurb:
-      "See which rooms are filled, vacant, cleaning or under maintenance — live, across every property.",
-    icon: BuildingOffice2Icon,
-  },
-  calendar: {
-    title: "Booking Calendar",
-    blurb: "Click any date to see exactly which rooms are booked that day.",
-    icon: CalendarDaysIcon,
-  },
   analytics: {
     title: "Sales Analytics",
     blurb:
       "Revenue charts across bookings and in-stay orders, plus your top-earning properties.",
     icon: ChartBarIcon,
-  },
-  guests: {
-    title: "Guest Profiles",
-    blurb:
-      "Total spend, stay history, and every snack or drink a guest has ordered — all in one view.",
-    icon: UserGroupIcon,
   },
   staff: {
     title: "Staff Management",
