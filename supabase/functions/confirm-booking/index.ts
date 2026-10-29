@@ -122,13 +122,21 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     // 2. Prevent double-processing the same reference
-    const { data: existingBooking } = await supabaseAdmin
+    const { data: existingBooking, error: existingBookingError } =
+      await supabaseAdmin
       .from("bookings")
-      .select("id")
+      .select("*")
       .eq("ref", reference)
       .maybeSingle();
+    if (existingBookingError) {
+      console.error(
+        "confirm-booking idempotency lookup failed:",
+        existingBookingError.message,
+      );
+      return fail("Could not check whether this booking was already processed", 500);
+    }
     if (existingBooking) {
-      return ok({ alreadyProcessed: true, bookingId: existingBooking.id });
+      return ok({ alreadyProcessed: true, booking: existingBooking });
     }
 
     // 3. Create the booking — the DB exclusion constraint is the final
@@ -212,7 +220,9 @@ serve(async (req: Request): Promise<Response> => {
     ]);
 
     return ok({ booking });
-  } catch (e: any) {
-    return fail(e.message ?? "Unexpected error", 500);
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Unexpected error";
+    console.error("confirm-booking failed:", e);
+    return fail(message, 500);
   }
 });

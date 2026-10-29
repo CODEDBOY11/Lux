@@ -1685,10 +1685,21 @@ export default function BookingPage({
               specialRequests: guestInfo.requests,
             },
           })
-          .then(({ data, error }) => {
+          .then(async ({ data, error }) => {
             if (error || !data?.data?.booking) {
+              let failureMessage = error?.message;
+              if (error?.context instanceof Response) {
+                try {
+                  const body = await error.context.clone().json();
+                  if (typeof body?.error === "string") {
+                    failureMessage = body.error;
+                  }
+                } catch {
+                  // Keep the Functions client message when the response is not JSON.
+                }
+              }
               setSaveError(
-                error?.message ??
+                failureMessage ??
                   "Payment succeeded but the booking could not be confirmed. If you were not refunded, contact support with reference " +
                     response.reference,
               );
