@@ -40,8 +40,8 @@ const ROLE_CONFIG: Record<
     bgImage:
       "https://images.unsplash.com/photo-1540202404-a2f29d618464?w=900&q=80",
     heading: "Become a Host",
-    subheading: "List your property and start earning with LuxStay.",
-    welcomeTitle: "Welcome to LuxStay",
+    subheading: "List your property and start earning with EDEN.",
+    welcomeTitle: "Welcome to EDEN",
     welcomeBody:
       "Your host account has been created. You can now list your first property and start receiving bookings.",
     loginPath: "/host/login",
@@ -60,7 +60,7 @@ const ROLE_CONFIG: Record<
       "https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=900&q=80",
     heading: "Create your account",
     subheading: "Browse and book verified luxury stays.",
-    welcomeTitle: "Welcome to LuxStay",
+    welcomeTitle: "Welcome to EDEN",
     welcomeBody:
       "Your guest account is ready. You can now browse and book luxury stays.",
     loginPath: "/guest/login",
@@ -204,11 +204,11 @@ const SignupPage = ({ fixedRole }: { fixedRole: FixedRole }) => {
         <div className="relative z-10 flex items-center gap-2.5">
           <img
             src={logo}
-            alt="LuxStay Logo"
+            alt="EDEN Logo"
             className="w-11 h-11 sm:w-12 sm:h-12"
           />
           <span className="font-['Cormorant_Garamond'] text-xl tracking-wide text-[#f5f0e8]">
-            LuxStay
+            EDEN
           </span>
         </div>
         <div className="relative z-10">
@@ -216,7 +216,7 @@ const SignupPage = ({ fixedRole }: { fixedRole: FixedRole }) => {
             "{config.quote}"
           </blockquote>
           <cite className="text-xs text-[rgba(245,240,232,0.45)] uppercase tracking-widest not-italic">
-            — LuxStay {fixedRole === "host" ? "Host Promise" : "Guest Network"}
+            — EDEN {fixedRole === "host" ? "Host Promise" : "Guest Network"}
           </cite>
           <div className="flex gap-8 mt-10">
             {config.stats.map(([n, l]) => (

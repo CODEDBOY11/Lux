@@ -1618,7 +1618,7 @@ export default function BookingPage({
   };
 
   const generateRef = () =>
-    `ZB-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+    `EDEN-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
 
   const handlePayWithPaystack = () => {
     if (!window.PaystackPop) {
@@ -2878,7 +2878,7 @@ export default function BookingPage({
             <button
               onClick={() => {
                 const shareUrl = `https://lux-d1ok.vercel.app/api/og-listings?id=${hotel.id}`;
-                const message = `Check out ${hotel.name} in ${hotel.city} on LuxStay!\n₦${hotel.pricePerNight.toLocaleString()}/night 🏡\n${shareUrl}`;
+                const message = `Check out ${hotel.name} in ${hotel.city} on EDEN!\n₦${hotel.pricePerNight.toLocaleString()}/night 🏡\n${shareUrl}`;
                 if (navigator.share) {
                   navigator
                     .share({ title: hotel.name, text: message, url: shareUrl })

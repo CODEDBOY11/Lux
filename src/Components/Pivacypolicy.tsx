@@ -34,7 +34,7 @@ const PrivacyPolicy = () => {
 
         <Section title="Who we are">
           <p>
-            LuxStay is operated as an individual / sole proprietorship. For any
+            EDEN is operated as an individual / sole proprietorship. For any
             privacy questions, you can reach us at{" "}
             <a
               href="mailto:support@luxstay.com"
@@ -42,7 +42,7 @@ const PrivacyPolicy = () => {
             >
               support@luxstay.com
             </a>
-            . As LuxStay grows, this section will be updated to reflect any
+            . As EDEN grows, this section will be updated to reflect any
             formal business registration.
           </p>
         </Section>
@@ -85,16 +85,16 @@ const PrivacyPolicy = () => {
 
         <Section title="Payments">
           <p>
-            All payments on LuxStay are processed by{" "}
+            All payments on EDEN are processed by{" "}
             <strong className="text-[#f5f0e8]">Paystack</strong>, a licensed
-            payment processor. LuxStay does not store your card number, bank
+            payment processor. EDEN does not store your card number, bank
             details, or CVV — these are handled entirely within Paystack's
             secure checkout. We only receive confirmation that a payment
             succeeded, along with a transaction reference.
           </p>
           <p>
             When a booking is paid, 90% of the amount is credited to the host's
-            wallet and 10% is retained by LuxStay as a platform fee. Hosts can
+            wallet and 10% is retained by EDEN as a platform fee. Hosts can
             request a withdrawal to their bank account, which is manually
             reviewed before payout.
           </p>
@@ -114,7 +114,7 @@ const PrivacyPolicy = () => {
 
         <Section title="Cookies and local storage">
           <p>
-            LuxStay uses your browser's local session storage to keep you signed
+            EDEN uses your browser's local session storage to keep you signed
             in and to remember temporary preferences (such as where to redirect
             you after logging in). We do not use third-party advertising cookies
             or trackers.
@@ -155,14 +155,14 @@ const PrivacyPolicy = () => {
 
         <Section title="Children">
           <p>
-            LuxStay is not intended for use by anyone under the age of 18. We do
+            EDEN is not intended for use by anyone under the age of 18. We do
             not knowingly collect information from minors.
           </p>
         </Section>
 
         <Section title="Changes to this policy">
           <p>
-            We may update this Privacy Policy as LuxStay grows and adds new
+            We may update this Privacy Policy as EDEN grows and adds new
             features. Material changes will be reflected by updating the "Last
             updated" date above.
           </p>

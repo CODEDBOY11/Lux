@@ -502,7 +502,7 @@ export default function ExplorePage() {
         >
           <div className="w-[18px] h-[18px] bg-[#C9A96E] rotate-45 rounded-sm shrink-0" />
           <span className="font-['Cormorant_Garamond'] text-xl text-[#f5f0e8] tracking-wide">
-            LuxStay
+            EDEN
           </span>
         </div>
 
@@ -902,7 +902,7 @@ export default function ExplorePage() {
           <p className="text-center text-[rgba(245,240,232,0.2)] text-xs mt-12">
             Showing all {displayed.length} available{" "}
             {displayed.length === 1 ? "property" : "properties"} · Powered by
-            LuxStay
+            EDEN
           </p>
         )}
       </div>

@@ -329,7 +329,7 @@ const Sidebar = ({
                 whiteSpace: "nowrap",
               }}
             >
-              LuxStay
+              EDEN
             </span>
           </div>
         </div>

@@ -306,7 +306,7 @@ export default function ValidateBooking() {
                 value={refInput}
                 onChange={(e) => setRefInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                placeholder="e.g. ZB-4827"
+                placeholder="e.g. EDEN-4827"
                 style={{
                   width: "100%",
                   padding: "10px 14px 10px 38px",

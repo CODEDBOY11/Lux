@@ -34,17 +34,17 @@ const TermsOfUse = () => {
 
         <Section title="Acceptance of these terms">
           <p>
-            By creating an account or using LuxStay, you agree to these Terms of
-            Use. If you do not agree, please do not use the platform. LuxStay is
+            By creating an account or using EDEN, you agree to these Terms of
+            Use. If you do not agree, please do not use the platform. EDEN is
             currently operated as an individual / sole proprietorship; this
             section will be updated if that changes.
           </p>
         </Section>
 
-        <Section title="Who can use LuxStay">
+        <Section title="Who can use EDEN">
           <p>
             You must be at least 18 years old to create an account, list a
-            property, or make a booking on LuxStay. By signing up, you confirm
+            property, or make a booking on EDEN. By signing up, you confirm
             that the information you provide is accurate and that you have the
             legal right to enter into this agreement.
           </p>
@@ -52,7 +52,7 @@ const TermsOfUse = () => {
 
         <Section title="Accounts and roles">
           <p>
-            LuxStay has two account types:{" "}
+            EDEN has two account types:{" "}
             <strong className="text-[#f5f0e8]">Guest</strong> accounts, for
             browsing and booking properties, and{" "}
             <strong className="text-[#f5f0e8]">Host</strong> accounts, for
@@ -69,8 +69,8 @@ const TermsOfUse = () => {
           <p>
             Hosts must submit identity verification (government ID, selfie,
             proof of ownership, and a recent utility bill) before a listing can
-            go live. LuxStay reviews submissions and may approve, reject, or
-            request more information before a property is published. LuxStay
+            go live. EDEN reviews submissions and may approve, reject, or
+            request more information before a property is published. EDEN
             reserves the right to remove any listing that violates these terms
             or is found to be fraudulent, misleading, or unsafe.
           </p>
@@ -95,7 +95,7 @@ const TermsOfUse = () => {
             <strong className="text-[#f5f0e8]">48 hours before check-in</strong>
             . Cancellations made within 48 hours of check-in are not eligible
             for a refund unless the host agrees otherwise. To request a
-            cancellation, contact the host directly through LuxStay messaging or
+            cancellation, contact the host directly through EDEN messaging or
             email{" "}
             <a
               href="mailto:support@luxstay.com"
@@ -114,8 +114,8 @@ const TermsOfUse = () => {
         <Section title="Payments and payouts">
           <p>
             All payments are processed securely through Paystack. On every
-            completed booking, LuxStay retains a 10% platform fee, and the
-            remaining 90% is credited to the host's LuxStay wallet. Hosts may
+            completed booking, EDEN retains a 10% platform fee, and the
+            remaining 90% is credited to the host's EDEN wallet. Hosts may
             request a withdrawal of their wallet balance to a linked bank
             account; withdrawal requests are reviewed manually before payment is
             released and may take 24–48 hours to process.
@@ -129,7 +129,7 @@ const TermsOfUse = () => {
             <li>Provide false identity or verification documents</li>
             <li>Use the platform for any unlawful purpose</li>
             <li>
-              Attempt to bypass LuxStay's payment system to avoid platform fees
+              Attempt to bypass EDEN's payment system to avoid platform fees
             </li>
             <li>
               Harass, threaten, or abuse other users through messaging or
@@ -149,14 +149,14 @@ const TermsOfUse = () => {
         <Section title="Reviews">
           <p>
             Only guests with a completed, paid booking may leave a review for
-            that stay. Reviews must reflect a genuine experience. LuxStay may
+            that stay. Reviews must reflect a genuine experience. EDEN may
             remove reviews that are fraudulent, abusive, or violate these terms.
           </p>
         </Section>
 
         <Section title="Limitation of liability">
           <p>
-            LuxStay acts as a platform connecting guests and hosts. We are not
+            EDEN acts as a platform connecting guests and hosts. We are not
             the owner or operator of any listed property and are not responsible
             for the condition of a property, the conduct of a host or guest, or
             any dispute arising between them, except as required by applicable
@@ -167,7 +167,7 @@ const TermsOfUse = () => {
 
         <Section title="Changes to these terms">
           <p>
-            We may update these Terms of Use as LuxStay grows and adds new
+            We may update these Terms of Use as EDEN grows and adds new
             features. Continued use of the platform after changes are posted
             constitutes acceptance of the updated terms.
           </p>

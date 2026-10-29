@@ -19,7 +19,7 @@ interface SEOProps {
   };
 }
 
-const SITE_NAME = "LuxStay";
+const SITE_NAME = "EDEN";
 const SITE_URL = "https://yourdomain.com"; // ← replace with your actual domain
 const DEFAULT_IMAGE = "https://yourdomain.com/og-default.jpg"; // ← make a nice 1200x630 image
 const DEFAULT_DESCRIPTION =

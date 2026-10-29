@@ -2545,7 +2545,7 @@ export default function AdminDashboard({ adminId }: { adminId: string }) {
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-[#C9A96E] rotate-45 rounded-sm" />
             <span className="font-['Cormorant_Garamond'] text-base tracking-wide text-[#f5f0e8]">
-              LuxStay
+              EDEN
             </span>
           </div>
           <div className="mt-2 flex items-center gap-1.5 px-2 py-1 rounded-full bg-[rgba(201,169,110,0.08)] border border-[rgba(201,169,110,0.15)] w-fit">

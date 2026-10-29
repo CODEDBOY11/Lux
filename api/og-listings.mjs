@@ -34,8 +34,8 @@ export default async function handler(req, res) {
       "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1200&h=630&fit=crop&q=80";
   }
 
-  const title = `${listing.name} — Luxury ${listing.category} in ${listing.city}, ${listing.country} | LuxStay`;
-  const description = `Book ${listing.name} in ${listing.city}, ${listing.country}. Luxury ${listing.category} from ₦${Number(listing.price_per_night).toLocaleString()}/night.${listing.rating > 0 ? ` Rated ${listing.rating}★.` : ""} Verified on LuxStay. Click to view photos and book instantly.`;
+  const title = `${listing.name} — Luxury ${listing.category} in ${listing.city}, ${listing.country} | EDEN`;
+  const description = `Book ${listing.name} in ${listing.city}, ${listing.country}. Luxury ${listing.category} from ₦${Number(listing.price_per_night).toLocaleString()}/night.${listing.rating > 0 ? ` Rated ${listing.rating}★.` : ""} Verified on EDEN. Click to view photos and book instantly.`;
   const url = `https://lux-d1ok.vercel.app/listing/${id}`;
 
   const html = `<!DOCTYPE html>
@@ -45,7 +45,7 @@ export default async function handler(req, res) {
   <title>${title}</title>
   <meta name="description" content="${description}" />
   <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="LuxStay" />
+  <meta property="og:site_name" content="EDEN" />
   <meta property="og:title" content="${title}" />
   <meta property="og:description" content="${description}" />
   <meta property="og:image" content="${image}" />

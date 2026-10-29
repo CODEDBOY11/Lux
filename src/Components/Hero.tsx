@@ -1136,7 +1136,7 @@ export default function Hero({
                 whiteSpace: "nowrap",
               }}
             >
-              LuxStay
+              EDEN
             </span>
           </div>
 

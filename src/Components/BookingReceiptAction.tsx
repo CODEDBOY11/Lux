@@ -100,7 +100,7 @@ function buildReceiptHTML(booking: Booking, hotelName: string): string {
 <body>
   <div class="page">
     <div class="header">
-      <div class="brand">ZIBRA</div>
+      <div class="brand">EDEN</div>
       <div class="brand-sub">Luxury Short Lets</div>
     </div>
 

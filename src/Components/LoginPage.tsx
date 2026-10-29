@@ -746,11 +746,11 @@ const LoginPage = ({ fixedRole }: { fixedRole: FixedRole }) => {
           <div className="flex items-center gap-2.5">
             <img
               src={logo}
-              alt="LuxStay Logo"
+              alt="EDEN Logo"
               className="w-11 h-11 sm:w-12 sm:h-12"
             />
             <span className="font-['Cormorant_Garamond'] text-xl tracking-wide text-[#f5f0e8]">
-              LuxStay
+              EDEN
             </span>
           </div>
           <div
@@ -771,7 +771,7 @@ const LoginPage = ({ fixedRole }: { fixedRole: FixedRole }) => {
               "{config.quote}"
             </blockquote>
             <cite className="text-xs text-[rgba(245,240,232,0.4)] uppercase tracking-widest not-italic">
-              — LuxStay{" "}
+              — EDEN{" "}
               {fixedRole === "host" ? "Host Community" : "Guest Network"}
             </cite>
             <div className="flex gap-8 mt-10">

@@ -230,7 +230,7 @@ serve(async (req: Request) => {
       user_id: hostId,
       type: "subscription",
       title: "Pro plan activated!",
-      body: `Your Zibra Pro subscription is now active. It renews on ${expiresAt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}.`,
+      body: `Your EDEN Pro subscription is now active. It renews on ${expiresAt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}.`,
       link: "/dashboard?tab=billing",
     };
 

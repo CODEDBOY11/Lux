@@ -3,7 +3,7 @@ import { BuildingOffice2Icon, UserIcon } from "@heroicons/react/24/outline";
 
 const AuthChooser = ({ mode }: { mode: "login" | "signup" }) => {
   const navigate = useNavigate();
-  const title = mode === "login" ? "Welcome back" : "Join LuxStay";
+  const title = mode === "login" ? "Welcome back" : "Join EDEN";
   const subtitle =
     mode === "login"
       ? "Sign in to continue"

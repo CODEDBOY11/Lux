@@ -103,7 +103,7 @@ export default function BillingSection() {
       email: user.email,
       amount: PRO_PLAN_PRICE_NGN * 100, // kobo
       currency: "NGN",
-      ref: `ZB-PRO-${user.id.slice(0, 8).toUpperCase()}-${Date.now()}`,
+      ref: `EDEN-PRO-${user.id.slice(0, 8).toUpperCase()}-${Date.now()}`,
       metadata: {
         custom_fields: [
           {
