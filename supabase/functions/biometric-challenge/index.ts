@@ -68,44 +68,151 @@ function base64urlToBuffer(b64: string): ArrayBuffer {
   return Uint8Array.from(bin, (c) => c.charCodeAt(0)).buffer;
 }
 
-function bufferToBase64url(buf: ArrayBuffer): string {
-  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+function bufferToBase64url(buf: ArrayBuffer | Uint8Array): string {
+  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  return btoa(String.fromCharCode(...bytes))
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=/g, "");
 }
 
-// ── CBOR decode (minimal — just enough for COSE EC2 public keys) ─
-// We only need x/y coords from the authenticator data for ES256
-function parseCOSEPublicKey(coseBytes: Uint8Array): {
-  x: Uint8Array;
-  y: Uint8Array;
+function ecdsaSignatureToP1363(signature: ArrayBuffer): Uint8Array {
+  const der = new Uint8Array(signature);
+  if (der.length === 64) return der;
+  if (der.length < 8 || der[0] !== 0x30 || der[1] !== der.length - 2)
+    throw new Error("Invalid ECDSA signature encoding");
+
+  const readInteger = (offset: number): {
+    value: Uint8Array;
+    nextOffset: number;
+  } => {
+    if (der[offset] !== 0x02) throw new Error("Invalid ECDSA signature integer");
+    const length = der[offset + 1];
+    const endOffset = offset + 2 + length;
+    if (!length || endOffset > der.length)
+      throw new Error("Truncated ECDSA signature integer");
+    let start = offset + 2;
+    while (start < endOffset - 32 && der[start] === 0) start++;
+    const value = der.slice(start, endOffset);
+    if (value.length > 32) throw new Error("ECDSA signature integer is too large");
+    return { value, nextOffset: endOffset };
+  };
+
+  const r = readInteger(2);
+  const s = readInteger(r.nextOffset);
+  if (s.nextOffset !== der.length)
+    throw new Error("Invalid ECDSA signature length");
+
+  const p1363 = new Uint8Array(64);
+  p1363.set(r.value, 32 - r.value.length);
+  p1363.set(s.value, 64 - s.value.length);
+  return p1363;
+}
+
+type CborHead = {
+  majorType: number;
+  value: number;
+  nextOffset: number;
+};
+
+function readCborHead(bytes: Uint8Array, offset: number): CborHead {
+  if (offset >= bytes.length) throw new Error("Truncated CBOR item");
+
+  const initial = bytes[offset];
+  const additionalInfo = initial & 0x1f;
+  let value: number;
+  let nextOffset = offset + 1;
+
+  if (additionalInfo <= 23) {
+    value = additionalInfo;
+  } else {
+    const byteLength =
+      additionalInfo === 24 ? 1 :
+      additionalInfo === 25 ? 2 :
+      additionalInfo === 26 ? 4 :
+      additionalInfo === 27 ? 8 :
+      0;
+    if (!byteLength || nextOffset + byteLength > bytes.length)
+      throw new Error("Invalid or truncated CBOR length");
+
+    value = 0;
+    for (let i = 0; i < byteLength; i++)
+      value = value * 256 + bytes[nextOffset + i];
+    nextOffset += byteLength;
+    if (!Number.isSafeInteger(value)) throw new Error("CBOR value is too large");
+  }
+
+  return { majorType: initial >> 5, value, nextOffset };
+}
+
+function skipCborValue(bytes: Uint8Array, offset: number, depth = 0): number {
+  if (depth > 32) throw new Error("CBOR nesting is too deep");
+
+  const head = readCborHead(bytes, offset);
+  let nextOffset = head.nextOffset;
+
+  if (head.majorType === 2 || head.majorType === 3) {
+    nextOffset += head.value;
+    if (nextOffset > bytes.length) throw new Error("Truncated CBOR data");
+    return nextOffset;
+  }
+  if (head.majorType === 4 || head.majorType === 5) {
+    const itemCount = head.majorType === 5 ? head.value * 2 : head.value;
+    for (let i = 0; i < itemCount; i++)
+      nextOffset = skipCborValue(bytes, nextOffset, depth + 1);
+    return nextOffset;
+  }
+  if (head.majorType === 6)
+    return skipCborValue(bytes, nextOffset, depth + 1);
+  return nextOffset;
+}
+
+function decodeCborInteger(bytes: Uint8Array, offset: number): {
+  value: number;
+  nextOffset: number;
 } {
-  // Simple CBOR map parser for COSE_Key
-  // COSE EC2: map { 1:2, 3:-7, -1:1, -2:x, -3:y }
-  // We just extract -2 and -3 values (32 bytes each)
-  let i = 1; // skip map header byte
-  const map: Record<number, Uint8Array> = {};
-  while (i < coseBytes.length) {
-    // Read key (negative int encoded as 0x20-0x37 for -1..-24)
-    const keyByte = coseBytes[i++];
-    let key: number;
-    if ((keyByte & 0xe0) === 0x20)
-      key = -(keyByte - 0x1f); // negative int
-    else if ((keyByte & 0xe0) === 0x00)
-      key = keyByte; // small positive
-    else break;
-    // Read value — we care about byte strings (0x40+)
-    const valByte = coseBytes[i++];
-    if ((valByte & 0xe0) === 0x40) {
-      const len = valByte & 0x1f;
-      map[key] = coseBytes.slice(i, i + len);
-      i += len;
+  const head = readCborHead(bytes, offset);
+  if (head.majorType !== 0 && head.majorType !== 1)
+    throw new Error("Expected CBOR integer");
+  return {
+    value: head.majorType === 0 ? head.value : -1 - head.value,
+    nextOffset: head.nextOffset,
+  };
+}
+
+function parseCOSEKey(coseBytes: Uint8Array): {
+  algorithm: number;
+  values: Map<number, number | Uint8Array>;
+  endOffset: number;
+} {
+  const head = readCborHead(coseBytes, 0);
+  if (head.majorType !== 5) throw new Error("COSE key must be a CBOR map");
+
+  const values = new Map<number, number | Uint8Array>();
+  let offset = head.nextOffset;
+  for (let i = 0; i < head.value; i++) {
+    const key = decodeCborInteger(coseBytes, offset);
+    offset = key.nextOffset;
+    const valueHead = readCborHead(coseBytes, offset);
+
+    if (valueHead.majorType === 0 || valueHead.majorType === 1) {
+      const value = decodeCborInteger(coseBytes, offset);
+      values.set(key.value, value.value);
+      offset = value.nextOffset;
+    } else if (valueHead.majorType === 2) {
+      const endOffset = valueHead.nextOffset + valueHead.value;
+      if (endOffset > coseBytes.length) throw new Error("Truncated COSE key");
+      values.set(key.value, coseBytes.slice(valueHead.nextOffset, endOffset));
+      offset = endOffset;
     } else {
-      i++; // skip unknown
+      offset = skipCborValue(coseBytes, offset);
     }
   }
-  return { x: map[-2] ?? new Uint8Array(32), y: map[-3] ?? new Uint8Array(32) };
+
+  const algorithm = values.get(3);
+  if (typeof algorithm !== "number" || (algorithm !== -7 && algorithm !== -257))
+    throw new Error("Unsupported COSE algorithm");
+  return { algorithm, values, endOffset: offset };
 }
 
 // ── Extract authData from CBOR attestationObject ─────────────
@@ -136,105 +243,17 @@ function extractAuthData(attObj: Uint8Array): Uint8Array | null {
     let pos = i + key.length;
     if (pos >= attObj.length) continue;
 
-    const b = attObj[pos];
-    // major type 2 = byte string
-    if (b >> 5 !== 2) continue;
-
-    const addl = b & 0x1f;
-    let len: number;
-    if (addl <= 23) {
-      len = addl;
-      pos += 1;
-    } else if (addl === 24) {
-      len = attObj[pos + 1];
-      pos += 2;
-    } else if (addl === 25) {
-      len = (attObj[pos + 1] << 8) | attObj[pos + 2];
-      pos += 3;
-    } else {
+    try {
+      const dataHead = readCborHead(attObj, pos);
+      if (dataHead.majorType !== 2) continue;
+      const endOffset = dataHead.nextOffset + dataHead.value;
+      if (endOffset > attObj.length) continue;
+      return attObj.slice(dataHead.nextOffset, endOffset);
+    } catch {
       continue;
     }
-    if (pos + len > attObj.length) continue;
-    return attObj.slice(pos, pos + len);
   }
   return null;
-}
-
-// ── Parse COSE algorithm from key bytes ──────────────────────
-function getCOSEAlgorithm(coseBytes: Uint8Array): number {
-  // COSE map key 3 = alg: -7 (ES256) or -257 (RS256)
-  let i = 1; // skip map header
-  while (i < coseBytes.length - 1) {
-    const keyByte = coseBytes[i++];
-    let key: number;
-    if ((keyByte & 0xe0) === 0x20) key = -(keyByte - 0x1f);
-    else if ((keyByte & 0xe0) === 0x00) key = keyByte;
-    else break;
-
-    if (key === 3) {
-      // Next byte is the algorithm value
-      const algByte = coseBytes[i];
-      if ((algByte & 0xe0) === 0x20) return -(algByte - 0x1f); // negative int
-      if (algByte === 0x38) return -(coseBytes[i + 1] + 1); // 1-byte negative (e.g. -257 = 0x38 0xff+1)
-      if (algByte === 0x39) {
-        return -(((coseBytes[i + 1] << 8) | coseBytes[i + 2]) + 1); // 2-byte negative
-      }
-      return algByte; // positive
-    }
-
-    // Skip value
-    const valByte = coseBytes[i++];
-    if ((valByte & 0xe0) === 0x40)
-      i += valByte & 0x1f; // byte string
-    else if ((valByte & 0xe0) === 0x60)
-      i += valByte & 0x1f; // text string
-    else if (valByte === 0x38) i += 1;
-    else if (valByte === 0x39) i += 2;
-  }
-  return -7; // default ES256
-}
-
-// ── Parse RSA public key from COSE bytes ─────────────────────
-function parseCOSERSAPublicKey(coseBytes: Uint8Array): {
-  n: Uint8Array;
-  e: Uint8Array;
-} {
-  // COSE RSA: map { 1:3, 3:-257, -1:n, -2:e }
-  let i = 1;
-  const map: Record<number, Uint8Array> = {};
-  while (i < coseBytes.length) {
-    const keyByte = coseBytes[i++];
-    let key: number;
-    if ((keyByte & 0xe0) === 0x20) key = -(keyByte - 0x1f);
-    else if ((keyByte & 0xe0) === 0x00) key = keyByte;
-    else break;
-
-    const valByte = coseBytes[i];
-    if ((valByte & 0xe0) === 0x40) {
-      const len = valByte & 0x1f;
-      i++;
-      map[key] = coseBytes.slice(i, i + len);
-      i += len;
-    } else if (valByte === 0x58) {
-      // 1-byte length follows
-      const len = coseBytes[i + 1];
-      i += 2;
-      map[key] = coseBytes.slice(i, i + len);
-      i += len;
-    } else if (valByte === 0x59) {
-      // 2-byte length follows
-      const len = (coseBytes[i + 1] << 8) | coseBytes[i + 2];
-      i += 3;
-      map[key] = coseBytes.slice(i, i + len);
-      i += len;
-    } else {
-      i++; // skip
-    }
-  }
-  return {
-    n: map[-1] ?? new Uint8Array(256),
-    e: map[-2] ?? new Uint8Array([1, 0, 1]),
-  };
 }
 
 // ── Verify signature (ES256 or RS256) ────────────────────────
@@ -246,7 +265,7 @@ async function verifySignature(
 ): Promise<boolean> {
   try {
     const coseBytes = new Uint8Array(base64urlToBuffer(publicKeyBase64));
-    const alg = getCOSEAlgorithm(coseBytes);
+    const { algorithm, values } = parseCOSEKey(coseBytes);
 
     const sigData = new Uint8Array(
       authenticatorData.byteLength + clientDataHash.byteLength,
@@ -254,9 +273,12 @@ async function verifySignature(
     sigData.set(new Uint8Array(authenticatorData), 0);
     sigData.set(new Uint8Array(clientDataHash), authenticatorData.byteLength);
 
-    if (alg === -257) {
+    if (algorithm === -257) {
       // RS256 — Windows Hello, some Android devices
-      const { n, e } = parseCOSERSAPublicKey(coseBytes);
+      const n = values.get(-1);
+      const e = values.get(-2);
+      if (!(n instanceof Uint8Array) || !(e instanceof Uint8Array))
+        return false;
       const cryptoKey = await crypto.subtle.importKey(
         "jwk",
         {
@@ -278,7 +300,10 @@ async function verifySignature(
       );
     } else {
       // ES256 — most platform authenticators
-      const { x, y } = parseCOSEPublicKey(coseBytes);
+      const x = values.get(-2);
+      const y = values.get(-3);
+      if (!(x instanceof Uint8Array) || !(y instanceof Uint8Array))
+        return false;
       const cryptoKey = await crypto.subtle.importKey(
         "jwk",
         {
@@ -294,7 +319,7 @@ async function verifySignature(
       return await crypto.subtle.verify(
         { name: "ECDSA", hash: "SHA-256" },
         cryptoKey,
-        signatureBytes,
+        ecdsaSignatureToP1363(signatureBytes),
         sigData,
       );
     }
@@ -423,7 +448,20 @@ serve(async (req) => {
         return fail("authData truncated");
 
       const credIdBytes = authDataBytes.slice(55, 55 + credIdLen);
-      const coseKeyBytes = authDataBytes.slice(55 + credIdLen);
+      const coseKeyAndExtensions = authDataBytes.slice(55 + credIdLen);
+      let coseKeyBytes: Uint8Array;
+      try {
+        const parsedKey = parseCOSEKey(coseKeyAndExtensions);
+        const requiredKeyParts =
+          parsedKey.algorithm === -257
+            ? [parsedKey.values.get(-1), parsedKey.values.get(-2)]
+            : [parsedKey.values.get(-2), parsedKey.values.get(-3)];
+        if (!requiredKeyParts.every((part) => part instanceof Uint8Array))
+          return fail("COSE public key is missing required parameters");
+        coseKeyBytes = coseKeyAndExtensions.slice(0, parsedKey.endOffset);
+      } catch {
+        return fail("Could not parse COSE public key from authData");
+      }
 
       // The credential ID from authData should match what the browser reported
       const credentialIdFromAuthData = bufferToBase64url(credIdBytes);
@@ -431,7 +469,7 @@ serve(async (req) => {
       const credentialId = credential.id ?? credentialIdFromAuthData;
       const publicKey = bufferToBase64url(coseKeyBytes);
 
-      if (!publicKey || coseKeyBytes.length < 4)
+      if (!publicKey)
         return fail("Could not extract public key from authData");
 
       // Store passkey
