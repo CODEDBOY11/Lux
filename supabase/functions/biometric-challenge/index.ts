@@ -160,8 +160,85 @@ function extractAuthData(attObj: Uint8Array): Uint8Array | null {
   return null;
 }
 
-// ── Verify ES256 signature ────────────────────────────────────
-async function verifyES256(
+// ── Parse COSE algorithm from key bytes ──────────────────────
+function getCOSEAlgorithm(coseBytes: Uint8Array): number {
+  // COSE map key 3 = alg: -7 (ES256) or -257 (RS256)
+  let i = 1; // skip map header
+  while (i < coseBytes.length - 1) {
+    const keyByte = coseBytes[i++];
+    let key: number;
+    if ((keyByte & 0xe0) === 0x20) key = -(keyByte - 0x1f);
+    else if ((keyByte & 0xe0) === 0x00) key = keyByte;
+    else break;
+
+    if (key === 3) {
+      // Next byte is the algorithm value
+      const algByte = coseBytes[i];
+      if ((algByte & 0xe0) === 0x20) return -(algByte - 0x1f); // negative int
+      if (algByte === 0x38) return -(coseBytes[i + 1] + 1); // 1-byte negative (e.g. -257 = 0x38 0xff+1)
+      if (algByte === 0x39) {
+        return -(((coseBytes[i + 1] << 8) | coseBytes[i + 2]) + 1); // 2-byte negative
+      }
+      return algByte; // positive
+    }
+
+    // Skip value
+    const valByte = coseBytes[i++];
+    if ((valByte & 0xe0) === 0x40)
+      i += valByte & 0x1f; // byte string
+    else if ((valByte & 0xe0) === 0x60)
+      i += valByte & 0x1f; // text string
+    else if (valByte === 0x38) i += 1;
+    else if (valByte === 0x39) i += 2;
+  }
+  return -7; // default ES256
+}
+
+// ── Parse RSA public key from COSE bytes ─────────────────────
+function parseCOSERSAPublicKey(coseBytes: Uint8Array): {
+  n: Uint8Array;
+  e: Uint8Array;
+} {
+  // COSE RSA: map { 1:3, 3:-257, -1:n, -2:e }
+  let i = 1;
+  const map: Record<number, Uint8Array> = {};
+  while (i < coseBytes.length) {
+    const keyByte = coseBytes[i++];
+    let key: number;
+    if ((keyByte & 0xe0) === 0x20) key = -(keyByte - 0x1f);
+    else if ((keyByte & 0xe0) === 0x00) key = keyByte;
+    else break;
+
+    const valByte = coseBytes[i];
+    if ((valByte & 0xe0) === 0x40) {
+      const len = valByte & 0x1f;
+      i++;
+      map[key] = coseBytes.slice(i, i + len);
+      i += len;
+    } else if (valByte === 0x58) {
+      // 1-byte length follows
+      const len = coseBytes[i + 1];
+      i += 2;
+      map[key] = coseBytes.slice(i, i + len);
+      i += len;
+    } else if (valByte === 0x59) {
+      // 2-byte length follows
+      const len = (coseBytes[i + 1] << 8) | coseBytes[i + 2];
+      i += 3;
+      map[key] = coseBytes.slice(i, i + len);
+      i += len;
+    } else {
+      i++; // skip
+    }
+  }
+  return {
+    n: map[-1] ?? new Uint8Array(256),
+    e: map[-2] ?? new Uint8Array([1, 0, 1]),
+  };
+}
+
+// ── Verify signature (ES256 or RS256) ────────────────────────
+async function verifySignature(
   publicKeyBase64: string,
   authenticatorData: ArrayBuffer,
   clientDataHash: ArrayBuffer,
@@ -169,20 +246,7 @@ async function verifyES256(
 ): Promise<boolean> {
   try {
     const coseBytes = new Uint8Array(base64urlToBuffer(publicKeyBase64));
-    const { x, y } = parseCOSEPublicKey(coseBytes);
-
-    const cryptoKey = await crypto.subtle.importKey(
-      "jwk",
-      {
-        kty: "EC",
-        crv: "P-256",
-        x: bufferToBase64url(x),
-        y: bufferToBase64url(y),
-      },
-      { name: "ECDSA", namedCurve: "P-256" },
-      false,
-      ["verify"],
-    );
+    const alg = getCOSEAlgorithm(coseBytes);
 
     const sigData = new Uint8Array(
       authenticatorData.byteLength + clientDataHash.byteLength,
@@ -190,12 +254,50 @@ async function verifyES256(
     sigData.set(new Uint8Array(authenticatorData), 0);
     sigData.set(new Uint8Array(clientDataHash), authenticatorData.byteLength);
 
-    return await crypto.subtle.verify(
-      { name: "ECDSA", hash: "SHA-256" },
-      cryptoKey,
-      signatureBytes,
-      sigData,
-    );
+    if (alg === -257) {
+      // RS256 — Windows Hello, some Android devices
+      const { n, e } = parseCOSERSAPublicKey(coseBytes);
+      const cryptoKey = await crypto.subtle.importKey(
+        "jwk",
+        {
+          kty: "RSA",
+          alg: "RS256",
+          ext: true,
+          n: bufferToBase64url(n),
+          e: bufferToBase64url(e),
+        },
+        { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+        false,
+        ["verify"],
+      );
+      return await crypto.subtle.verify(
+        { name: "RSASSA-PKCS1-v1_5" },
+        cryptoKey,
+        signatureBytes,
+        sigData,
+      );
+    } else {
+      // ES256 — most platform authenticators
+      const { x, y } = parseCOSEPublicKey(coseBytes);
+      const cryptoKey = await crypto.subtle.importKey(
+        "jwk",
+        {
+          kty: "EC",
+          crv: "P-256",
+          x: bufferToBase64url(x),
+          y: bufferToBase64url(y),
+        },
+        { name: "ECDSA", namedCurve: "P-256" },
+        false,
+        ["verify"],
+      );
+      return await crypto.subtle.verify(
+        { name: "ECDSA", hash: "SHA-256" },
+        cryptoKey,
+        signatureBytes,
+        sigData,
+      );
+    }
   } catch {
     return false;
   }
@@ -435,7 +537,7 @@ serve(async (req) => {
       );
       const sigBuf = base64urlToBuffer(assertion.response.signature);
 
-      const verified = await verifyES256(
+      const verified = await verifySignature(
         passkey.public_key,
         authDataBuf,
         clientDataHash,
