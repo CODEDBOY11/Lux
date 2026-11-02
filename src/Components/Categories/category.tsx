@@ -1,876 +1,462 @@
 import { useState, useEffect, useRef } from "react";
 import { ListingsDB, type Listing } from "../../index";
-import { ArrowRightIcon, XMarkIcon } from "@heroicons/react/24/outline";
-import { StarIcon as StarSolid, MapPinIcon } from "@heroicons/react/24/solid";
-
-/* ─────────────────────────────────────────
-   Types & config
-───────────────────────────────────────── */
+import { ArrowRightIcon, XMarkIcon, MapPinIcon } from "@heroicons/react/24/outline";
+import { StarIcon as StarSolid } from "@heroicons/react/24/solid";
 
 type CategoryKey = Listing["category"];
 
-interface CategoryMeta {
-  label: string;
-  tagline: string;
-  tag: string;
-  fallbackImage: string;
-}
+/* ─── Tokens ──────────────────────────────────────────── */
+const css = `
+  .cat-section {
+    --c-bg: #F3F1ED;
+    --c-white: #FFFFFF;
+    --c-border: #E8E4DD;
+    --c-text: #1A1714;
+    --c-sub: #6A6359;
+    --c-muted: #8A8278;
+    --c-gold: #C9A96E;
+    --c-gold-dim: rgba(201,169,110,0.10);
+    --c-gold-border: rgba(201,169,110,0.25);
+    --c-gold-hover: #B8935A;
+    color-scheme: light;
+    font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+    background: var(--c-bg);
+  }
+  @media (prefers-color-scheme: dark) {
+    .cat-section:not([data-theme="light"]) {
+      --c-bg: #111009;
+      --c-white: #1A1714;
+      --c-border: rgba(255,255,255,0.07);
+      --c-text: #F0EDE8;
+      --c-sub: #A8A09A;
+      --c-muted: #706860;
+      color-scheme: dark;
+    }
+  }
+  [data-theme="dark"] .cat-section {
+    --c-bg: #111009;
+    --c-white: #1A1714;
+    --c-border: rgba(255,255,255,0.07);
+    --c-text: #F0EDE8;
+    --c-sub: #A8A09A;
+    --c-muted: #706860;
+    color-scheme: dark;
+  }
+  .cat-mosaic {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: 1fr;
+  }
+  @media (min-width: 640px) {
+    .cat-mosaic {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  @media (min-width: 1024px) {
+    .cat-mosaic {
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(2, 220px);
+    }
+    .cat-card-featured {
+      grid-column: 1 / 2;
+      grid-row: 1 / 3;
+    }
+    .cat-card-wide {
+      grid-column: 2 / 4;
+      grid-row: 1 / 2;
+    }
+  }
+  .cat-card {
+    position: relative; overflow: hidden;
+    border-radius: 14px; cursor: pointer;
+    min-height: 190px;
+    border: 1px solid var(--c-border);
+    transition: transform .28s, box-shadow .28s;
+  }
+  .cat-card:hover { transform: translateY(-2px); box-shadow: 0 16px 48px rgba(0,0,0,.13); }
+  .cat-card:hover .cat-card-img { transform: scale(1.06); }
+  .cat-card-img {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%; object-fit: cover;
+    transition: transform .65s;
+  }
+  .cat-card-overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(to top, rgba(10,8,6,.82) 0%, rgba(10,8,6,.18) 55%, transparent 80%);
+    transition: opacity .25s;
+  }
+  .cat-card:hover .cat-card-overlay { opacity: .88; }
+  .cat-card-body {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    padding: 20px 20px 18px;
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: 10;
+  }
+  .cat-pill-tag {
+    font-size: 9px; font-weight: 700; letter-spacing: .18em;
+    text-transform: uppercase; padding: 3px 10px; border-radius: 99px;
+    background: var(--c-gold); color: #1A1714;
+    margin-bottom: 6px; display: inline-block;
+  }
+  .cat-arrow-btn {
+    width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+    background: rgba(255,255,255,.15); backdrop-filter: blur(6px);
+    border: 1px solid rgba(255,255,255,.28);
+    display: flex; align-items: center; justify-content: center;
+    transition: background .18s, border-color .18s;
+  }
+  .cat-card:hover .cat-arrow-btn {
+    background: var(--c-gold); border-color: var(--c-gold);
+  }
+  .cat-detail-overlay {
+    position: fixed; inset: 0; z-index: 50;
+    display: flex; align-items: flex-end; justify-content: center;
+  }
+  .cat-detail-panel {
+    position: relative; z-index: 10;
+    background: var(--c-white);
+    border: 1px solid var(--c-border);
+    border-radius: 18px 18px 0 0;
+    width: 100%; max-height: 90dvh;
+    overflow: hidden; display: flex; flex-direction: column;
+  }
+  @media (min-width: 640px) {
+    .cat-detail-panel {
+      max-width: 620px;
+      margin-bottom: 16px;
+      border-radius: 18px;
+    }
+  }
+  .cat-listing-item {
+    display: flex; gap: 12px; padding: 14px 0;
+    border-bottom: 1px solid var(--c-border);
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .cat-listing-item:hover { background: var(--c-bg); border-radius: 8px; padding: 14px 8px; margin: 0 -8px; }
+  .cat-listing-item:last-child { border-bottom: none; }
+  .cat-stats-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0;
+    border-top: 1px solid var(--c-border);
+    margin-top: 32px;
+  }
+  @media (min-width: 480px) {
+    .cat-stats-row { grid-template-columns: repeat(4, 1fr); }
+  }
+  .cat-stat-item {
+    text-align: center; padding: 22px 12px;
+  }
+  .cat-stat-item:not(:last-child) { border-right: 1px solid var(--c-border); }
+  @keyframes cat-fadeUp { from{opacity:0;transform:translateY(14px);} to{opacity:1;transform:translateY(0);} }
+`;
 
-const CATEGORY_META: Record<CategoryKey, CategoryMeta> = {
+const CATEGORY_META: Record<CategoryKey, {
+  label: string; tagline: string; tag: string; fallbackImage: string;
+}> = {
   villa: {
-    label: "Luxury Villas",
-    tagline: "Private estates with sweeping views",
+    label: "Luxury Villas", tagline: "Private gated estates with full staff",
     tag: "Most Popular",
-    fallbackImage:
-      "https://images.unsplash.com/photo-1613395877344-13d4a8e0d49e?w=900&q=80",
+    fallbackImage: "https://images.unsplash.com/photo-1613395877344-13d4a8e0d49e?w=900&q=80",
   },
   apartment: {
-    label: "City Apartments",
-    tagline: "Iconic addresses in the world's great cities",
+    label: "City Apartments", tagline: "Prime addresses in Lagos & Abuja",
     tag: "City Escapes",
-    fallbackImage:
-      "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=800&q=80",
+    fallbackImage: "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=800&q=80",
   },
   resort: {
-    label: "Island Resorts",
-    tagline: "Where ocean meets absolute luxury",
+    label: "Resorts", tagline: "Full-service retreat experiences",
     tag: "Top Rated",
-    fallbackImage:
-      "https://images.unsplash.com/photo-1439066615861-d1af74d74000?w=800&q=80",
+    fallbackImage: "https://images.unsplash.com/photo-1439066615861-d1af74d74000?w=800&q=80",
   },
   boutique: {
-    label: "Boutique Hotels",
-    tagline: "Handcrafted stays with singular character",
+    label: "Boutique Hotels", tagline: "Curated stays with real character",
     tag: "Hidden Gems",
-    fallbackImage:
-      "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800&q=80",
+    fallbackImage: "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800&q=80",
   },
   penthouse: {
-    label: "Penthouses",
-    tagline: "Above the city, above expectation",
+    label: "Penthouses", tagline: "Above the city, above everything",
     tag: "Ultra Luxury",
-    fallbackImage:
-      "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=800&q=80",
+    fallbackImage: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=800&q=80",
   },
 };
 
-const CARD_ORDER: CategoryKey[] = [
-  "villa",
-  "resort",
-  "penthouse",
-  "apartment",
-  "boutique",
-];
+const CARD_ORDER: CategoryKey[] = ["villa", "resort", "penthouse", "apartment", "boutique"];
 
-const OVERLAY =
-  "linear-gradient(to top, rgba(12,10,8,0.92) 0%, rgba(12,10,8,0.3) 50%, rgba(12,10,8,0.05) 100%)";
-
-/* ─────────────────────────────────────────
-   DB hook
-───────────────────────────────────────── */
-
-interface CategoryStats {
-  key: CategoryKey;
-  meta: CategoryMeta;
+interface CategoryCardProps {
+  category: CategoryKey;
+  image?: string;
   count: number;
-  avgPrice: number;
-  minPrice: number;
-  topRating: number;
-  coverImage: string;
-  listings: Listing[];
-}
-
-function useCategoryStats(): CategoryStats[] {
-  const [stats, setStats] = useState<CategoryStats[]>([]);
-
-  useEffect(() => {
-    let alive = true;
-    ListingsDB.all().then((all) => {
-      if (!alive) return;
-      const computed = (Object.keys(CATEGORY_META) as CategoryKey[]).map(
-        (key) => {
-          const listings = all.filter((l) => l.category === key);
-          const meta = CATEGORY_META[key];
-          const prices = listings.map((l) => l.pricePerNight);
-          const avgPrice =
-            prices.length > 0
-              ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length)
-              : 0;
-          const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
-          const topRating =
-            listings.length > 0
-              ? Math.max(...listings.map((l) => l.rating))
-              : 0;
-          const coverImage =
-            listings.find((l) => l.images[0])?.images[0] ?? meta.fallbackImage;
-          return {
-            key,
-            meta,
-            count: listings.length,
-            avgPrice,
-            minPrice,
-            topRating,
-            coverImage,
-            listings,
-          };
-        },
-      );
-      setStats(computed);
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  return stats;
-}
-
-/* ─────────────────────────────────────────
-   Mobile scroll card  (used inside horizontal strip)
-───────────────────────────────────────── */
-
-function MobileCard({
-  stats,
-  isActive,
-  onClick,
-}: {
-  stats: CategoryStats;
-  isActive: boolean;
-  onClick: () => void;
-}) {
-  const { meta, minPrice, avgPrice, topRating, coverImage } = stats;
-  const price = minPrice > 0 ? minPrice : avgPrice;
-
-  return (
-    <button
-      onClick={onClick}
-      className="relative flex-shrink-0 overflow-hidden rounded-xl text-left focus:outline-none"
-      style={{
-        width: 220,
-        height: 280,
-        outline: isActive ? "2px solid #B8964A" : "none",
-        outlineOffset: 2,
-      }}
-    >
-      <img
-        src={coverImage}
-        alt={meta.label}
-        loading="lazy"
-        className="absolute inset-0 w-full h-full object-cover transition-transform duration-500"
-        style={{ filter: "brightness(0.78) saturate(0.9)" }}
-        onError={(e) => {
-          (e.target as HTMLImageElement).src = meta.fallbackImage;
-        }}
-      />
-      <div className="absolute inset-0" style={{ background: OVERLAY }} />
-
-      {/* Tag */}
-      <div className="absolute top-3 left-3">
-        <span
-          className="text-[9px] font-medium uppercase tracking-[0.14em] px-2 py-0.5"
-          style={{
-            background: "rgba(212,170,102,0.18)",
-            border: "1px solid rgba(212,170,102,0.45)",
-            color: "#D4AA66",
-            backdropFilter: "blur(4px)",
-            borderRadius: 2,
-          }}
-        >
-          {meta.tag}
-        </span>
-      </div>
-
-      {/* Bottom info */}
-      <div className="absolute inset-x-0 bottom-0 p-4">
-        <p className="font-['Cormorant_Garamond'] text-xl font-light text-white leading-tight mb-0.5">
-          {meta.label}
-        </p>
-        <p className="text-white/50 text-[10px] font-light mb-3">
-          {meta.tagline}
-        </p>
-
-        <div className="flex items-center justify-between border-t border-white/10 pt-2.5">
-          {price > 0 ? (
-            <div>
-              <p className="text-[8px] text-white/35 uppercase tracking-wider mb-0.5">
-                From
-              </p>
-              <p className="font-['Cormorant_Garamond'] text-sm font-light text-[#D4AA66]">
-                ₦{price.toLocaleString()}
-                <span className="font-sans text-[9px] text-white/30 ml-0.5">
-                  /night
-                </span>
-              </p>
-            </div>
-          ) : (
-            <span className="text-white/25 text-[10px]">Coming soon</span>
-          )}
-
-          {topRating > 0 && (
-            <div className="flex items-center gap-1">
-              <StarSolid className="w-3 h-3 text-[#D4AA66]" />
-              <span className="text-white text-xs font-['Cormorant_Garamond']">
-                {topRating.toFixed(1)}
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Active indicator */}
-      {isActive && (
-        <div
-          className="absolute bottom-0 inset-x-0 h-0.5"
-          style={{ background: "#B8964A" }}
-        />
-      )}
-    </button>
-  );
-}
-
-/* ─────────────────────────────────────────
-   Desktop mosaic card
-───────────────────────────────────────── */
-
-function DesktopCard({
-  stats,
-  index,
-  isActive,
-  isWide,
-  onClick,
-}: {
-  stats: CategoryStats;
+  variant?: "featured" | "wide" | "normal";
   index: number;
-  isActive: boolean;
-  isWide: boolean;
   onClick: () => void;
-}) {
-  const { meta, count, minPrice, avgPrice, topRating, coverImage } = stats;
-  const ref = useRef<HTMLButtonElement>(null);
-  const price = minPrice > 0 ? minPrice : avgPrice;
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      ([e]) => {
-        if (e.isIntersecting) {
-          el.style.opacity = "1";
-          el.style.transform = "translateY(0)";
-          obs.disconnect();
-        }
-      },
-      { threshold: 0.08 },
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
-
-  return (
-    <button
-      ref={ref}
-      onClick={onClick}
-      aria-pressed={isActive}
-      className="group relative overflow-hidden w-full h-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B8964A]"
-      style={{
-        opacity: 0,
-        transform: "translateY(18px)",
-        transition: `opacity 0.5s ease ${index * 75}ms, transform 0.5s ease ${index * 75}ms`,
-        outline: isActive ? "2px solid rgba(184,150,74,0.65)" : "none",
-        outlineOffset: -2,
-        minHeight: isWide ? 340 : 260,
-      }}
-    >
-      <img
-        src={coverImage}
-        alt={meta.label}
-        loading="lazy"
-        className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
-        style={{ filter: "brightness(0.8) saturate(0.9)" }}
-        onError={(e) => {
-          (e.target as HTMLImageElement).src = meta.fallbackImage;
-        }}
-      />
-      <div className="absolute inset-0" style={{ background: OVERLAY }} />
-
-      {/* Tag */}
-      <div className="absolute top-4 left-4">
-        <span
-          className="text-[9px] font-medium uppercase tracking-[0.16em] px-2.5 py-1"
-          style={{
-            background: "rgba(212,170,102,0.15)",
-            border: "1px solid rgba(212,170,102,0.4)",
-            color: "#D4AA66",
-            backdropFilter: "blur(6px)",
-            borderRadius: 2,
-          }}
-        >
-          {meta.tag}
-        </span>
-      </div>
-
-      {/* Count */}
-      {count > 0 && (
-        <div className="absolute top-4 right-4">
-          <span className="text-[10px] text-white/45 font-light">
-            {count} {count === 1 ? "property" : "properties"}
-          </span>
-        </div>
-      )}
-
-      {/* Bottom */}
-      <div className="absolute inset-x-0 bottom-0 p-5">
-        <h3
-          className="font-['Cormorant_Garamond'] font-light text-white leading-tight mb-0.5"
-          style={{ fontSize: isWide ? "clamp(22px,2.4vw,30px)" : 20 }}
-        >
-          {meta.label}
-        </h3>
-        <p className="text-white/45 text-[11px] font-light">{meta.tagline}</p>
-
-        {price > 0 && (
-          <div className="flex items-center gap-5 mt-3.5 pt-3 border-t border-white/10">
-            <div>
-              <p className="text-[8px] text-white/30 uppercase tracking-wider mb-0.5">
-                From
-              </p>
-              <p className="font-['Cormorant_Garamond'] text-base font-light text-[#D4AA66]">
-                ₦{price.toLocaleString()}
-                <span className="font-sans text-[10px] text-white/30 ml-0.5">
-                  /night
-                </span>
-              </p>
-            </div>
-            {topRating > 0 && (
-              <div>
-                <p className="text-[8px] text-white/30 uppercase tracking-wider mb-0.5">
-                  Rating
-                </p>
-                <p className="flex items-center gap-1 font-['Cormorant_Garamond'] text-base font-light text-white">
-                  <StarSolid className="w-3 h-3 text-[#D4AA66]" />
-                  {topRating.toFixed(1)}
-                </p>
-              </div>
-            )}
-            <div className="ml-auto">
-              <div
-                className="w-8 h-8 rounded-full border border-white/20 group-hover:border-[#D4AA66]/50 flex items-center justify-center transition-colors duration-300"
-                aria-hidden
-              >
-                <ArrowRightIcon
-                  className={`w-3.5 h-3.5 text-white/50 group-hover:text-[#D4AA66] transition-all duration-300 ${isActive ? "rotate-90" : ""}`}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {count === 0 && (
-          <p className="mt-2 text-white/25 text-[11px] font-light">
-            Coming soon
-          </p>
-        )}
-      </div>
-    </button>
-  );
 }
 
-/* ─────────────────────────────────────────
-   Listing detail panel  (shared mobile + desktop)
-───────────────────────────────────────── */
-
-function CategoryDetail({
-  stats,
-  onClose,
-  onBook,
-}: {
-  stats: CategoryStats;
-  onClose: () => void;
-  onBook?: (id: string) => void;
-}) {
-  const { meta, listings } = stats;
-
+const CategoryCard = ({ category, image, count, variant = "normal", index, onClick }: CategoryCardProps) => {
+  const meta = CATEGORY_META[category];
   return (
     <div
-      className="border border-[#E8E4DC] overflow-hidden"
-      style={{
-        background: "#FFFFFF",
-        borderRadius: 2,
-        animation: "csIn 0.28s cubic-bezier(0.34,1.1,0.64,1)",
-      }}
+      className={`cat-card${variant === "featured" ? " cat-card-featured" : ""}${variant === "wide" ? " cat-card-wide" : ""}`}
+      style={{ animation: `cat-fadeUp .42s ease ${index * 60}ms both` }}
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      aria-label={`Browse ${meta.label}`}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onClick(); }}
     >
-      <style>{`@keyframes csIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}`}</style>
-
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-[#F0EDE6]">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-5 h-px" style={{ background: "#B8964A" }} />
-            <span
-              className="text-[9px] font-medium uppercase tracking-[0.2em]"
-              style={{ color: "#B8964A" }}
-            >
-              {meta.tag}
-            </span>
-          </div>
-          <h3
-            className="font-['Cormorant_Garamond'] text-lg font-light"
-            style={{ color: "#1C1A17" }}
-          >
-            {meta.label}
-          </h3>
+      <img
+        className="cat-card-img"
+        src={image || meta.fallbackImage}
+        alt={meta.label}
+        loading="lazy"
+        onError={(e) => { (e.target as HTMLImageElement).src = meta.fallbackImage; }}
+      />
+      <div className="cat-card-overlay" />
+      <div className="cat-card-body">
+        <div style={{ minWidth: 0 }}>
+          <div className="cat-pill-tag">{meta.tag}</div>
+          <h3 style={{
+            fontFamily: "Cormorant Garamond, serif",
+            fontSize: variant === "featured" ? "clamp(22px,4vw,28px)" : "clamp(18px,3vw,22px)",
+            fontWeight: 600, color: "#fff", lineHeight: 1.15, marginBottom: 4,
+          }}>{meta.label}</h3>
+          <p style={{ fontSize: 11, color: "rgba(255,255,255,.65)", fontWeight: 300 }}>
+            {count > 0 ? `${count} propert${count !== 1 ? "ies" : "y"}` : meta.tagline}
+          </p>
         </div>
-        <button
-          onClick={onClose}
-          aria-label="Close"
-          className="w-8 h-8 rounded-full border flex items-center justify-center transition-colors duration-150 shrink-0"
-          style={{ borderColor: "#E8E4DC", color: "#A09890" }}
-        >
-          <XMarkIcon className="w-4 h-4" />
-        </button>
+        <div className="cat-arrow-btn">
+          <ArrowRightIcon style={{ width: 14, height: 14, color: "#fff" }} />
+        </div>
       </div>
-
-      {/* Listings */}
-      {listings.length === 0 ? (
-        <div className="py-12 text-center">
-          <p className="text-sm font-light" style={{ color: "#A09890" }}>
-            No {meta.label.toLowerCase()} available right now.
-          </p>
-          <p className="text-xs mt-1" style={{ color: "#C4BFB5" }}>
-            Check back soon.
-          </p>
-        </div>
-      ) : (
-        <>
-          {/* Mobile + tablet: horizontal scroll */}
-          <div
-            className="lg:hidden flex gap-3 overflow-x-auto px-4 py-4"
-            style={{ scrollSnapType: "x mandatory" }}
-          >
-            {listings.map((listing) => (
-              <button
-                key={listing.id}
-                onClick={() => onBook?.(listing.id)}
-                className="flex-shrink-0 text-left rounded-lg overflow-hidden border focus:outline-none"
-                style={{
-                  width: 180,
-                  borderColor: "#F0EDE6",
-                  scrollSnapAlign: "start",
-                }}
-              >
-                <div className="relative h-28 overflow-hidden">
-                  <img
-                    src={listing.images[0] ?? meta.fallbackImage}
-                    alt={listing.name}
-                    loading="lazy"
-                    className="w-full h-full object-cover"
-                    style={{ filter: "saturate(0.9)" }}
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = meta.fallbackImage;
-                    }}
-                  />
-                  {listing.featured && (
-                    <span
-                      className="absolute top-1.5 right-1.5 text-[8px] font-medium uppercase tracking-wider px-1.5 py-0.5"
-                      style={{
-                        background: "rgba(212,170,102,0.18)",
-                        border: "1px solid rgba(212,170,102,0.4)",
-                        color: "#D4AA66",
-                        borderRadius: 2,
-                      }}
-                    >
-                      Featured
-                    </span>
-                  )}
-                </div>
-                <div className="p-3">
-                  <p
-                    className="font-['Cormorant_Garamond'] text-sm font-normal truncate"
-                    style={{ color: "#1C1A17" }}
-                  >
-                    {listing.name}
-                  </p>
-                  <p
-                    className="flex items-center gap-1 text-[10px] font-light mt-0.5 truncate"
-                    style={{ color: "#A09890" }}
-                  >
-                    <MapPinIcon
-                      className="w-2.5 h-2.5 shrink-0"
-                      style={{ color: "#C4BFB5" }}
-                    />
-                    {listing.location}
-                  </p>
-                  <div className="flex items-center justify-between mt-2">
-                    <p
-                      className="font-['Cormorant_Garamond'] text-sm"
-                      style={{ color: "#B8964A" }}
-                    >
-                      ₦{listing.pricePerNight.toLocaleString()}
-                      <span
-                        className="font-sans text-[9px] ml-0.5"
-                        style={{ color: "#C4BFB5" }}
-                      >
-                        /night
-                      </span>
-                    </p>
-                    {listing.rating > 0 && (
-                      <span
-                        className="flex items-center gap-0.5 text-[10px]"
-                        style={{ color: "#8A8478" }}
-                      >
-                        <StarSolid
-                          className="w-2.5 h-2.5"
-                          style={{ color: "#B8964A" }}
-                        />
-                        {listing.rating.toFixed(1)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-
-          {/* Desktop: grid */}
-          <div
-            className="hidden lg:grid gap-px"
-            style={{
-              gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-              background: "#F0EDE6",
-            }}
-          >
-            {listings.map((listing) => (
-              <button
-                key={listing.id}
-                onClick={() => onBook?.(listing.id)}
-                className="group text-left bg-white hover:bg-[#FDFCFA] transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B8964A]"
-              >
-                <div className="relative h-36 overflow-hidden">
-                  <img
-                    src={listing.images[0] ?? meta.fallbackImage}
-                    alt={listing.name}
-                    loading="lazy"
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-                    style={{ filter: "saturate(0.9)" }}
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = meta.fallbackImage;
-                    }}
-                  />
-                  {listing.featured && (
-                    <span
-                      className="absolute top-2 right-2 text-[8px] font-medium uppercase tracking-wider px-2 py-0.5"
-                      style={{
-                        background: "rgba(212,170,102,0.18)",
-                        border: "1px solid rgba(212,170,102,0.4)",
-                        color: "#D4AA66",
-                        borderRadius: 2,
-                      }}
-                    >
-                      Featured
-                    </span>
-                  )}
-                </div>
-                <div className="px-4 py-3.5">
-                  <p
-                    className="font-['Cormorant_Garamond'] text-base font-normal truncate"
-                    style={{ color: "#1C1A17" }}
-                  >
-                    {listing.name}
-                  </p>
-                  <p
-                    className="flex items-center gap-1 text-[11px] font-light mt-0.5 truncate"
-                    style={{ color: "#A09890" }}
-                  >
-                    <MapPinIcon
-                      className="w-2.5 h-2.5 shrink-0"
-                      style={{ color: "#C4BFB5" }}
-                    />
-                    {listing.location}
-                  </p>
-                  <div className="flex items-center justify-between mt-2.5">
-                    <p
-                      className="font-['Cormorant_Garamond'] text-base"
-                      style={{ color: "#B8964A" }}
-                    >
-                      ₦{listing.pricePerNight.toLocaleString()}
-                      <span
-                        className="font-sans text-[9px] ml-0.5"
-                        style={{ color: "#C4BFB5" }}
-                      >
-                        /night
-                      </span>
-                    </p>
-                    {listing.rating > 0 && (
-                      <span
-                        className="flex items-center gap-1 text-[11px]"
-                        style={{ color: "#8A8478" }}
-                      >
-                        <StarSolid
-                          className="w-2.5 h-2.5"
-                          style={{ color: "#B8964A" }}
-                        />
-                        {listing.rating.toFixed(1)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
     </div>
   );
-}
+};
 
-/* ─────────────────────────────────────────
-   Main export
-───────────────────────────────────────── */
-
-interface CategorySectionProps {
-  onCategorySelect?: (category: CategoryKey) => void;
-  onListingSelect?: (listingId: string) => void;
-}
-
-const CategorySection = ({
+export default function CategorySection({
   onCategorySelect,
   onListingSelect,
-}: CategorySectionProps) => {
-  const allStats = useCategoryStats();
-  const [activeCategory, setActiveCategory] = useState<CategoryKey | null>(
-    null,
-  );
+}: {
+  onCategorySelect?: (category: CategoryKey) => void;
+  onListingSelect?: (listing: Listing) => void;
+}) {
+  const [allListings, setAllListings] = useState<Listing[]>([]);
+  const [activeCategory, setActiveCategory] = useState<CategoryKey | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const categories = CARD_ORDER.map(
-    (key) => allStats.find((s) => s.key === key)!,
-  ).filter(Boolean);
+  useEffect(() => {
+    let cancelled = false;
+    ListingsDB.all()
+      .then((data) => { if (!cancelled) setAllListings(data); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
-  const activeCategoryStats = categories.find((c) => c.key === activeCategory);
-  const totalListings = categories.reduce((s, c) => s + c.count, 0);
-  const ratedCats = categories.filter((c) => c.topRating > 0);
-  const avgRating =
-    ratedCats.length > 0
-      ? (
-          ratedCats.reduce((s, c) => s + c.topRating, 0) / ratedCats.length
-        ).toFixed(1)
-      : "—";
+  useEffect(() => {
+    if (!activeCategory) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setActiveCategory(null); };
+    document.addEventListener("keydown", onKey);
+    panelRef.current?.focus();
+    return () => document.removeEventListener("keydown", onKey);
+  }, [activeCategory]);
 
-  const handleClick = (key: CategoryKey) => {
-    if (activeCategory === key) {
-      setActiveCategory(null);
-    } else {
-      setActiveCategory(key);
-      onCategorySelect?.(key);
-      setTimeout(() => {
-        panelRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "nearest",
-        });
-      }, 60);
-    }
+  const countFor = (cat: CategoryKey) => allListings.filter((l) => l.category === cat).length;
+  const listingsFor = (cat: CategoryKey) =>
+    allListings.filter((l) => l.category === cat).slice(0, 10);
+
+  const handleCardClick = (cat: CategoryKey) => {
+    setActiveCategory(cat);
+    onCategorySelect?.(cat);
   };
 
+  const getVariant = (i: number): "featured" | "wide" | "normal" => {
+    if (i === 0) return "featured";
+    if (i === 1) return "wide";
+    return "normal";
+  };
+
+  const activeMeta = activeCategory ? CATEGORY_META[activeCategory] : null;
+  const activeListings = activeCategory ? listingsFor(activeCategory) : [];
+
   return (
-    <section
-      className="relative py-12 sm:py-20 md:py-24"
-      style={{ background: "#FAF8F4" }}
-    >
-      {/* ── Scoped styles ── */}
-      <style>{`
-        @media (min-width: 1024px) {
-          .cs-desktop-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            grid-template-rows: auto auto;
-            gap: 2px;
-            background: #E8E4DC;
-            border: 1px solid #E8E4DC;
-            border-radius: 2px;
-          }
-          .cs-desktop-grid .cs-wide {
-            grid-column: span 2;
-          }
-        }
-      `}</style>
+    <section className="cat-section">
+      <style>{css}</style>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-8 md:px-12">
-        {/* ── Eyebrow ── */}
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-7 h-px" style={{ background: "#B8964A" }} />
-          <span
-            className="text-[10px] font-medium uppercase tracking-[0.22em]"
-            style={{ color: "#B8964A" }}
-          >
-            Curated Collection
-          </span>
+      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "clamp(48px,7vw,72px) max(16px,env(safe-area-inset-left,0px))" }}>
+        {/* Header */}
+        <div style={{ marginBottom: 32 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            <div style={{ width: 20, height: 1, background: "var(--c-gold)" }} />
+            <p style={{
+              fontSize: 10, fontWeight: 700, letterSpacing: ".26em",
+              color: "var(--c-gold)", textTransform: "uppercase",
+            }}>Browse by Type</p>
+          </div>
+          <h2 style={{
+            fontFamily: "Cormorant Garamond, serif",
+            fontSize: "clamp(26px,5vw,38px)",
+            fontWeight: 500, color: "var(--c-text)",
+            lineHeight: 1.1, letterSpacing: "-.01em", marginBottom: 8,
+          }}>
+            Find Your Kind of Stay
+          </h2>
+          <p style={{ color: "var(--c-sub)", fontSize: 13, lineHeight: 1.65, maxWidth: 400 }}>
+            From private villas in Lekki to boutique hotels in Abuja — curated collections for every occasion.
+          </p>
         </div>
 
-        {/* ── Header ── */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-5 mb-8 sm:mb-12">
-          <div>
-            <h2
-              className="font-['Cormorant_Garamond'] font-light leading-[1.05]"
-              style={{ fontSize: "clamp(32px, 6vw, 52px)", color: "#1C1A17" }}
-            >
-              Browse by{" "}
-              <em style={{ fontStyle: "italic", color: "#B8964A" }}>
-                Category
-              </em>
-            </h2>
-            <p
-              className="text-sm font-light leading-relaxed mt-3 max-w-xs"
-              style={{ color: "#8A8478" }}
-            >
-              From clifftop estates to skyline penthouses — each property
-              handpicked for the discerning traveller.
-            </p>
-          </div>
-
-          {/* Stats strip */}
-          <div className="flex items-center gap-5 sm:gap-7 shrink-0">
-            {[
-              { value: String(totalListings), label: "Properties" },
-              {
-                value: String(categories.filter((c) => c.count > 0).length),
-                label: "Categories",
-              },
-              { value: avgRating, label: "Avg rating", star: true },
-            ].map((s, i) => (
-              <div key={i} className="flex items-center gap-5 sm:gap-7">
-                {i > 0 && (
-                  <div
-                    className="w-px h-7 flex-shrink-0"
-                    style={{ background: "#DDD8CE" }}
-                  />
-                )}
-                <div>
-                  <p
-                    className="font-['Cormorant_Garamond'] font-light leading-none flex items-center gap-1"
-                    style={{ fontSize: 26, color: "#1C1A17" }}
-                  >
-                    {s.value}
-                    {s.star && (
-                      <StarSolid
-                        className="w-3.5 h-3.5"
-                        style={{ color: "#B8964A" }}
-                      />
-                    )}
-                  </p>
-                  <p
-                    className="text-[10px] uppercase tracking-[0.12em] mt-1 whitespace-nowrap"
-                    style={{ color: "#A09890" }}
-                  >
-                    {s.label}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ══════════════════════════════════════
-            MOBILE + TABLET  — horizontal scroll strip (below lg)
-        ══════════════════════════════════════ */}
-        <div className="lg:hidden">
-          <div
-            className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4"
-            style={{
-              scrollSnapType: "x mandatory",
-              WebkitOverflowScrolling: "touch",
-            }}
-          >
-            {categories.map((s) => (
-              <div key={s.key} style={{ scrollSnapAlign: "start" }}>
-                <MobileCard
-                  stats={s}
-                  isActive={activeCategory === s.key}
-                  onClick={() => handleClick(s.key)}
-                />
-              </div>
-            ))}
-          </div>
-
-          {/* Dot indicator */}
-          <div className="flex justify-center gap-1.5 mt-3">
-            {categories.map((s) => (
-              <button
-                key={s.key}
-                onClick={() => handleClick(s.key)}
-                aria-label={s.meta.label}
-                className="transition-all duration-200"
-                style={{
-                  width: activeCategory === s.key ? 20 : 6,
-                  height: 6,
-                  borderRadius: 3,
-                  background: activeCategory === s.key ? "#B8964A" : "#DDD8CE",
-                }}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* ══════════════════════════════════════
-            DESKTOP  ≥ 1024px  — mosaic grid
-        ══════════════════════════════════════ */}
-        <div className="hidden lg:block cs-desktop-grid">
-          {categories.map((s, i) => (
-            <div key={s.key} className={s.key === "villa" ? "cs-wide" : ""}>
-              <DesktopCard
-                stats={s}
-                index={i}
-                isActive={activeCategory === s.key}
-                isWide={s.key === "villa"}
-                onClick={() => handleClick(s.key)}
-              />
-            </div>
+        {/* Mosaic grid */}
+        <div className="cat-mosaic">
+          {CARD_ORDER.map((cat, i) => (
+            <CategoryCard
+              key={cat}
+              category={cat}
+              count={countFor(cat)}
+              variant={getVariant(i)}
+              index={i}
+              onClick={() => handleCardClick(cat)}
+            />
           ))}
         </div>
 
-        {/* ── Detail panel (both breakpoints) ── */}
-        <div ref={panelRef} className={activeCategoryStats ? "mt-0.5" : ""}>
-          {activeCategoryStats && (
-            <CategoryDetail
-              stats={activeCategoryStats}
-              onClose={() => setActiveCategory(null)}
-              onBook={(id) => onListingSelect?.(id)}
-            />
-          )}
-        </div>
-
-        {/* ── Footer ── */}
-        <div className="mt-10 sm:mt-14 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <p
-            className="text-[11px] uppercase tracking-[0.1em] font-light leading-relaxed"
-            style={{ color: "#C4BFB5" }}
-          >
-            All properties verified &amp; insured · Concierge available 24/7
-          </p>
-          <button
-            className="group flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] px-5 py-2.5 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B8964A] shrink-0"
-            style={{
-              border: "1px solid #B8964A",
-              color: "#B8964A",
-              borderRadius: 2,
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "#B8964A";
-              (e.currentTarget as HTMLButtonElement).style.color = "#FAF8F4";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "transparent";
-              (e.currentTarget as HTMLButtonElement).style.color = "#B8964A";
-            }}
-          >
-            Browse all {totalListings} properties
-            <ArrowRightIcon className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform duration-200" />
-          </button>
+        {/* Stats */}
+        <div className="cat-stats-row">
+          {[
+            { value: "500+", label: "Verified Stays" },
+            { value: "5", label: "Property Types" },
+            { value: "₦0", label: "Hidden Fees" },
+            { value: "24/7", label: "Nigerian Support" },
+          ].map((s) => (
+            <div key={s.label} className="cat-stat-item">
+              <p style={{
+                fontFamily: "Cormorant Garamond, serif",
+                fontSize: "clamp(24px,4.5vw,32px)", fontWeight: 600,
+                color: "var(--c-gold)", lineHeight: 1, marginBottom: 5,
+              }}>{s.value}</p>
+              <p style={{
+                fontSize: 9, fontWeight: 600, letterSpacing: ".18em",
+                textTransform: "uppercase", color: "var(--c-muted)",
+              }}>{s.label}</p>
+            </div>
+          ))}
         </div>
       </div>
+
+      {/* Detail panel */}
+      {activeCategory && activeMeta && (
+        <div className="cat-detail-overlay" onClick={() => setActiveCategory(null)}>
+          <div style={{
+            position: "absolute", inset: 0,
+            background: "rgba(26,23,20,.55)", backdropFilter: "blur(6px)",
+          }} />
+          <div
+            ref={panelRef}
+            tabIndex={-1}
+            className="cat-detail-panel"
+            onClick={(e) => e.stopPropagation()}
+            style={{ outline: "none" }}
+          >
+            {/* Panel header image */}
+            <div style={{ position: "relative", height: 180, flexShrink: 0, overflow: "hidden" }}>
+              <img
+                src={activeMeta.fallbackImage}
+                alt={activeMeta.label}
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+              <div style={{
+                position: "absolute", inset: 0,
+                background: "linear-gradient(to top, rgba(10,8,6,.75), transparent 60%)",
+              }} />
+              <div style={{ position: "absolute", bottom: 18, left: 20, right: 50 }}>
+                <span style={{
+                  fontSize: 9, fontWeight: 800, letterSpacing: ".2em",
+                  textTransform: "uppercase", color: "var(--c-gold)",
+                  display: "block", marginBottom: 4,
+                }}>{activeMeta.tag}</span>
+                <h3 style={{
+                  fontFamily: "Cormorant Garamond, serif", fontSize: 24,
+                  fontWeight: 600, color: "#fff", lineHeight: 1.1,
+                }}>{activeMeta.label}</h3>
+              </div>
+              <button
+                onClick={() => setActiveCategory(null)}
+                aria-label="Close"
+                style={{
+                  position: "absolute", top: 14, right: 14,
+                  width: 34, height: 34, borderRadius: "50%",
+                  background: "rgba(255,255,255,.9)", backdropFilter: "blur(6px)",
+                  border: "none", cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                <XMarkIcon style={{ width: 15, height: 15, color: "#1A1714" }} />
+              </button>
+            </div>
+
+            {/* Listings */}
+            <div style={{ overflowY: "auto", flex: 1, padding: "16px 20px 24px" }}>
+              {activeListings.length === 0 ? (
+                <p style={{ color: "var(--c-sub)", fontSize: 13, textAlign: "center", padding: "32px 0" }}>
+                  No properties in this category yet. Check back soon.
+                </p>
+              ) : (
+                activeListings.map((l) => (
+                  <div
+                    key={l.id}
+                    className="cat-listing-item"
+                    onClick={() => { setActiveCategory(null); onListingSelect?.(l); }}
+                  >
+                    <img
+                      src={(l as any).thumbnail || activeMeta.fallbackImage}
+                      alt={l.name}
+                      loading="lazy"
+                      style={{
+                        width: 72, height: 60, borderRadius: 9, objectFit: "cover", flexShrink: 0,
+                        border: "1px solid var(--c-border)",
+                      }}
+                      onError={(e) => { (e.target as HTMLImageElement).src = activeMeta.fallbackImage; }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                        <h4 style={{
+                          fontFamily: "Cormorant Garamond, serif", fontSize: 15, fontWeight: 600,
+                          color: "var(--c-text)", lineHeight: 1.2, marginBottom: 3,
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                          flex: 1, minWidth: 0,
+                        }}>{l.name}</h4>
+                        <span style={{
+                          display: "inline-flex", alignItems: "center", gap: 3,
+                          background: "rgba(34,120,70,0.08)", border: "1px solid rgba(34,120,70,0.18)",
+                          color: "#1a7040", borderRadius: 99, padding: "2px 7px",
+                          fontSize: 8, fontWeight: 700, flexShrink: 0,
+                        }}>
+                          ✓ Verified
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
+                        <MapPinIcon style={{ width: 10, height: 10, color: "var(--c-gold)", flexShrink: 0 }} />
+                        <span style={{ fontSize: 11, color: "var(--c-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.location}</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                        <span style={{
+                          fontFamily: "Cormorant Garamond, serif",
+                          fontSize: 15, fontWeight: 700, color: "var(--c-text)",
+                        }}>₦{l.pricePerNight.toLocaleString()}<span style={{ fontSize: 10, fontWeight: 400, color: "var(--c-muted)" }}>/night</span></span>
+                        {l.rating > 0 && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                            <StarSolid style={{ width: 10, height: 10, color: "var(--c-gold)" }} />
+                            <span style={{ fontSize: 11, fontWeight: 600, color: "var(--c-text)" }}>{l.rating}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
-};
-
-export default CategorySection;
+}

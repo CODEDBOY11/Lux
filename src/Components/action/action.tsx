@@ -8,13 +8,12 @@ import { ReviewsDB, type Review } from "../../index";
 
 const T = {
   gold: "#C9A96E",
-  goldHover: "#d4b87e",
+  goldHover: "#B8935A",
 };
 
 const CARD_COUNT = 3;
 const MIN_RATING = 4;
 
-/** Fisher-Yates shuffle — avoids the subtle bias of Array.sort(() => Math.random() - 0.5) */
 function shuffle<T>(arr: T[]): T[] {
   const out = [...arr];
   for (let i = out.length - 1; i > 0; i--) {
@@ -32,58 +31,46 @@ function initialsFrom(name: string): string {
 }
 
 const Stars = ({ rating }: { rating: number }) => (
-  <div className="flex gap-1 mb-4">
+  <div style={{ display: "flex", gap: 3, marginBottom: 14 }}>
     {[...Array(5)].map((_, i) => (
       <StarSolid
         key={i}
-        className="w-[11px] h-[11px]"
-        style={{ color: i < rating ? T.gold : "rgba(201,169,110,0.25)" }}
+        style={{ width: 11, height: 11, color: i < rating ? T.gold : "rgba(201,169,110,0.22)" }}
       />
     ))}
   </div>
 );
 
 const CardSkeleton = () => (
-  <div
-    className="animate-pulse rounded-2xl border p-5 sm:p-7"
-    style={{
-      background: "rgba(255,255,255,0.05)",
-      borderColor: "rgba(201,169,110,0.15)",
-    }}
-  >
-    <div className="flex gap-1 mb-4">
-      {[...Array(5)].map((_, i) => (
-        <div key={i} className="w-[11px] h-[11px] rounded-full bg-white/10" />
-      ))}
+  <div style={{
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(201,169,110,0.12)",
+    borderRadius: 16, padding: "20px 22px",
+    animation: "pulse 1.6s ease infinite",
+  }}>
+    <div style={{ display: "flex", gap: 3, marginBottom: 14 }}>
+      {[...Array(5)].map((_, i) => <div key={i} style={{ width: 11, height: 11, borderRadius: "50%", background: "rgba(255,255,255,0.08)" }} />)}
     </div>
-    <div className="space-y-2 mb-5">
-      <div className="h-3 bg-white/10 rounded-full w-full" />
-      <div className="h-3 bg-white/10 rounded-full w-5/6" />
-      <div className="h-3 bg-white/10 rounded-full w-2/3" />
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 }}>
+      {[100, 83, 67].map((w) => <div key={w} style={{ height: 11, background: "rgba(255,255,255,0.07)", borderRadius: 99, width: `${w}%` }} />)}
     </div>
-    <div
-      className="flex items-center gap-2.5 pt-4"
-      style={{ borderTop: "0.5px solid rgba(255,255,255,0.1)" }}
-    >
-      <div className="w-[34px] h-[34px] rounded-full bg-white/10 shrink-0" />
-      <div className="h-3 bg-white/10 rounded-full w-24" />
+    <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: 14, display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ width: 34, height: 34, borderRadius: "50%", background: "rgba(255,255,255,0.08)", flexShrink: 0 }} />
+      <div style={{ height: 11, background: "rgba(255,255,255,0.07)", borderRadius: 99, width: 100 }} />
     </div>
   </div>
 );
 
-export default function TestimonialsCTA() {
+export default function TestimonialsCTA({ onExplore }: { onExplore?: () => void }) {
   const [reviews, setReviews] = useState<Review[] | null>(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-
     ReviewsDB.featured(30)
       .then((all) => {
         if (cancelled) return;
-        const qualified = all.filter(
-          (r) => r.rating >= MIN_RATING && r.body.trim().length > 0,
-        );
+        const qualified = all.filter((r) => r.rating >= MIN_RATING && r.body.trim().length > 0);
         setReviews(shuffle(qualified).slice(0, CARD_COUNT));
       })
       .catch(() => {
@@ -91,143 +78,160 @@ export default function TestimonialsCTA() {
         setError(true);
         setReviews([]);
       });
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   const loading = reviews === null;
   const hasReviews = !loading && reviews.length > 0;
 
   return (
-    <section
-      className="relative py-16 sm:py-20 md:py-24 px-5 sm:px-8 md:px-10 overflow-hidden"
-      style={{ fontFamily: "'Inter', sans-serif", background: "#0a0908" }}
-    >
-      {/* Ambient gradient texture — replaces the photo background */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          backgroundImage: `radial-gradient(ellipse 80% 50% at 50% -10%, rgba(201,169,110,0.14), transparent),
-                            radial-gradient(ellipse 60% 45% at 85% 105%, rgba(110,173,201,0.08), transparent),
-                            radial-gradient(ellipse 50% 40% at 5% 60%, rgba(201,169,110,0.06), transparent)`,
-        }}
-      />
+    <section style={{
+      position: "relative",
+      background: "#0a0908",
+      fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
+      padding: "clamp(52px, 9vw, 88px) max(16px, env(safe-area-inset-left, 0px))",
+      overflow: "hidden",
+    }}>
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: .55; }
+        }
+        @keyframes act-fadeUp {
+          from { opacity: 0; transform: translateY(14px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
 
-      {/* Content */}
-      <div className="relative z-10 max-w-5xl mx-auto text-center text-white">
+      {/* Ambient texture */}
+      <div style={{
+        position: "absolute", inset: 0, pointerEvents: "none",
+        backgroundImage: `
+          radial-gradient(ellipse 80% 55% at 50% -5%, rgba(201,169,110,0.13), transparent),
+          radial-gradient(ellipse 55% 40% at 88% 100%, rgba(110,173,201,0.07), transparent),
+          radial-gradient(ellipse 45% 35% at 5% 65%, rgba(201,169,110,0.05), transparent)
+        `,
+      }} />
+
+      <div style={{ position: "relative", zIndex: 1, maxWidth: 1100, margin: "0 auto" }}>
         {/* Header */}
-        <span className="inline-block text-[10px] sm:text-[11px] font-medium tracking-[0.16em] sm:tracking-[0.18em] uppercase text-[#C9A96E] mb-3">
-          Guest Experiences
-        </span>
-        <h2
-          className="text-[clamp(28px,6vw,40px)] font-semibold leading-tight"
-          style={{ fontFamily: "'Playfair Display', serif" }}
-        >
-          What Our Guests Say
-        </h2>
-        <div className="w-10 h-[1.5px] bg-[#C9A96E] mx-auto mt-4 sm:mt-5 mb-9 sm:mb-12 rounded-full" />
+        <div style={{ textAlign: "center", marginBottom: "clamp(36px, 6vw, 56px)" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginBottom: 12 }}>
+            <div style={{ width: 20, height: 1, background: T.gold }} />
+            <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".26em", color: T.gold, textTransform: "uppercase" }}>
+              Guest Stories
+            </p>
+            <div style={{ width: 20, height: 1, background: T.gold }} />
+          </div>
+          <h2 style={{
+            fontFamily: "Cormorant Garamond, serif",
+            fontSize: "clamp(28px, 6vw, 42px)",
+            fontWeight: 500, color: "rgba(255,255,255,0.92)",
+            lineHeight: 1.1, letterSpacing: "-.01em",
+          }}>
+            Real Guests,<br />
+            <em style={{ fontStyle: "italic", color: T.gold }}>Real Stays</em>
+          </h2>
+          <div style={{ width: 28, height: 1.5, background: T.gold, borderRadius: 99, margin: "16px auto 0" }} />
+          <p style={{
+            color: "rgba(255,255,255,.45)", fontSize: 13, lineHeight: 1.75,
+            maxWidth: 360, margin: "14px auto 0", fontWeight: 300,
+          }}>
+            Every review is from a verified Eden booking. We never edit or remove them.
+          </p>
+        </div>
 
-        {/* Testimonial Cards */}
+        {/* Reviews */}
         {loading && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-            {Array.from({ length: CARD_COUNT }).map((_, i) => (
-              <CardSkeleton key={i} />
-            ))}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
+            {Array.from({ length: CARD_COUNT }).map((_, i) => <CardSkeleton key={i} />)}
           </div>
         )}
 
         {!loading && !hasReviews && (
-          <div
-            className="rounded-2xl border p-10 max-w-md mx-auto"
-            style={{
-              background: "rgba(255,255,255,0.05)",
-              borderColor: "rgba(201,169,110,0.2)",
-            }}
-          >
-            <div
-              className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4"
-              style={{
-                background: "rgba(201,169,110,0.15)",
-                border: "1px solid rgba(201,169,110,0.3)",
-              }}
-            >
-              <ChatBubbleLeftRightIcon
-                className="w-5 h-5"
-                style={{ color: T.gold }}
-              />
+          <div style={{
+            maxWidth: 380, margin: "0 auto",
+            background: "rgba(255,255,255,0.05)",
+            border: "1px solid rgba(201,169,110,0.2)",
+            borderRadius: 16, padding: "36px 24px", textAlign: "center",
+          }}>
+            <div style={{
+              width: 48, height: 48, borderRadius: "50%", margin: "0 auto 14px",
+              background: "rgba(201,169,110,0.12)",
+              border: "1px solid rgba(201,169,110,0.28)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <ChatBubbleLeftRightIcon style={{ width: 22, height: 22, color: T.gold }} />
             </div>
-            <p className="text-white/60 text-sm">
-              {error
-                ? "Couldn't load guest reviews right now."
-                : "No reviews yet — be the first to share your stay."}
+            <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 13, fontWeight: 300 }}>
+              {error ? "Couldn't load reviews right now." : "No reviews yet — be the first to share your stay."}
             </p>
           </div>
         )}
 
         {hasReviews && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
             {reviews.map((r, i) => (
               <div
                 key={r.id}
-                className={`group flex flex-col justify-between text-left p-5 sm:p-7 rounded-2xl border backdrop-blur-md transition-all duration-300 ${
-                  // On a 2-up tablet layout, let an odd one out span both columns
-                  reviews.length % 2 === 1 && i === reviews.length - 1
-                    ? "sm:col-span-2 lg:col-span-1"
-                    : ""
-                }`}
                 style={{
+                  display: "flex", flexDirection: "column", justifyContent: "space-between",
+                  textAlign: "left", padding: "20px 22px",
+                  borderRadius: 16,
                   background: "rgba(255,255,255,0.07)",
-                  borderColor: "rgba(201,169,110,0.25)",
+                  border: "1px solid rgba(201,169,110,0.22)",
+                  backdropFilter: "blur(10px)",
+                  transition: "background .25s, border-color .25s",
+                  cursor: "default",
+                  animation: `act-fadeUp .45s ease ${i * 70}ms both`,
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "rgba(255,255,255,0.12)";
-                  e.currentTarget.style.borderColor = "rgba(201,169,110,0.55)";
+                  (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.11)";
+                  (e.currentTarget as HTMLElement).style.borderColor = "rgba(201,169,110,0.5)";
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "rgba(255,255,255,0.07)";
-                  e.currentTarget.style.borderColor = "rgba(201,169,110,0.25)";
+                  (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.07)";
+                  (e.currentTarget as HTMLElement).style.borderColor = "rgba(201,169,110,0.22)";
                 }}
               >
                 <div>
                   <Stars rating={r.rating} />
-                  <p className="text-[13px] text-white/80 leading-[1.8] font-light italic line-clamp-5">
+                  <p style={{
+                    fontSize: 13, color: "rgba(255,255,255,.78)",
+                    lineHeight: 1.8, fontWeight: 300, fontStyle: "italic",
+                    display: "-webkit-box", WebkitLineClamp: 5,
+                    WebkitBoxOrient: "vertical", overflow: "hidden",
+                  }}>
                     "{r.body}"
                   </p>
                 </div>
-                <div
-                  className="flex items-center gap-2.5 mt-5 pt-4"
-                  style={{ borderTop: "0.5px solid rgba(255,255,255,0.1)" }}
-                >
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  marginTop: 18, paddingTop: 14,
+                  borderTop: "1px solid rgba(255,255,255,0.08)",
+                }}>
                   {r.guestAvatar ? (
-                    <img
-                      src={r.guestAvatar}
-                      alt=""
-                      loading="lazy"
-                      className="w-[34px] h-[34px] rounded-full object-cover flex-shrink-0 border"
-                      style={{ borderColor: "rgba(201,169,110,0.4)" }}
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = "none";
-                      }}
+                    <img src={r.guestAvatar} alt="" loading="lazy"
+                      style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: "1px solid rgba(201,169,110,0.35)" }}
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                     />
                   ) : (
-                    <div
-                      className="w-[34px] h-[34px] rounded-full flex items-center justify-center text-[12px] font-medium text-[#C9A96E] flex-shrink-0 border"
-                      style={{
-                        background: "rgba(201,169,110,0.2)",
-                        borderColor: "rgba(201,169,110,0.4)",
-                      }}
-                    >
+                    <div style={{
+                      width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
+                      background: "rgba(201,169,110,0.18)",
+                      border: "1px solid rgba(201,169,110,0.35)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 12, fontWeight: 600, color: T.gold,
+                    }}>
                       {initialsFrom(r.guestName || "Guest")}
                     </div>
                   )}
-                  <div className="min-w-0">
-                    <p className="text-[13px] font-medium text-white leading-tight truncate">
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: 13, fontWeight: 500, color: "rgba(255,255,255,.85)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {r.guestName || "Verified Guest"}
                     </p>
-                    <p className="text-[11px] text-white/45 mt-0.5 truncate">
-                      Verified stay
+                    <p style={{ fontSize: 10, color: "rgba(255,255,255,.35)", marginTop: 2, fontWeight: 400 }}>
+                      Verified stay · Eden
                     </p>
                   </div>
                 </div>
@@ -237,27 +241,68 @@ export default function TestimonialsCTA() {
         )}
 
         {/* CTA */}
-        <div className="mt-16 sm:mt-20">
-          <h3
-            className="text-[clamp(22px,5vw,30px)] font-semibold text-white leading-snug px-2"
-            style={{ fontFamily: "'Playfair Display', serif" }}
-          >
+        <div style={{ textAlign: "center", marginTop: "clamp(52px, 8vw, 72px)" }}>
+          {/* Nigerian trust signals */}
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            gap: 20, marginBottom: 28, flexWrap: "wrap",
+          }}>
+            {[
+              { icon: "₦", text: "Naira pricing" },
+              { icon: "✓", text: "No hidden fees" },
+              { icon: "🔒", text: "Paystack secure" },
+            ].map((b) => (
+              <div key={b.text} style={{
+                display: "flex", alignItems: "center", gap: 6,
+                background: "rgba(255,255,255,.05)",
+                border: "1px solid rgba(255,255,255,.1)",
+                padding: "5px 14px", borderRadius: 99,
+              }}>
+                <span style={{ fontSize: 12 }}>{b.icon}</span>
+                <span style={{ fontSize: 11, color: "rgba(255,255,255,.5)", fontWeight: 400 }}>{b.text}</span>
+              </div>
+            ))}
+          </div>
+
+          <h3 style={{
+            fontFamily: "Cormorant Garamond, serif",
+            fontSize: "clamp(24px, 5vw, 34px)",
+            fontWeight: 500, color: "rgba(255,255,255,.92)",
+            lineHeight: 1.2, marginBottom: 10,
+          }}>
             Ready to Find Your Perfect Stay?
           </h3>
-          <p className="text-sm text-white/55 font-light mt-2">
-            Start exploring luxury stays tailored just for you
+          <p style={{ fontSize: 13, color: "rgba(255,255,255,.42)", fontWeight: 300, marginBottom: 28 }}>
+            Thousands of Nigerians have already booked through Eden — your turn.
           </p>
+
           <button
-            className="inline-flex items-center gap-2 mt-7 px-7 sm:px-8 py-3.5 rounded-full text-[13px] font-medium tracking-wide transition-transform duration-200 hover:scale-[1.04]"
-            style={{ background: T.gold, color: "#1a1a1a" }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.background = T.goldHover)
-            }
-            onMouseLeave={(e) => (e.currentTarget.style.background = T.gold)}
+            onClick={onExplore}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 8,
+              background: T.gold, color: "#1A1714",
+              border: "none", cursor: "pointer",
+              fontSize: 13, fontWeight: 700, letterSpacing: ".03em",
+              padding: "14px 32px", borderRadius: 99,
+              transition: "background .18s, transform .15s",
+              boxShadow: "0 8px 28px rgba(201,169,110,.3)",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.background = T.goldHover;
+              (e.currentTarget as HTMLElement).style.transform = "scale(1.04)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background = T.gold;
+              (e.currentTarget as HTMLElement).style.transform = "scale(1)";
+            }}
           >
-            Get Started
-            <ArrowRightIcon className="w-3 h-3" />
+            Explore Luxury Stays
+            <ArrowRightIcon style={{ width: 14, height: 14 }} />
           </button>
+
+          <p style={{ marginTop: 14, fontSize: 11, color: "rgba(255,255,255,.25)", fontWeight: 300 }}>
+            No booking fees · Cancel for free · Pay in Naira
+          </p>
         </div>
       </div>
     </section>

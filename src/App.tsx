@@ -155,7 +155,7 @@ function HomePage() {
       <Property />
       <Category />
       <WhyChooseUs />
-      <TestimonialsCTA />
+    <TestimonialsCTA onExplore={() => window.scrollTo({ top: 0, behavior: "smooth" })} />
       <Footer />
     </>
   );
@@ -167,9 +167,17 @@ function useSessionReady() {
 
   useEffect(() => {
     // Capture token immediately on every auth event — including INITIAL_SESSION
+    const auth = supabase.auth as typeof supabase.auth & {
+      onAuthStateChange: (
+        callback: (event: string, session: { access_token?: string } | null) => void,
+      ) => {
+        data: { subscription: { unsubscribe: () => void } };
+      };
+    };
+
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = auth.onAuthStateChange((event, session) => {
       if (
         event === "INITIAL_SESSION" ||
         event === "SIGNED_IN" ||
@@ -245,7 +253,7 @@ function HostDashboardWrapper() {
         email={user.email ?? ""}
         isHost={true}
         onVerified={() => setBiometricPassed(true)}
-        onSignOut={() => supabase.auth.signOut()}
+        onSignOut={() => void (supabase.auth as any).signOut?.()}
       />
     );
   }
@@ -304,7 +312,12 @@ function AdminDashboardWrapper() {
         email={user.email ?? ""}
         isHost={false} // blue accent for admin
         onVerified={() => setBiometricPassed(true)}
-        onSignOut={() => supabase.auth.signOut()}
+        onSignOut={() => {
+          const auth = supabase.auth as typeof supabase.auth & {
+            signOut?: () => Promise<{ error: unknown | null }>;
+          };
+          void auth.signOut?.();
+        }}
       />
     );
   }
@@ -316,12 +329,16 @@ function AuthCallback() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    const auth = supabase.auth as typeof supabase.auth & {
+      getSession?: () => Promise<{ data: { session: unknown | null } }>;
+    };
+
+    void auth.getSession?.().then(({ data }) => {
       if (!data.session) {
         navigate("/login", { replace: true });
       }
     });
-  }, []);
+  }, [navigate]);
 
   return (
     <div
