@@ -130,6 +130,9 @@ const css = `
 
 type SortKey = "featured" | "price_asc" | "price_desc" | "rating";
 
+const DEFAULT_PROPERTY_IMAGE =
+  "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400";
+
 const AMENITY_ICONS: Record<string, React.ReactNode> = {
   wifi: <WifiIcon style={{ width: 12, height: 12 }} />,
   pool: <SparklesIcon style={{ width: 12, height: 12 }} />,
@@ -365,7 +368,7 @@ export default function FeaturedProperties({
                       {/* Image */}
                       <div style={{ position: "relative", height: 200, overflow: "hidden", flexShrink: 0 }}>
                         <img
-                          src={(l as any).thumbnail || (l as any).image_url}
+                          src={l.images[0] || DEFAULT_PROPERTY_IMAGE}
                           alt={l.name}
                           loading="lazy"
                           style={{
@@ -374,8 +377,12 @@ export default function FeaturedProperties({
                             transform: isHov ? "scale(1.05)" : "scale(1)",
                           }}
                           onError={(e) => {
-                            (e.target as HTMLImageElement).src =
-                              "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400";
+                            const image = e.currentTarget;
+                            if (image.src !== DEFAULT_PROPERTY_IMAGE) {
+                              image.src = DEFAULT_PROPERTY_IMAGE;
+                            } else {
+                              image.style.visibility = "hidden";
+                            }
                           }}
                         />
                         <div style={{
